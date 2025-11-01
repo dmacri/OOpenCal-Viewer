@@ -198,6 +198,31 @@ void SceneWidget::readSettingsFromConfigFile(const std::string& filename)
         settingParameter->nNodeY = execContext->getConfigParameter("number_node_y")->getValue<int>();
         /// Notice: there are much more params, which are not used: e.g. border_size_x, border_size_y
     }
+
+    {
+        ConfigCategory* visualizationContext = config.getConfigCategory("VISUALIZATION");
+        if (visualizationContext)
+        {
+            // Read visualization mode (text or binary)
+            auto modeParam = visualizationContext->getConfigParameter("mode");
+            settingParameter->readMode = modeParam ? modeParam->getValue<std::string>() : "text";
+
+            // Read substates
+            auto substatesParam = visualizationContext->getConfigParameter("substates");
+            settingParameter->substates = substatesParam ? substatesParam->getValue<std::string>() : "";
+
+            // Read reduction operations
+            auto reductionParam = visualizationContext->getConfigParameter("reduction");
+            settingParameter->reduction = reductionParam ? reductionParam->getValue<std::string>() : "";
+        }
+        else
+        {
+            // Default values if VISUALIZATION section is not present
+            settingParameter->readMode = "text";
+            settingParameter->substates = "";
+            settingParameter->reduction = "";
+        }
+    }
 }
 
 void SceneWidget::setupVtkScene()

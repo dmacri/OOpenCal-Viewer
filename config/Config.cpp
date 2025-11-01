@@ -108,6 +108,15 @@ void Config::setUpConfigCategories()
             {"chunk_size", "1", ConfigParameter::int_par}
         }
     });
+
+    configCategories.push_back(ConfigCategory{
+        "VISUALIZATION",
+        {
+            {"substates", "h", ConfigParameter::string_par},
+            {"mode", "text", ConfigParameter::string_par},
+            {"reduction", "sum,min,max", ConfigParameter::string_par}
+        }
+    });
 }
 
 void Config::writeConfigFile() const
@@ -212,7 +221,8 @@ void Config::readConfigFileInOOpenCalFormat()
 
         if (line.back() != ':')
         {
-            throw std::runtime_error("ERROR: Category name must end with the ':' character, line is: " + line);
+            std::cerr << "WARNING: Category name must end with ':' character, skipping line: " << line << std::endl;
+            continue;
         }
 
         line.pop_back(); // removing ':' from the end
@@ -221,20 +231,48 @@ void Config::readConfigFileInOOpenCalFormat()
         ConfigCategory* configCategory = getConfigCategory(line);
         if (! configCategory)
         {
-            throw std::runtime_error(std::format("Unknown config category '{}'", line));
+            std::cerr << "WARNING: Unknown config category '" << line << "' - skipping" << std::endl;
+            // Skip parameters for unknown category
+            while (std::getline(file, line))
+            {
+                if (line.empty() || line.back() == ':')
+                {
+                    // Put the line back by seeking back (not ideal, but works for this case)
+                    // Actually, we can't easily put it back, so we'll just process it in the next iteration
+                    if (!line.empty() && line.back() == ':')
+                    {
+                        // This is a new category, process it in the next iteration
+                        file.seekg(-(line.length() + 1), std::ios_base::cur);
+                    }
+                    break;
+                }
+            }
+            continue;
         }
 
         for (int i{}; i < configCategory->getSize(); ++i)
         {
             if (! std::getline(file, line))
             {
-                throw std::runtime_error("Unexpected end of file while reading parameters");
+                std::cerr << "WARNING: Unexpected end of file while reading parameters for category '" 
+                          << configCategory->getName() << "'" << std::endl;
+                break;
+            }
+
+            if (line.empty())
+            {
+                std::cerr << "WARNING: Empty parameter line in category '" 
+                          << configCategory->getName() << "'" << std::endl;
+                i--; // Don't count this as a parameter
+                continue;
             }
 
             auto pos = line.find('=');
             if (pos == std::string::npos)
             {
-                throw std::runtime_error(std::format("Invalid parameter line: '{}'", line));
+                std::cerr << "WARNING: Invalid parameter line (no '=' found): '" << line << "'" << std::endl;
+                i--; // Don't count this as a parameter
+                continue;
             }
 
             std::string parName = line.substr(0, pos);
@@ -243,7 +281,15 @@ void Config::readConfigFileInOOpenCalFormat()
             remove_spaces(parName);
             remove_spaces(valueStr);
 
-            configCategory->setConfigParameterValue(parName, valueStr);
+            try
+            {
+                configCategory->setConfigParameterValue(parName, valueStr);
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "WARNING: Failed to set parameter '" << parName << "' in category '" 
+                          << configCategory->getName() << "': " << e.what() << std::endl;
+            }
         }
     }
 }

@@ -15,34 +15,22 @@ ColumnAndRow ReaderHelpers::getColumnAndRowFromLine(const std::string& line)
         throw std::runtime_error("No delimiter '-' found in the line: >" + line + "<");
     }
 
-    return ColumnAndRow
-        {
-            .column = std::stoi(line.substr(0, delimiterPos)),
-            .row = std::stoi(line.substr(delimiterPos + 1))
-        };
+    const auto x = std::stoi(line.substr(0, delimiterPos));
+    const auto y = std::stoi(line.substr(delimiterPos + 1));
+    return ColumnAndRow::xy(x, y);
 }
 
-ColumnAndRow ReaderHelpers::calculateXYOffset(NodeIndex node,
-                                              NodeIndex nNodeX,
-                                              NodeIndex nNodeY,
-                                              const std::vector<ColumnAndRow>& columnsAndRows)
+ColumnAndRow ReaderHelpers::calculateXYOffsetForNode(NodeIndex node,
+                                                     NodeIndex nNodeX,
+                                                     NodeIndex nNodeY,
+                                                     const std::vector<ColumnAndRow>& columnsAndRows)
 {
     int offsetX = 0; //= //(node % nNodeX)*nLocalCols;//-this->borderSizeX;
     int offsetY = 0; //= //(node / nNodeX)*nLocalRows;//-this->borderSizeY;
 
-    if (nNodeY == 1)
+    for (NodeIndex k = (node / nNodeX) * nNodeX; k < node; k++)
     {
-        for (NodeIndex k = 0; k < node % nNodeX; k++)
-        {
-            offsetX += columnsAndRows[k].column;
-        }
-    }
-    else
-    {
-        for (NodeIndex k = (node / nNodeX) * nNodeX; k < node; k++)
-        {
-            offsetX += columnsAndRows[k].column;
-        }
+        offsetX += columnsAndRows[k].column;
     }
 
     if (node >= nNodeX)

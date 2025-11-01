@@ -23,6 +23,9 @@ struct SettingParameter
     NodeIndex nNodeY;           ///< Number of nodes in Y direction
     int numberOfLines;          ///< Total number of lines in the visualization
     std::string outputFileName; ///< Name of the output file
+    std::string readMode;       ///< File read mode: "text" or "binary"
+    std::string substates;      ///< Substates to read (e.g., "h,z")
+    std::string reduction;      ///< Reduction operations (e.g., "sum,min,max")
 
     static constexpr int font_size = 18; ///< Font size for text rendering
 

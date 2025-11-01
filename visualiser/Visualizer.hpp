@@ -21,7 +21,6 @@
 #include <vtkTextMapper.h>
 #include <vtkTextProperty.h>
 
-#include "OOpenCAL/base/Cell.h" // Color
 #include "utilities/types.h"    // StepIndex
 
 class Line;
@@ -36,9 +35,9 @@ class Visualizer
 {
 public:
     template<class Matrix>
-    void drawWithVTK(/*const*/ Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer,vtkSmartPointer<vtkActor> gridActor);
+    void drawWithVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor);
     template<class Matrix>
-    void refreshWindowsVTK(/*const*/ Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor);
+    void refreshWindowsVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor);
     void buildLoadBalanceLine(const std::vector<Line>& lines, int nRows, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor2D> actorBuildLine);
     void refreshBuildLoadBalanceLine(const std::vector<Line> &lines, int nRows, vtkActor2D* lineActor);
     vtkTextProperty* buildStepLine(StepIndex step, vtkSmartPointer<vtkTextMapper> singleLineTextB);
@@ -46,7 +45,7 @@ public:
 
 private:
     template<class Matrix>
-    void buidColor(vtkLookupTable* lut, int nCols, int nRows, Matrix& p);
+    void buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p);
 
     /** @brief Creates a vtkPolyData representing a set of 2D lines.
       * @param lines Vector of Line objects (each defines a line segment)
@@ -58,7 +57,7 @@ private:
 ////////////////////////////////////////////////////////////////////
 
 template <class Matrix>
-void Visualizer::drawWithVTK(/*const*/ Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor)
+void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor)
 {
     const auto numberOfPoints = nRows * nCols;
     vtkNew<vtkDoubleArray> pointValues;
@@ -98,7 +97,7 @@ void Visualizer::drawWithVTK(/*const*/ Matrix& p, int nRows, int nCols, vtkSmart
 }
 
 template<class Matrix>
-void Visualizer::refreshWindowsVTK(/*const*/ Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor)
+void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor)
 {
     if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(gridActor->GetMapper()->GetLookupTable()))
     {
@@ -133,7 +132,7 @@ inline double toUnitColor(double channel)
 }
 
 template<class Matrix>
-void Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, Matrix& p)
+void Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix &p)
 {
     for (int r = 0; r < nRows; ++r)
     {
