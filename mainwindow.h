@@ -56,6 +56,7 @@ private slots:
     void onModelSelected();
     void onReloadDataRequested();
     void onLoadPluginRequested();
+    void onLoadModelFromDirectoryRequested();
 
     void onPlayButtonClicked();
     void onStopButtonClicked();
@@ -111,20 +112,20 @@ private:
     void updateCameraControlsVisibility();
 
     // Recent files management
-    void updateRecentFilesMenu();
     void addToRecentFiles(const QString &filePath);
     QStringList loadRecentFiles() const;
     void saveRecentFiles(const QStringList &files) const;
     QString getSmartDisplayName(const QString &filePath, const QStringList &allPaths) const;
     QString generateTooltipForFile(const QString &filePath) const;
-    void openConfigurationFile(const QString &configFileName);
+    void updateRecentFilesMenu();
+    void openConfigurationFile(const QString& configFileName);
+    void loadModelFromDirectory(const QString& modelDirectory);
 
     static constexpr int MAX_RECENT_FILES = 10;
 
     Ui::MainWindow *ui;
-
-    QActionGroup *modelActionGroup;
     QTimer *playbackTimer;
+    QActionGroup *modelActionGroup = nullptr;
 
     StepIndex currentStep;
 

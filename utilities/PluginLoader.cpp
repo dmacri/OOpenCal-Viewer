@@ -1,14 +1,19 @@
 /** @file PluginLoader.cpp
  * @brief Implementation of the plugin loading system. */
 
-#include "PluginLoader.h"
-
 #include <filesystem>
 #include <iostream>
-
 #include <dlfcn.h>
 
+#include "PluginLoader.h"
+#include "visualiserProxy/SceneWidgetVisualizerFactory.h" // SceneWidgetVisualizerFactory::unregisterModel
+
+
+namespace
+{
 namespace fs = std::filesystem;
+}
+
 
 PluginLoader& PluginLoader::instance()
 {
@@ -16,17 +21,22 @@ PluginLoader& PluginLoader::instance()
     return loader;
 }
 
-bool PluginLoader::loadPlugin(const std::string& pluginPath)
+bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin)
 {
-    // Check if already loaded
     if (isPluginLoaded(pluginPath))
     {
         lastError = "Plugin already loaded: " + pluginPath;
         std::cerr << "Warning: " << lastError << std::endl;
-        return false;
+        if (overridePlugin)
+        {
+            removePlugin(pluginPath);
+        }
+        else
+        {
+            return false;
+        }
     }
 
-    // Check if file exists
     if (! fs::exists(pluginPath))
     {
         lastError = "Plugin file does not exist: " + pluginPath;
@@ -118,6 +128,49 @@ void PluginLoader::extractPluginMetadata(PluginInfo& info)
     {
         info.name = getModelName();
     }
+}
+
+void PluginLoader::removePlugin(const std::string &pluginPath)
+{
+    namespace fs = std::filesystem;
+
+    auto it = std::find_if(loadedPlugins.begin(), loadedPlugins.end(),
+                           [&](const PluginInfo& p) { return p.path == pluginPath; });
+
+    if (it == loadedPlugins.end())
+    {
+        lastError = "Plugin not found: " + pluginPath;
+        std::cerr << "Warning: " << lastError << std::endl;
+        return;
+    }
+
+    PluginInfo& plugin = *it;
+
+    std::cout << "Unloading plugin: " << pluginPath << std::endl;
+
+    if (!plugin.name.empty() && SceneWidgetVisualizerFactory::isModelRegistered(plugin.name))
+    {
+        if (SceneWidgetVisualizerFactory::unregisterModel(plugin.name))
+            std::cout << "✓ Unregistered model: " << plugin.name << std::endl;
+    }
+
+    // Close the library .so
+    if (plugin.handle)
+    {
+        if (dlclose(plugin.handle) != 0)
+        {
+            lastError = std::string("Failed to close plugin handle: ") + dlerror();
+            std::cerr << "Error: " << lastError << std::endl;
+        }
+        else
+        {
+            std::cout << "✓ Closed plugin handle: " << pluginPath << std::endl;
+        }
+    }
+
+    // Remove from list of loaded files
+    loadedPlugins.erase(it);
+    clearError();
 }
 
 int PluginLoader::loadPluginsFromDirectory(const std::string& directory)

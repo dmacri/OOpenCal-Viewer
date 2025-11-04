@@ -24,6 +24,7 @@
 #include "types.h"
 #include "visualiser/Line.h"
 #include "visualiser/SettingParameter.h"
+#include "utilities/CellConcept.hpp"
 
 /** @class ModelReader
  * @brief Template class for reading and processing model data from files.
@@ -34,7 +35,7 @@
  * 
  * @tparam Cell The cell type used in the model 
  * Note: Cell is derived class from Element (which is header from OOpenCal) */
-template<class Cell>
+template<CellLike Cell>
 class ModelReader
 {
 public:
@@ -173,7 +174,7 @@ ColumnAndRow calculateXYOffsetForNode(NodeIndex node, NodeIndex nNodeX, NodeInde
 } // namespace ReaderHelpers
 /////////////////////////////
 
-template<class Cell>
+template<CellLike Cell>
 ColumnAndRow ModelReader<Cell>::readColumnAndRowForStepFromFile(StepIndex step, const std::string& fileName, NodeIndex node, bool isBinary)
 {
     ColumnAndRow columnAndRow;
@@ -181,7 +182,7 @@ ColumnAndRow ModelReader<Cell>::readColumnAndRowForStepFromFile(StepIndex step, 
     return columnAndRow;
 }
 
-template<class Cell>
+template<CellLike Cell>
 std::ifstream ModelReader<Cell>::readColumnAndRowForStepFromFileReturningStream(StepIndex step,
                                                                                 const std::string& fileName,
                                                                                 NodeIndex node,
@@ -234,7 +235,7 @@ std::ifstream ModelReader<Cell>::readColumnAndRowForStepFromFileReturningStream(
     return file;
 }
 
-template<class Cell>
+template<CellLike Cell>
 template<class Matrix>
 void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParameter* sp, Line* lines)
 {
@@ -319,7 +320,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
 
                     // Create a temporary cell from binary data and copy to matrix
                     Cell tempCell;
-                    std::memcpy(&tempCell, cellData, cellSize);
+                    std::memcpy(&tempCell, cellData, cellSize); /// @note This is erasing vtable, so don't use the object polimorphic way
                     m[matrixRow][matrixCol] = tempCell;
                 }
             }
@@ -400,7 +401,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
                           });
 }
 
-template<class Cell>
+template<CellLike Cell>
 std::vector<ColumnAndRow> ModelReader<Cell>::giveMeLocalColsAndRowsForAllSteps(StepIndex step,
                                                                                NodeIndex nNodeX,
                                                                                NodeIndex nNodeY,
@@ -418,7 +419,7 @@ std::vector<ColumnAndRow> ModelReader<Cell>::giveMeLocalColsAndRowsForAllSteps(S
     return allColumnsAndRows;
 }
 
-template<class Cell>
+template<CellLike Cell>
 void ModelReader<Cell>::readStepsOffsetsForAllNodesFromFiles(NodeIndex nNodeX, NodeIndex nNodeY, const std::string& filename)
 {
     const auto totalNodes = nNodeX * nNodeY;
@@ -474,7 +475,7 @@ void ModelReader<Cell>::readStepsOffsetsForAllNodesFromFiles(NodeIndex nNodeX, N
     }
 }
 
-template<class Cell>
+template<CellLike Cell>
 std::vector<StepIndex> ModelReader<Cell>::availableSteps(bool throwOnMismatch) const
 {
     if (nodeStepOffsets.empty())
@@ -540,7 +541,7 @@ std::vector<StepIndex> ModelReader<Cell>::availableSteps(bool throwOnMismatch) c
     return firstNodeSteps;
 }
 
-template<class Cell>
+template<CellLike Cell>
 FilePosition ModelReader<Cell>::getStepStartingPositionInFile(StepIndex step, NodeIndex node) const
 {
     if (node >= nodeStepOffsets.size())

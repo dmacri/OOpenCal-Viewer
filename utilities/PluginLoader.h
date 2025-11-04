@@ -44,7 +44,7 @@ public:
     /** @brief Load a single plugin from path
      * @param pluginPath Full path to .so file
      * @return true if loaded successfully, false otherwise */
-    bool loadPlugin(const std::string& pluginPath);
+    bool loadPlugin(const std::string& pluginPath, bool overridePlugin=false);
 
     /** @brief Load all plugins from a directory
      * @param directory Path to directory containing .so files
@@ -79,9 +79,12 @@ private:
     PluginLoader(const PluginLoader&) = delete;
     PluginLoader& operator=(const PluginLoader&) = delete;
 
+    /// @brief Extract plugin metadata after loading
+    void extractPluginMetadata(PluginInfo& info);
+
+    /// @brief Remove plugin from application, if loaded
+    void removePlugin(const std::string& pluginPath);
+
     std::vector<PluginInfo> loadedPlugins;
     std::string lastError;
-
-    /** @brief Extract plugin metadata after loading */
-    void extractPluginMetadata(PluginInfo& info);
 };

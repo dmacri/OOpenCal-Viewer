@@ -1,4 +1,6 @@
 #include <utility> // std::to_underlying, which requires C++23
+#include <filesystem>
+#include <source_location>
 #include <QCommonStyle>
 #include <QSettings>
 #include <QDebug>
@@ -19,9 +21,12 @@
 #include "ui_mainwindow.h"
 #include "utilities/PluginLoader.h"
 #include "utilities/CommandLineParser.h"
+#include "utilities/ModelLoader.h"
+#include "utilities/CppModuleBuilder.h"
 #include "widgets/ConfigDetailsDialog.h"
 #include "widgets/ColorSettingsDialog.h"
 #include "widgets/AboutDialog.h"
+#include "widgets/CompilationLogWidget.h"
 #include "visualiser/VideoExporter.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
 #include "config/Config.h"
@@ -30,7 +35,13 @@
 namespace
 {
 constexpr StepIndex FIRST_STEP_NUMBER = 0;
+
+inline std::string sourceFileParentDirectoryAbsolutePath(const std::source_location& location = std::source_location::current())
+{
+    const auto path2CurrentFile = std::filesystem::absolute(location.file_name());
+    return path2CurrentFile.parent_path().string();
 }
+} // namespace
 
 
 MainWindow::MainWindow(QWidget* parent)
@@ -96,6 +107,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionOpenConfiguration, &QAction::triggered, this, &MainWindow::onOpenConfigurationRequested);
     connect(ui->actionReloadData, &QAction::triggered, this, &MainWindow::onReloadDataRequested);
     connect(ui->actionLoadPlugin, &QAction::triggered, this, &MainWindow::onLoadPluginRequested);
+    connect(ui->actionLoadModelFromDirectory, &QAction::triggered, this, &MainWindow::onLoadModelFromDirectoryRequested);
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
 
     // View mode actions
@@ -702,6 +714,96 @@ void MainWindow::onLoadPluginRequested()
                               tr("Failed to load plugin:\n%1\n\nError: %2")
                                   .arg(pluginPath)
                                   .arg(QString::fromStdString(loader.getLastError())));
+    }
+}
+
+void MainWindow::onLoadModelFromDirectoryRequested()
+{
+    QString modelDirectory = QFileDialog::getExistingDirectory(this,
+                                                               tr("Load Model from Directory"),
+                                                               ".",
+                                                               QFileDialog::ShowDirsOnly);
+
+    if (modelDirectory.isEmpty())
+    {
+        return; // User cancelled
+    }
+
+    loadModelFromDirectory(modelDirectory);
+}
+
+void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
+{
+    try
+    {
+        // Show progress dialog
+        QProgressDialog progress(tr("Loading model from directory..."), tr("Cancel"), 0, 0, this);
+        progress.setWindowModality(Qt::WindowModal);
+        progress.setMinimumDuration(500);
+
+        QApplication::processEvents();
+
+        // Use ModelLoader to handle all loading logic
+        ModelLoader loader;
+        
+        // Set the project root path for include paths during compilation
+        // Get the directory where the executable is located
+        loader.getBuilder()->setProjectRootPath(sourceFileParentDirectoryAbsolutePath());
+        
+        const auto result = loader.loadModelFromDirectory(modelDirectory.toStdString());
+
+        if (! result.success)
+        {
+            progress.close();
+
+            // If compilation was attempted and failed, show detailed error dialog
+            if (result.compilationResult)
+            {
+                CompilationLogWidget logWidget(this);
+                logWidget.displayCompilationResult(*result.compilationResult);
+                logWidget.exec();
+            }
+            else
+            {
+                QMessageBox::critical(this, tr("Model Load Failed"),
+                    tr("Failed to load model from:\n%1").arg(modelDirectory));
+            }
+            return;
+        }
+
+        progress.setLabelText(tr("Loading compiled module..."));
+        QApplication::processEvents();
+
+        // Load the compiled module
+        PluginLoader& pluginLoader = PluginLoader::instance();
+        if (pluginLoader.loadPlugin(result.compiledModulePath, /*overridePlugin=*/true))
+        {
+            // Refresh the models menu
+            recreateModelMenuActions();
+
+            progress.close();
+
+            QMessageBox::information(this,
+                                     tr("Model Loaded"),
+                                     tr("Model '%1' loaded successfully from:\n%2\n\nNew model is now available in the Model menu.")
+                                         .arg(QString::fromStdString(result.modelName))
+                                         .arg(modelDirectory));
+        }
+        else
+        {
+            progress.close();
+
+            QMessageBox::critical(this,
+                                  tr("Module Load Failed"),
+                                  tr("Failed to load compiled module:\n%1\n\nError: %2")
+                                      .arg(QString::fromStdString(result.compiledModulePath))
+                                      .arg(QString::fromStdString(pluginLoader.getLastError())));
+        }
+    }
+    catch (const std::exception& e)
+    {
+        QMessageBox::critical(this, tr("Error"),
+            tr("An error occurred while loading the model:\n%1").arg(e.what()));
     }
 }
 

@@ -130,6 +130,9 @@
        </item>
        <item>
         <widget class="QSlider" name="azimuthSlider">
+         <property name="toolTip">
+          <string>Camera rotation around Z axis</string>
+         </property>
          <property name="minimum">
           <number>-180</number>
          </property>
@@ -141,9 +144,6 @@
          </property>
          <property name="orientation">
           <enum>Qt::Orientation::Horizontal</enum>
-         </property>
-         <property name="toolTip">
-          <string>Camera rotation around Z axis</string>
          </property>
         </widget>
        </item>
@@ -169,6 +169,9 @@
        </item>
        <item>
         <widget class="QSlider" name="elevationSlider">
+         <property name="toolTip">
+          <string>Camera elevation angle</string>
+         </property>
          <property name="minimum">
           <number>-90</number>
          </property>
@@ -180,9 +183,6 @@
          </property>
          <property name="orientation">
           <enum>Qt::Orientation::Horizontal</enum>
-         </property>
-         <property name="toolTip">
-          <string>Camera elevation angle</string>
          </property>
         </widget>
        </item>
@@ -486,17 +486,19 @@
     <property name="title">
      <string>File</string>
     </property>
-    <addaction name="actionOpenConfiguration"/>
-    <addaction name="separator"/>
     <widget class="QMenu" name="menuRecentFiles">
-     <property name="title">
-      <string>Recent Files</string>
-     </property>
      <property name="toolTip">
       <string>Recent model configuration files</string>
      </property>
+     <property name="title">
+      <string>Recent Files</string>
+     </property>
     </widget>
+    <addaction name="actionOpenConfiguration"/>
+    <addaction name="separator"/>
     <addaction name="menuRecentFiles"/>
+    <addaction name="separator"/>
+    <addaction name="actionLoadModelFromDirectory"/>
     <addaction name="separator"/>
     <addaction name="actionShow_config_details"/>
     <addaction name="separator"/>
@@ -619,6 +621,20 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+P</string>
+   </property>
+  </action>
+  <action name="actionLoadModelFromDirectory">
+   <property name="icon">
+    <iconset theme="QIcon::ThemeIcon::FolderOpen"/>
+   </property>
+   <property name="text">
+    <string>Load Model from Directory...</string>
+   </property>
+   <property name="toolTip">
+    <string>Load a model from a directory (auto-compile if needed)</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+D</string>
    </property>
   </action>
   <action name="actionColor_settings">

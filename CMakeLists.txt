@@ -120,9 +120,12 @@ list(APPEND Sources
     widgets/ColorSettingsDialog.cpp
     widgets/ColorSettings.cpp
     widgets/AboutDialog.cpp
+    widgets/CompilationLogWidget.cpp
     utilities/PluginLoader.cpp
     utilities/ModelReader.cpp
     utilities/CommandLineParser.cpp
+    utilities/ModelLoader.cpp
+    utilities/CppModuleBuilder.cpp
 )
 file(GLOB Resources
     LIST_DIRECTORIES false
@@ -271,11 +274,36 @@ else()
     message(FATAL_ERROR "argparse source directory not found. Ensure initial FetchContent download succeeded.")
 endif()
 
+# ============================================
+# Tiny Process Library (FetchContent)
+# ============================================
+FetchContent_Declare(
+    tiny_process_library
+    GIT_REPOSITORY https://gitlab.com/eidheim/tiny-process-library.git
+    GIT_TAG master
+    ${_UPDATE_ARGS}
+)
+
+FetchContent_MakeAvailable(tiny_process_library)
+
+FetchContent_GetProperties(tiny_process_library)
+if(tiny_process_library_SOURCE_DIR)
+    target_sources(${PROJECT_NAME} PRIVATE
+        ${tiny_process_library_SOURCE_DIR}/process.cpp
+    )
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        ${tiny_process_library_SOURCE_DIR}
+    )
+else()
+    message(FATAL_ERROR "tiny_process_library source directory not found. Ensure initial FetchContent download succeeded.")
+endif()
+
 
 # ============================================
 # Linking
 # ============================================
 target_link_libraries(${PROJECT_NAME} PRIVATE ${VTK_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} PRIVATE tiny-process-library)
 #target_link_libraries(${PROJECT_NAME} PRIVATE Qt5::Widgets Qt5::OpenGL VTK::GUISupportQt VTK::IOLegacy)
 
 # Export symbols for plugins to use

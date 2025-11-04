@@ -48,11 +48,14 @@ The generated documentation will be available in the `doc/html` directory.
 
 ### Additional Documentation
 
+- **[doc/LOAD_MODEL_FROM_DIRECTORY.md](doc/LOAD_MODEL_FROM_DIRECTORY.md)** - User guide for loading models from directory
+- **[doc/DEVELOPER_GUIDE_MODEL_LOADING.md](doc/DEVELOPER_GUIDE_MODEL_LOADING.md)** - Developer documentation for model loading feature
 - **[doc/PLUGIN_USER_GUIDE.md](doc/PLUGIN_USER_GUIDE.md)** - Complete guide to creating and using plugins
 - **[doc/PLUGIN_ARCHITECTURE.md](doc/PLUGIN_ARCHITECTURE.md)** - Technical implementation details
 - **[doc/VIEW_MODES.md](doc/VIEW_MODES.md)** - 2D/3D view modes documentation
 - **[doc/Build-VTK.md](doc/Build-VTK.md)** - VTK compilation instructions
 - **[examples/custom_model_plugin/](examples/custom_model_plugin/)** - Working example of a plugin
+- **[examples/model_header_example/](examples/model_header_example/)** - Example Header.txt configuration file
 
 ## Project Structure
 
@@ -160,6 +163,62 @@ The application now supports **loading custom models as plugins** without recomp
 ```
 
 See **[doc/PLUGIN_USER_GUIDE.md](doc/PLUGIN_USER_GUIDE.md)** for complete guide and examples.
+
+### 📁 Load Models from Directory (NEW!)
+
+The application now supports **loading OOpenCAL models directly from a directory** with automatic compilation!
+
+**Key Features:**
+- ✅ Load models from directory containing `Header.txt` and C++ source
+- ✅ Automatic compilation of C++ models to shared libraries
+- ✅ Smart detection: uses pre-compiled .so if available
+- ✅ Comprehensive error reporting with compilation logs
+- ✅ Full integration with existing plugin system
+- ✅ **Load via GUI** - File → Load Model from Directory... (Ctrl+D)
+
+**How It Works:**
+1. User selects a directory containing a model
+2. Application reads `Header.txt` configuration
+3. Finds C++ model source file (*.h)
+4. Checks if compiled module (.so) exists
+5. If not, automatically compiles using Clang
+6. Loads compiled module and adds to Model menu
+
+**Quick Start:**
+```bash
+# Directory structure
+MyModel/
+├── Header.txt          # Configuration file
+├── MyModelCell.h       # C++ model source
+└── Output/             # (Optional) Simulation output data
+    ├── MyModel_0.txt
+    └── MyModel_1.txt
+
+# In GUI:
+# 1. Model → Load Model from Directory...
+# 2. Select MyModel directory
+# 3. Model automatically compiles and loads!
+```
+
+**Header.txt Format:**
+```ini
+GENERAL:
+    number_of_columns=500
+    number_of_rows=500
+    number_of_steps=500
+    output_file_name=mymodel
+
+DISTRIBUTED:
+    number_node_x=1
+    number_node_y=1
+
+VISUALIZATION:
+    substates=h,z
+    mode=binary
+    reduction=sum,min,max
+```
+
+See **[doc/LOAD_MODEL_FROM_DIRECTORY.md](doc/LOAD_MODEL_FROM_DIRECTORY.md)** for complete guide and **[examples/model_header_example/](examples/model_header_example/)** for example files.
 
 ### ✨ Runtime Model Switching & Configuration Loading
 
