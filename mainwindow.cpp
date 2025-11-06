@@ -19,17 +19,20 @@
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+
 #include "utilities/PluginLoader.h"
 #include "utilities/CommandLineParser.h"
 #include "utilities/ModelLoader.h"
 #include "utilities/CppModuleBuilder.h"
+#include "visualiser/SettingParameter.h"
+#include "config/Config.h"
 #include "widgets/ConfigDetailsDialog.h"
 #include "widgets/ColorSettingsDialog.h"
 #include "widgets/AboutDialog.h"
 #include "widgets/CompilationLogWidget.h"
+#include "widgets/ReductionManager.h"
 #include "visualiser/VideoExporter.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
-#include "config/Config.h"
 
 
 namespace
@@ -47,8 +50,7 @@ inline std::string sourceFileParentDirectoryAbsolutePath(const std::source_locat
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , modelActionGroup(nullptr)
-    , playbackTimer(new QTimer(this))
+    , playbackTimer{ std::make_unique<QTimer>(this) }
     , currentStep{ FIRST_STEP_NUMBER }
 {
     ui->setupUi(this);
@@ -62,15 +64,6 @@ MainWindow::MainWindow(QWidget* parent)
     updateRecentFilesMenu();
 
     enterNoConfigurationFileMode();
-}
-
-void MainWindow::loadInitialConfiguration(const QString& configFileName)
-{
-    if (! configFileName.isEmpty())
-    {
-        configureUIElements(configFileName);
-        addToRecentFiles(configFileName);
-    }
 }
 
 void MainWindow::configureUIElements(const QString& configFileName)
@@ -95,7 +88,7 @@ void MainWindow::setupConnections()
     connect(ui->sceneWidget, &SceneWidget::totalNumberOfStepsReadFromConfigFile, this, &MainWindow::totalStepsNumberChanged);
     connect(ui->sceneWidget, &SceneWidget::availableStepsReadFromConfigFile, this, &MainWindow::availableStepsLoadedFromConfigFile);
 
-    connect(playbackTimer, &QTimer::timeout, this, &MainWindow::onPlaybackTimerTick);
+    connect(playbackTimer.get(), &QTimer::timeout, this, &MainWindow::onPlaybackTimerTick);
 }
 
 void MainWindow::connectMenuActions()
@@ -450,6 +443,7 @@ bool MainWindow::setPositionOnWidgets(StepIndex stepPosition, bool updateSlider)
         changingPositionSuccess = false;
     }
     changeWhichButtonsAreEnabled();
+    updateReductionDisplay();
 
     return changingPositionSuccess;
 }
@@ -472,6 +466,7 @@ void MainWindow::onStepNumberChanged()
         currentStep = step;
         setPositionOnWidgets(currentStep);
     }
+    updateReductionDisplay();
 }
 
 void MainWindow::onUpdateStepPositionOnSlider(StepIndex value)
@@ -588,6 +583,9 @@ void MainWindow::openConfigurationFile(const QString& configFileName)
             // Reload with new configuration
             ui->sceneWidget->loadNewConfiguration(configFileName.toStdString(), 0);
         }
+
+        // Initialize reduction manager for this configuration
+        initializeReductionManager(configFileName);
 
         // Update UI with new configuration
         showInputFilePathOnBarLabel(configFileName);
@@ -780,6 +778,10 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         {
             // Refresh the models menu
             recreateModelMenuActions();
+
+            // Reset reduction manager when model changes
+            reductionManager.reset();
+            updateReductionDisplay();
 
             progress.close();
 
@@ -1288,5 +1290,50 @@ void MainWindow::applyCommandLineOptions(CommandLineParser& cmdParser)
         {
             QTimer::singleShot(100, this, &MainWindow::close);
         }
+    }
+}
+
+void MainWindow::updateReductionDisplay()
+{
+    ui->reductionWidget->updateDisplay(currentStep);
+}
+
+void MainWindow::initializeReductionManager(const QString& configFileName)
+{
+    ui->reductionWidget->setReductionManager(nullptr);
+
+    // Get reduction configuration from SettingParameter
+    const auto* settingParam = this->ui->sceneWidget->getSettingParameter();
+    if (!settingParam || settingParam->reduction.empty())
+    {
+        // No reduction configured
+        reductionManager.reset();
+        return;
+    }
+
+    // Build path to reduction file
+    namespace fs = std::filesystem;
+    fs::path configPath(configFileName.toStdString());
+    fs::path outputDir = configPath.parent_path() / "Output";
+    
+    // Get output filename from config
+    try
+    {
+        Config config(configFileName.toStdString());
+        ConfigCategory* generalContext = config.getConfigCategory("GENERAL");
+        std::string outputFileNameFromCfg = generalContext->getConfigParameter("output_file_name")->getValue<std::string>();
+        fs::path reductionFilePath = outputDir / (outputFileNameFromCfg + "-red.txt");
+        
+        // Create ReductionManager with the reduction file path and configuration
+        reductionManager = std::make_unique<ReductionManager>(
+            QString::fromStdString(reductionFilePath.string()),
+            QString::fromStdString(settingParam->reduction)
+        );
+        ui->reductionWidget->setReductionManager(reductionManager.get());
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error initializing ReductionManager: " << e.what() << std::endl;
+        reductionManager.reset();
     }
 }

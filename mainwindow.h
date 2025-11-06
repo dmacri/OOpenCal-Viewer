@@ -16,6 +16,7 @@ class MainWindow;
 class QPushButton;
 class QActionGroup;
 class QTimer;
+class ReductionManager;
 
 /** @class MainWindow
  * @brief The main application window class that manages the user interface.
@@ -30,7 +31,7 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    void loadInitialConfiguration(const QString &configFileName);
+    void openConfigurationFile(const QString& configFileName);
     void applyCommandLineOptions(class CommandLineParser &cmdParser);
 
     void setSilentMode(bool newSilentMode)
@@ -38,25 +39,33 @@ public:
         silentMode = newSilentMode;
     }
 
-private slots:
-    void showAboutThisApplicationDialog();
+private slots: // menu actions
+    // File submenu
+    void onOpenConfigurationRequested();
     void showConfigDetailsDialog();
     void exportVideoDialog();
-    void onStepNumberChanged();
-    void onOpenConfigurationRequested();
-    void onColorSettingsRequested();
+    void onLoadPluginRequested();
+    void onLoadModelFromDirectoryRequested();
 
+    // View submenu
     void on2DModeRequested();
     void on3DModeRequested();
+
+    // Model submenu
+    void onModelSelected();
+    void onReloadDataRequested();
+
+    // Help submenu:
+    void showAboutThisApplicationDialog();
+
+    // other slots
+    void onStepNumberChanged();
+    void onColorSettingsRequested();
+
     void onAzimuthChanged(int value);
     void onElevationChanged(int value);
     void onCameraOrientationChanged(double azimuth, double elevation);
     void syncCameraSliders();
-
-    void onModelSelected();
-    void onReloadDataRequested();
-    void onLoadPluginRequested();
-    void onLoadModelFromDirectoryRequested();
 
     void onPlayButtonClicked();
     void onStopButtonClicked();
@@ -118,14 +127,17 @@ private:
     QString getSmartDisplayName(const QString &filePath, const QStringList &allPaths) const;
     QString generateTooltipForFile(const QString &filePath) const;
     void updateRecentFilesMenu();
-    void openConfigurationFile(const QString& configFileName);
     void loadModelFromDirectory(const QString& modelDirectory);
+    void initializeReductionManager(const QString& configFileName);
+    void updateReductionDisplay();
 
     static constexpr int MAX_RECENT_FILES = 10;
 
+private:
     Ui::MainWindow *ui;
-    QTimer *playbackTimer;
+    std::unique_ptr<QTimer> playbackTimer;
     QActionGroup *modelActionGroup = nullptr;
+    std::unique_ptr<ReductionManager> reductionManager;
 
     StepIndex currentStep;
 

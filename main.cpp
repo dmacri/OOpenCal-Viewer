@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
         const auto& configFile = cmdParser.getConfigFile().value();
         if (std::filesystem::exists(configFile))
         {
-            mainWindow.loadInitialConfiguration(QString::fromStdString(configFile));
+            mainWindow.openConfigurationFile(QString::fromStdString(configFile));
         }
         else
         {

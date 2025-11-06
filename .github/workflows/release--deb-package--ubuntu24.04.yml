@@ -8,7 +8,7 @@ on:
     types: [created]
 
 env:
-  PROJECT_NAME: QtVtkViewer
+  PROJECT_NAME: OOpenCal-Viewer
 
 jobs:
   build:
