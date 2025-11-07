@@ -39,7 +39,7 @@ void Visualizer::buildLoadBalanceLine(const std::vector<Line>& lines,
     // actorBuildLine->GetProperty()->SetLineWidth(1.5);
 
     // 5. Add to renderer
-    renderer->AddActor2D(actorBuildLine);
+    renderer->AddViewProp(actorBuildLine);
 }
 
 vtkSmartPointer<vtkPolyData> Visualizer::createLinePolyData(const std::vector<Line>& lines, int nRows)
@@ -123,6 +123,6 @@ vtkNew<vtkActor2D> Visualizer::buildStepText(StepIndex step,
     stepLineTextActor->SetMapper(stepLineTextMapper);
     stepLineTextActor->GetPositionCoordinate()->SetCoordinateSystemToNormalizedDisplay();
     stepLineTextActor->GetPositionCoordinate()->SetValue(0.05, 0.85);
-    renderer->AddActor2D(stepLineTextActor);
+    renderer->AddViewProp(stepLineTextActor);
     return stepLineTextActor;
 }

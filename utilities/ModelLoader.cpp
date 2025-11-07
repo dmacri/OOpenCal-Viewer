@@ -11,6 +11,7 @@
 #include "ModelLoader.h"
 #include "config/Config.h"
 #include "CppModuleBuilder.h"
+#include "vtk_compile_flags.h"
 
 namespace
 {
@@ -54,6 +55,13 @@ std::string generateModuleNameForSourceFile(const std::string& cppHeaderFile)
     const auto sharedLibraryName = "lib" + base + "Plugin.so";
     return file.parent_path() / sharedLibraryName;
 }
+
+std::string generateClassNameFromCppHeaderFileName(const std::string& cppHeaderFile)
+{
+    std::filesystem::path file(cppHeaderFile);
+    const std::string base = file.stem().string();  // e.g. "BallCell"
+    return base;
+}
 } // namespace
 
 
@@ -61,7 +69,7 @@ ModelLoader::ModelLoader()
     : builder(std::make_unique<viz::plugins::CppModuleBuilder>())
 {
     std::string projectRoot = getProjectRootPath();
-    if (!projectRoot.empty())
+    if (! projectRoot.empty())
     {
         builder->setProjectRootPath(projectRoot);
     }
@@ -138,7 +146,8 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             std::cout << "Compiling module: " << sourceFile << std::endl;
 
             // Generate wrapper code
-            if (!generateWrapper(result.modelName, wrapperSource))
+            const auto className = generateClassNameFromCppHeaderFileName(sourceFile);
+            if (! generateWrapper(wrapperSource, result.modelName, className))
             {
                 std::cerr << "Error: Failed to generate wrapper code" << std::endl;
                 result.success = false;
@@ -149,7 +158,7 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             // Empty string for cppStandard triggers auto-detection in CppModuleBuilder
             auto compilationResult = builder->compileModule(wrapperSource, outputFile, "");
 
-            if (!compilationResult.success)
+            if (! compilationResult.success)
             {
                 std::cerr << "Compilation failed with exit code: " << compilationResult.exitCode << std::endl;
                 if (!compilationResult.stderr.empty())
@@ -226,7 +235,7 @@ bool ModelLoader::moduleExists(const std::string& outputPath)
     return fs::exists(outputPath) && fs::is_regular_file(outputPath);
 }
 
-bool ModelLoader::generateWrapper(const std::string& modelName, const std::string& wrapperPath)
+bool ModelLoader::generateWrapper(const std::string& wrapperPath, const std::string& modelName, const std::string& className)
 {
     try
     {
@@ -245,7 +254,7 @@ bool ModelLoader::generateWrapper(const std::string& modelName, const std::strin
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
 
 // The actual model class is defined in the compiled model header
-#include "{0}.h"
+#include "{1}.h"
 
 #define MODEL_NAME "{0}"
 
@@ -257,7 +266,7 @@ void registerPlugin()
     std::cout << "Registering " MODEL_NAME " plugin..." << std::endl;
 
     bool success = SceneWidgetVisualizerFactory::registerModel(MODEL_NAME, []() {{
-        return std::make_unique<SceneWidgetVisualizerAdapter<{0}>>(
+        return std::make_unique<SceneWidgetVisualizerAdapter<{1}>>(
             MODEL_NAME
         );
     }});
@@ -293,7 +302,7 @@ const char* getModelName()
     return MODEL_NAME;
 }}
 }} // extern "C"
-)", modelName);
+)", modelName, className);
 
         wrapper << code;
         wrapper.close();

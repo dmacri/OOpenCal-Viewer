@@ -1,3 +1,4 @@
+#include <iostream>
 #include <utility> // std::to_underlying, which requires C++23
 #include <filesystem>
 #include <source_location>
@@ -6,7 +7,6 @@
 #include <QDebug>
 #include <QMessageBox>
 #include <QTextStream>
-#include <iostream>
 #include <QColorDialog>
 #include <QStandardPaths>
 #include <QFileDialog>
@@ -15,24 +15,23 @@
 #include <QFileInfo>
 #include <QDateTime>
 #include <QDir>
-#include <QTimer>
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-#include "utilities/PluginLoader.h"
-#include "utilities/CommandLineParser.h"
-#include "utilities/ModelLoader.h"
-#include "utilities/CppModuleBuilder.h"
-#include "visualiser/SettingParameter.h"
 #include "config/Config.h"
-#include "widgets/ConfigDetailsDialog.h"
-#include "widgets/ColorSettingsDialog.h"
-#include "widgets/AboutDialog.h"
-#include "widgets/CompilationLogWidget.h"
-#include "widgets/ReductionManager.h"
+#include "utilities/CommandLineParser.h"
+#include "utilities/CppModuleBuilder.h"
+#include "utilities/ModelLoader.h"
+#include "utilities/PluginLoader.h"
+#include "utilities/ReductionManager.h"
+#include "visualiser/SettingParameter.h"
 #include "visualiser/VideoExporter.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+#include "widgets/AboutDialog.h"
+#include "widgets/ColorSettingsDialog.h"
+#include "widgets/CompilationLogWidget.h"
+#include "widgets/ConfigDetailsDialog.h"
 
 
 namespace
@@ -50,7 +49,7 @@ inline std::string sourceFileParentDirectoryAbsolutePath(const std::source_locat
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , playbackTimer{ std::make_unique<QTimer>(this) }
+    , playbackTimer{ this }
     , currentStep{ FIRST_STEP_NUMBER }
 {
     ui->setupUi(this);
@@ -88,7 +87,7 @@ void MainWindow::setupConnections()
     connect(ui->sceneWidget, &SceneWidget::totalNumberOfStepsReadFromConfigFile, this, &MainWindow::totalStepsNumberChanged);
     connect(ui->sceneWidget, &SceneWidget::availableStepsReadFromConfigFile, this, &MainWindow::availableStepsLoadedFromConfigFile);
 
-    connect(playbackTimer.get(), &QTimer::timeout, this, &MainWindow::onPlaybackTimerTick);
+    connect(&playbackTimer, &QTimer::timeout, this, &MainWindow::onPlaybackTimerTick);
 }
 
 void MainWindow::connectMenuActions()
@@ -270,8 +269,8 @@ void MainWindow::recordVideoToFile(const QString& outputFilePath, int fps)
 {
     // Save current state
     const auto originalStep = currentStep;
-    const bool wasPlaying = playbackTimer->isActive();
-    playbackTimer->stop();
+    const bool wasPlaying = playbackTimer.isActive();
+    playbackTimer.stop();
 
     // Create progress dialog
     QProgressDialog progress(tr("Exporting video..."), tr("Cancel"), 1, static_cast<int>(totalSteps()), this);
@@ -318,17 +317,17 @@ void MainWindow::recordVideoToFile(const QString& outputFilePath, int fps)
     setPositionOnWidgets(currentStep);
     if (wasPlaying)
     {
-        playbackTimer->start(ui->sleepSpinBox->value());
+        playbackTimer.start(ui->sleepSpinBox->value());
     }
 
     progress.setValue(static_cast<int>(totalSteps()));
 }
 void MainWindow::playingRequested(PlayingDirection direction)
 {
-    if (playbackTimer->isActive() && playbackDirection == direction)
+    if (playbackTimer.isActive() && playbackDirection == direction)
     {
         // Already playing in this direction, stop it
-        playbackTimer->stop();
+        playbackTimer.stop();
         return;
     }
 
@@ -336,7 +335,7 @@ void MainWindow::playingRequested(PlayingDirection direction)
     playbackDirection = direction;
 
     // Start timer with interval from sleepSpinBox
-    playbackTimer->start(ui->sleepSpinBox->value());
+    playbackTimer.start(ui->sleepSpinBox->value());
 }
 
 void MainWindow::onPlaybackTimerTick()
@@ -350,7 +349,7 @@ void MainWindow::onPlaybackTimerTick()
         QSignalBlocker blockSlider(ui->updatePositionSlider);
         if (bool changingPositionSuccess = setPositionOnWidgets(currentStep); ! changingPositionSuccess)
         {
-            playbackTimer->stop();
+            playbackTimer.stop();
             return;
         }
     }
@@ -359,19 +358,19 @@ void MainWindow::onPlaybackTimerTick()
     if ((playbackDirection == PlayingDirection::Forward && currentStep >= totalSteps())
         || (playbackDirection == PlayingDirection::Backward && currentStep <= FIRST_STEP_NUMBER))
     {
-        playbackTimer->stop();
+        playbackTimer.stop();
     }
 
     // Update timer interval in case sleepSpinBox changed
-    playbackTimer->setInterval(ui->sleepSpinBox->value());
+    playbackTimer.setInterval(ui->sleepSpinBox->value());
 }
 
 
 void MainWindow::onPlayButtonClicked()
 {
-    if (playbackTimer->isActive())
+    if (playbackTimer.isActive())
     {
-        playbackTimer->stop();
+        playbackTimer.stop();
     }
     else
     {
@@ -381,7 +380,7 @@ void MainWindow::onPlayButtonClicked()
 
 void MainWindow::onStopButtonClicked()
 {
-    playbackTimer->stop();
+    playbackTimer.stop();
     ui->playButton->setIcon(QCommonStyle().standardIcon(QStyle::SP_MediaPlay));
 }
 
@@ -572,7 +571,7 @@ void MainWindow::openConfigurationFile(const QString& configFileName)
     try
     {
         // Stop any ongoing playback
-        playbackTimer->stop();
+        playbackTimer.stop();
 
         if (bool isFirstConfiguration [[maybe_unused]] = ui->inputFilePathLabel->getFileName().isEmpty())
         {

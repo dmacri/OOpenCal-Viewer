@@ -332,6 +332,9 @@ protected:
      * settings from settingParameter. It's called during initialization and when
      * reloading data. */
     void prepareStageWithCurrentNodeConfiguration();
+    
+    /// @brief Returns part of ToolTip for specific position (it contains cell value with substates)
+    QString cellValueAtThisPositionAsText() const;
 
 private:
     /** @brief Proxy for the scene widget visualizer

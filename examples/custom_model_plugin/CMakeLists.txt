@@ -48,11 +48,13 @@ if(NOT VTK_FOUND)
     )
 endif()
 
-if(NOT Qt6_FOUND AND NOT Qt5_FOUND)
-    find_package(Qt6 COMPONENTS Core Widgets QUIET)
-    if(NOT Qt6_FOUND)
-        find_package(Qt5 5.15 COMPONENTS Core Widgets QUIET)
-    endif()
+# Try to find Qt6 first, fall back to Qt5 (Qt5 is for GithubCI for compatibility with VTK)
+find_package(Qt6 COMPONENTS Core Gui Widgets OpenGL QUIET)
+if (NOT Qt6_FOUND)
+    find_package(Qt5 COMPONENTS Core Gui Widgets OpenGL REQUIRED)
+    set(QT_LIBRARIES Qt5::Core Qt5::Gui Qt5::Widgets Qt5::OpenGL)
+else()
+    set(QT_LIBRARIES Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL)
 endif()
 
 # ============================================================================

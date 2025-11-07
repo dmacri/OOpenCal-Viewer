@@ -5,6 +5,7 @@
 
 #include <iosfwd>
 #include <string>
+#include <vector>
 
 #include "utilities/types.h"
 
@@ -30,6 +31,14 @@ struct SettingParameter
     static constexpr int font_size = 18; ///< Font size for text rendering
 
     bool changed; ///< Flag indicating if settings have been modified and currently visible state should be redrown
+
+    /** @brief Parse substates string into a vector of field names.
+     * 
+     * Parses the substates string (e.g., "h,z" or "s") into individual field names.
+     * Handles both simple format (comma-separated) and extended format with parameters.
+     * 
+     * @return Vector of field names (e.g., {"h", "z"}) or empty vector if substates is empty */
+    std::vector<std::string> getSubstateFields() const;
 
     /// @brief Printing SettingParameter to output stream
     friend std::ostream& operator<<(std::ostream& os, const SettingParameter& sp);

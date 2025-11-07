@@ -1,13 +1,13 @@
 /** @file ReductionManager.cpp
- * @brief Implementation of the ReductionManager class.
- */
+ * @brief Implementation of the ReductionManager class. */
 
 #include "ReductionManager.h"
 #include <QFile>
 #include <QTextStream>
 #include <QStringList>
 #include <iostream>
-#include <qregularexpression.h>
+#include <QRegularExpression>
+
 
 ReductionManager::ReductionManager(const QString& reductionFilePath, const QString& reductionConfig)
 {
@@ -15,26 +15,30 @@ ReductionManager::ReductionManager(const QString& reductionFilePath, const QStri
     if (!reductionConfig.isEmpty())
     {
         const auto reductions = reductionConfig.split(',', Qt::SkipEmptyParts);
-        expectedReductions.assign(reductions.begin(), reductions.end());
         for (auto& reduction : expectedReductions)
         {
             reduction = reduction.trimmed();
         }
+        expectedReductions.assign(reductions.begin(), reductions.end());
     }
 
     // Load reduction data from file
-    loadReductionData(reductionFilePath, reductionConfig);
+    loadReductionData(reductionFilePath);
 }
 
-void ReductionManager::loadReductionData(const QString& filePath, const QString& reductionConfig)
+void ReductionManager::loadReductionData(const QString& filePath)
 {
+    reductionFilePath.clear();
+
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-        errorMessage = QString("Failed to open reduction file: %1").arg(filePath);
+        errorMessage = QString("Failed to open reduction file: %1").arg(filePath); // TODO: GB: It should throw
         dataLoaded = false;
         return;
     }
+
+    reductionFilePath = filePath;
 
     QTextStream in(&file);
     int lineNumber = 0;
@@ -50,9 +54,9 @@ void ReductionManager::loadReductionData(const QString& filePath, const QString&
         int stepNumber = -1;
         std::map<QString, QString> values;
 
-        if (!parseLine(line, stepNumber, values))
+        if (! parseLine(line, stepNumber, values))
         {
-            errorMessage = QString("Failed to parse line %1 in reduction file: %2").arg(lineNumber).arg(line);
+            errorMessage = QString("Failed to parse line %1 in reduction file: %2").arg(lineNumber).arg(line); // TODO: It should throw?
             file.close();
             dataLoaded = false;
             return;

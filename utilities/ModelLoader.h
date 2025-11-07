@@ -98,5 +98,5 @@ private:
      * @param modelName Name of the model
      * @param wrapperPath Path where wrapper file should be created
      * @return true if wrapper was generated successfully */
-    bool generateWrapper(const std::string& modelName, const std::string& wrapperPath);
+    bool generateWrapper(const std::string& wrapperPath, const std::string& modelName, const std::string& className);
 };

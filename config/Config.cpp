@@ -15,16 +15,14 @@
 
 namespace
 {
-/**
- * @brief Removes all whitespace characters from a std::string.
+/** @brief Removes all whitespace characters from a std::string.
  *
  * This function erases all characters for which std::isspace() returns true,
  * such as spaces, tabs, newlines, and other locale-defined whitespace.
  * It works in-place and automatically selects a ranges-based implementation
  * if supported by the compiler, otherwise falls back to classic erase–remove idiom.
  *
- * @param s Reference to the std::string to be modified in place.
- */
+ * @param s Reference to the std::string to be modified in place. */
 void remove_spaces(std::string& s)
 {
     auto removingRange = std::ranges::remove_if(s, [](unsigned char ch) {

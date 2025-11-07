@@ -1,14 +1,14 @@
 /** @file CppModuleBuilder.cpp
  * @brief Implementation of CppModuleBuilder for compiling C++ modules. */
 
-#include "CppModuleBuilder.h"
-
 #include <filesystem>
 #include <iostream>
 #include <sstream>
 
-#include "process.hpp"
+#include "CppModuleBuilder.h"
+#include "process.hpp" // tiny process library
 #include "ModelLoader.h"
+#include "vtk_compile_flags.h" // generated header
 
 namespace fs = std::filesystem;
 
@@ -19,7 +19,7 @@ namespace viz::plugins
  * @return C++ standard string (e.g., "c++17", "c++23") */
 static std::string detectCppStandard(const std::string& userStandard)
 {
-    if (!userStandard.empty())
+    if (! userStandard.empty())
         return userStandard;
 
     #ifdef __cplusplus
@@ -45,6 +45,10 @@ CppModuleBuilder::CppModuleBuilder(const std::string& compilerPath,
         if (envDir)
         {
             this->oopencalDir = envDir;
+        }
+        else
+        {
+            this->oopencalDir = OOPENCAL_DIR; // defined in CMake
         }
     }
 }
@@ -102,8 +106,8 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
 }
 
 std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
-                                                   const std::string& outputFile,
-                                                   const std::string& cppStandard) const
+                                                  const std::string& outputFile,
+                                                  const std::string& cppStandard) const
 {
     // Auto-detect C++ standard if not provided
     std::string standard = detectCppStandard(cppStandard);
@@ -115,18 +119,21 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
         << " -std=" << standard;
 
     // Add OOpenCAL include path if available
-    if (!oopencalDir.empty())
+    if (! oopencalDir.empty())
     {
-        cmd << " -I\"" << oopencalDir << "/base\"";
+        cmd << " -I\"" << oopencalDir << "/OOpenCAL/base\"";
+        cmd << " -I\"" << oopencalDir << '"';
     }
 
     // Add Qt-VTK-viewer project include paths if available
-    if (!projectRootPath.empty())
+    if (! projectRootPath.empty())
     {
         cmd << " -I\"" << projectRootPath << "\"";
         cmd << " -I\"" << projectRootPath << "/visualiserProxy\"";
         cmd << " -I\"" << projectRootPath << "/config\"";
     }
+
+    cmd << " " << BuildInfo::VTK_COMPILE_FLAGS; // temorary
 
     cmd << " \"" << sourceFile << "\""
         << " -o \"" << outputFile << "\"";

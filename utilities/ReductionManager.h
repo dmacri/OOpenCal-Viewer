@@ -44,13 +44,21 @@ public:
 
     /** @brief Gets error message if loading failed.
      *  @return Error message or empty string if no error */
-    QString getErrorMessage() const { return errorMessage; }
+    QString getErrorMessage() const
+    {
+        return errorMessage;
+    }
+
+    /// @brief Return path to reduction file (the file used to set up the manager)
+    const QString& getReductionFilePath() const
+    {
+        return reductionFilePath;
+    }
 
 private:
     /** @brief Loads reduction data from file.
-     *  @param filePath Path to the reduction file
-     *  @param reductionConfig Comma-separated reduction types */
-    void loadReductionData(const QString& filePath, const QString& reductionConfig);
+     *  @param filePath Path to the reduction file */
+    void loadReductionData(const QString& filePath);
 
     /** @brief Parses a single line from the reduction file.
      *  @param line The line to parse (e.g., "0  sum=12057,min=1,max=1")
@@ -63,4 +71,5 @@ private:
     bool dataLoaded = false;                          ///< Flag indicating if data was loaded successfully
     QString errorMessage;                             ///< Error message if loading failed
     std::vector<QString> expectedReductions;          ///< Expected reduction types (e.g., ["sum", "min", "max"])
+    QString reductionFilePath;                        ///< Path to the reduction file
 };

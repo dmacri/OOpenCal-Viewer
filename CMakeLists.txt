@@ -122,9 +122,9 @@ list(APPEND Sources
     widgets/AboutDialog.cpp
     widgets/CompilationLogWidget.cpp
     widgets/ReductionDialog.cpp
-    widgets/ReductionManager.cpp
     widgets/ReductionDisplayWidget.cpp
     utilities/PluginLoader.cpp
+    utilities/ReductionManager.cpp
     utilities/ModelReader.cpp
     utilities/CommandLineParser.cpp
     utilities/ModelLoader.cpp
@@ -152,28 +152,15 @@ file(GLOB_RECURSE Docs
 )
 set(OTHER_FILES LICENSE .github/workflows/release--deb-package--ubuntu24.04.yml .githooks/pre-commit .clang-format)
 
-
-# ============================================
-# Qt setup
-# ============================================
-set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOMOC "YES")
-set(CMAKE_AUTOUIC "YES")
-
-
-# ============================================
-# Qt dependencies
-# ============================================
-find_package(Qt6 COMPONENTS
-    Core
-    Gui
-    Widgets
-    REQUIRED
-)
-
 # ============================================
 # VTK dependencies
 # ============================================
+# NOTE:
+# VTK must be found *before* Qt to avoid a known issue in Qt6 (6.8–6.9)
+# where re-importing Qt targets (e.g., Qt6::Platform*) causes
+# "Some (but not all) targets in this export set were already defined" errors.
+# The 'GUISupportQt' module internally calls find_package(Qt6),
+# so finding VTK first prevents duplicate Qt target definitions.
 find_package(VTK COMPONENTS
     CommonColor
     CommonCore
@@ -193,6 +180,16 @@ find_package(VTK COMPONENTS
         GUISupportQt
         IOLegacy
 )
+
+# ============================================
+# Qt setup + dependencies
+# ============================================
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOMOC "YES")
+set(CMAKE_AUTOUIC "YES")
+
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL)
+message(STATUS "Using Qt${QT_VERSION_MAJOR} (${Qt${QT_VERSION_MAJOR}_VERSION})")
 
 # ============================================
 # Executable target
@@ -220,6 +217,9 @@ if(OOPENCAL_DIR)
         ${OOPENCAL_DIR}
         ${OOPENCAL_DIR}/OOpenCAL
     )
+
+    # Define OOPENCAL_DIR for use in C++ code
+    target_compile_definitions(${PROJECT_NAME} PRIVATE OOPENCAL_DIR="${OOPENCAL_DIR}")
 else()
     message(WARNING "OOPENCAL_DIR not set! Includes like <OOpenCAL/...> may not work.")
 endif()
@@ -315,10 +315,17 @@ endif()
 # ============================================
 # Linking
 # ============================================
-target_link_libraries(${PROJECT_NAME} PRIVATE ${VTK_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
-target_link_libraries(${PROJECT_NAME} PRIVATE tiny-process-library)
-#target_link_libraries(${PROJECT_NAME} PRIVATE Qt5::Widgets Qt5::OpenGL VTK::GUISupportQt VTK::IOLegacy)
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    # Qt:
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Gui
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::OpenGL
+    # VTK:
+    ${VTK_LIBRARIES}
+    # other:
+    tiny-process-library
+)
 
 # Export symbols for plugins to use
 # This allows plugins to call functions from the main executable
@@ -328,6 +335,74 @@ vtk_module_autoinit(
     TARGETS ${PROJECT_NAME}
     MODULES VTK::GUISupportQt VTK::IOLegacy
 )
+
+# ============================================
+# Export VTK compile flags to C++ header (this is temporary as long as plugin needs VTK)
+# ============================================
+
+# Select the main VTK target (always present)
+set(VTK_MAIN_TARGET VTK::CommonCore)
+
+# Safely read target properties (may contain generator expressions)
+get_target_property(_vtk_includes ${VTK_MAIN_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(_vtk_defs     ${VTK_MAIN_TARGET} INTERFACE_COMPILE_DEFINITIONS)
+get_target_property(_vtk_opts     ${VTK_MAIN_TARGET} INTERFACE_COMPILE_OPTIONS)
+
+# Prepare resolved lists
+set(VTK_INCLUDES_EXPANDED "")
+set(VTK_DEFS_EXPANDED "")
+set(VTK_OPTS_EXPANDED "")
+
+# Function to strip generator expressions like $<BUILD_INTERFACE:...> or $<INSTALL_INTERFACE:...>
+function(clean_genex output input_list)
+    set(temp_list "")
+    foreach(item IN LISTS input_list)
+        # Remove $<BUILD_INTERFACE:...> and $<INSTALL_INTERFACE:...>
+        string(REGEX REPLACE "\\$<BUILD_INTERFACE:([^>]+)>" "\\1" item "${item}")
+        string(REGEX REPLACE "\\$<INSTALL_INTERFACE:([^>]+)>" "\\1" item "${item}")
+        string(REGEX REPLACE "\\$<[^>]+>" "" item "${item}") # remove any remaining generator expressions
+        string(STRIP "${item}" item)
+        if (NOT "${item}" STREQUAL "")
+            list(APPEND temp_list "${item}")
+        endif()
+    endforeach()
+    set(${output} "${temp_list}" PARENT_SCOPE)
+endfunction()
+
+# Clean all lists
+clean_genex(VTK_INCLUDES_EXPANDED "${_vtk_includes}")
+clean_genex(VTK_DEFS_EXPANDED "${_vtk_defs}")
+clean_genex(VTK_OPTS_EXPANDED "${_vtk_opts}")
+
+# Build final compile flags string
+set(VTK_COMPILE_FLAGS_STR "")
+foreach(inc IN LISTS VTK_INCLUDES_EXPANDED)
+    if (EXISTS "${inc}")
+        string(APPEND VTK_COMPILE_FLAGS_STR "-I${inc} ")
+    endif()
+endforeach()
+
+# Generate header file
+set(VTK_FLAGS_HEADER "${CMAKE_BINARY_DIR}/generated/vtk_compile_flags.h")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+
+file(WRITE "${VTK_FLAGS_HEADER}" "
+// Auto-generated file: DO NOT EDIT
+#pragma once
+
+namespace BuildInfo
+{
+    static constexpr const char* VTK_COMPILE_FLAGS = R\"(${VTK_COMPILE_FLAGS_STR})\";
+}
+")
+
+target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_BINARY_DIR}/generated")
+
+# (Optional) Debug print to verify values
+message(STATUS "VTK compile includes: ${VTK_INCLUDES_EXPANDED}")
+message(STATUS "VTK compile defs: ${VTK_DEFS_EXPANDED}")
+message(STATUS "VTK compile opts: ${VTK_OPTS_EXPANDED}")
+
 
 # ============================================
 # Doxygen Documentation (optional)

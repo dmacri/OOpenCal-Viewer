@@ -8,8 +8,7 @@
 #include <QLabel>
 #include <QTextEdit>
 #include <QPushButton>
-#include <QScrollArea>
-#include <QFont>
+#include <QFontDatabase>
 
 #include "utilities/ModelLoader.h"
 
@@ -26,24 +25,23 @@ CompilationLogWidget::CompilationLogWidget(QWidget* parent)
     // Create main layout
     auto* mainLayout = new QVBoxLayout(this);
 
-    // Status label
+    // Title: Compilation Status
     auto* statusLabel = new QLabel("Compilation Status:", this);
     QFont boldFont = statusLabel->font();
     boldFont.setBold(true);
     statusLabel->setFont(boldFont);
     mainLayout->addWidget(statusLabel);
 
-    // Status text
+    // Dynamic status text
     auto* statusText = new QLabel(this);
     statusText->setObjectName("statusText");
+    statusText->setWordWrap(true);
     mainLayout->addWidget(statusText);
 
     // Separator
-    auto* separator1 = new QLabel(this);
-    separator1->setText("─────────────────────────────────────────");
-    mainLayout->addWidget(separator1);
+    mainLayout->addWidget(new QLabel("────────────────────────────────────────────", this));
 
-    // File info label
+    // File Information
     auto* fileLabel = new QLabel("File Information:", this);
     fileLabel->setFont(boldFont);
     mainLayout->addWidget(fileLabel);
@@ -53,14 +51,13 @@ CompilationLogWidget::CompilationLogWidget(QWidget* parent)
     fileText->setObjectName("fileText");
     fileText->setReadOnly(true);
     fileText->setMaximumHeight(80);
+    fileText->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
     mainLayout->addWidget(fileText);
 
     // Separator
-    auto* separator2 = new QLabel(this);
-    separator2->setText("─────────────────────────────────────────");
-    mainLayout->addWidget(separator2);
+    mainLayout->addWidget(new QLabel("────────────────────────────────────────────", this));
 
-    // Compiler output label
+    // Compiler Output
     auto* outputLabel = new QLabel("Compiler Output:", this);
     outputLabel->setFont(boldFont);
     mainLayout->addWidget(outputLabel);
@@ -69,6 +66,8 @@ CompilationLogWidget::CompilationLogWidget(QWidget* parent)
     auto* outputText = new QTextEdit(this);
     outputText->setObjectName("outputText");
     outputText->setReadOnly(true);
+    outputText->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    outputText->setLineWrapMode(QTextEdit::NoWrap);
     mainLayout->addWidget(outputText);
 
     // Buttons
@@ -93,7 +92,7 @@ void CompilationLogWidget::displayCompilationResult(const viz::plugins::Compilat
     if (!statusText || !fileText || !outputText)
         return;
 
-    // Display status
+    // --- Status ---
     if (result.success)
     {
         statusText->setText("<span style='color: green; font-weight: bold;'>✓ Compilation Successful</span>");
@@ -101,21 +100,26 @@ void CompilationLogWidget::displayCompilationResult(const viz::plugins::Compilat
     else
     {
         statusText->setText("<span style='color: red; font-weight: bold;'>✗ Compilation Failed (Exit Code: " +
-                           QString::number(result.exitCode) + ")</span>");
+                            QString::number(result.exitCode) + ")</span>");
     }
-    // Display file information
+    // --- File info ---
     QString fileInfo;
     fileInfo += "Source File: " + QString::fromStdString(result.sourceFile) + "\n";
     fileInfo += "Output File: " + QString::fromStdString(result.outputFile) + "\n";
     fileInfo += "Command: " + QString::fromStdString(result.compileCommand);
     fileText->setPlainText(fileInfo);
 
+    // --- Output formatting ---
     QString output;
-
-    if (!result.stdout.empty())
+    if (! result.stdout.empty())
     {
         output += "<b>=== Standard Output ===</b><br>";
-        output += QString::fromStdString(result.stdout).replace("<", "&lt;").replace(">", "&gt;") + "<br><br>";
+        QString stdoutFormatted = QString::fromStdString(result.stdout);
+        stdoutFormatted.replace("&", "&amp;");
+        stdoutFormatted.replace("<", "&lt;");
+        stdoutFormatted.replace(">", "&gt;");
+        stdoutFormatted.replace("\n", "<br>");
+        output += "<pre style='font-family: monospace;'>" + stdoutFormatted + "</pre><br>";
     }
 
     if (!result.stderr.empty())
@@ -150,16 +154,22 @@ QString CompilationLogWidget::formatErrorOutput(const std::string& errorText)
 {
     QString formatted = QString::fromStdString(errorText);
 
-    // First, escape HTML special characters
+    // Escape HTML
     formatted.replace("&", "&amp;");
     formatted.replace("<", "&lt;");
     formatted.replace(">", "&gt;");
     formatted.replace("\"", "&quot;");
 
-    // Then highlight error lines with proper HTML
-    formatted.replace("error:", "<span style='color: red; font-weight: bold;'>error:</span>");
+    // Preserve line breaks
+    formatted.replace("\n", "<br>");
+
+    // Highlight compiler message types
+    formatted.replace("error:",   "<span style='color: red; font-weight: bold;'>error:</span>");
     formatted.replace("warning:", "<span style='color: orange; font-weight: bold;'>warning:</span>");
-    formatted.replace("note:", "<span style='color: blue;'>note:</span>");
+    formatted.replace("note:",    "<span style='color: blue;'>note:</span>");
+
+    // Monospace block
+    formatted = "<pre style='font-family: monospace;'>" + formatted + "</pre>";
 
     return formatted;
 }

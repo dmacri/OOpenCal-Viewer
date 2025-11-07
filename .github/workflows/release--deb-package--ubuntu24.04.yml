@@ -32,12 +32,24 @@ jobs:
           sudo apt install -y \
             build-essential \
             cmake \
-            qt6-base-dev \
-            qt6-tools-dev \
-            qt6-tools-dev-tools \
+            ninja-build \
+            qtbase5-dev \
+            qttools5-dev \
+            qttools5-dev-tools \
             libvtk9-dev \
             libvtk9-qt-dev \
-            software-properties-common
+            libfreetype-dev \
+            libeigen3-dev \
+            libtiff-dev \
+            libpng-dev \
+            libjpeg-dev \
+            zlib1g-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev
+            # when official VTK package uses Qt6 instead of Qt5 use them instead
+            #   qt6-base-dev \
+            #   qt6-tools-dev \
+            #   qt6-tools-dev-tools
 
       ################### building application
       - name: Prepare application icon

@@ -76,4 +76,16 @@ public:
 
     /// @brief Returns available steps from index file.
     virtual std::vector<StepIndex> availableSteps() const = 0;
+
+    /** @brief Get the string encoding of a cell at given grid coordinates.
+     * 
+     * This method retrieves the string representation of a cell at the specified
+     * grid position. The coordinates are in grid indices (row, col), not world coordinates.
+     * 
+     * @param row The row index of the cell (0-based, from top)
+     * @param col The column index of the cell (0-based, from left)
+     * @param details Optional field name to retrieve specific cell property (e.g., "h", "z").
+     *                If nullptr or empty, returns the default encoding.
+     * @return String representation of the cell via stringEncoding(), or empty string if out of bounds */
+    virtual std::string getCellStringEncoding(int row, int col, const char* details = nullptr) const = 0;
 };

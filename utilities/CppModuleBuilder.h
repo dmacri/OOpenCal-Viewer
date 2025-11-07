@@ -10,8 +10,6 @@
 #include <memory>
 #include <string>
 
-// Forward declaration
-class ModelLoader;
 
 namespace viz::plugins
 {
@@ -60,21 +58,36 @@ public:
 
     /** @brief Get the last compilation result
      * @return Pointer to the last result, or nullptr if no compilation has been done */
-    const CompilationResult* getLastResult() const { return lastResult.get(); }
+    const CompilationResult* getLastResult() const
+    {
+        return lastResult.get();
+    }
 
     /** @brief Set the compiler path
      * @param path Path to the compiler executable */
-    void setCompilerPath(const std::string& path) { compilerPath = path; }
+    void setCompilerPath(const std::string& path)
+    {
+        compilerPath = path;
+    }
 
     /** @brief Get the current compiler path */
-    const std::string& getCompilerPath() const { return compilerPath; }
+    const std::string& getCompilerPath() const
+    {
+        return compilerPath;
+    }
 
     /** @brief Set the project root directory (for include paths)
-     * @param path Path to the Qt-VTK-viewer project root */
-    void setProjectRootPath(const std::string& path) { projectRootPath = path; }
+     * @param path Path to the OOpenCal-Viewer project root */
+    void setProjectRootPath(const std::string& path)
+    {
+        projectRootPath = path;
+    }
 
     /** @brief Get the project root path */
-    const std::string& getProjectRootPath() const { return projectRootPath; }
+    const std::string& getProjectRootPath() const
+    {
+        return projectRootPath;
+    }
 
 private:
     std::string compilerPath;

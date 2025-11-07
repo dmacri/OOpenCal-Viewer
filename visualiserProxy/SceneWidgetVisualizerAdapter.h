@@ -98,6 +98,18 @@ public:
         return m_impl.modelReader.availableSteps();
     }
 
+    std::string getCellStringEncoding(int row, int col, const char* details = nullptr) const override
+    {
+        // Check bounds
+        if (row < 0 || col < 0 || row >= static_cast<int>(m_impl.p.size()))
+            return {};
+        if (col >= static_cast<int>(m_impl.p[row].size()))
+            return {};
+        
+        // Get the cell and call its stringEncoding method
+        return m_impl.p[row][col].stringEncoding(details);
+    }
+
 private:
     SceneWidgetVisualizerTemplate<Cell> m_impl;
     const std::string m_modelName;

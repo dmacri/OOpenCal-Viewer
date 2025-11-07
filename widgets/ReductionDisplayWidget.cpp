@@ -8,7 +8,7 @@
 #include <QMessageBox>
 
 #include "ReductionDisplayWidget.h"
-#include "ReductionManager.h"
+#include "utilities/ReductionManager.h"
 #include "ReductionDialog.h"
 
 
@@ -104,9 +104,11 @@ void ReductionDisplayWidget::updateLabel()
     label->setText(QString("Step %1: %2").arg(currentStep).arg(reductionStr));
     label->setStyleSheet("color: #2ECC71;"); // green
     label->setToolTip(
-        QString("<b>Reduction (Step %1):</b><br/>%2<br/><br/><i>Double-click for detailed view</i>")
+        QString("<b>Reduction (Step %1):</b><br/>%2<br/>File path '%3'<br/><br/><i>Double-click for detailed view</i>")
             .arg(currentStep)
-            .arg(reductionStr));
+            .arg(reductionStr)
+            .arg(reductionManager->getReductionFilePath())
+        );
 }
 
 bool ReductionDisplayWidget::eventFilter(QObject* obj, QEvent* event)

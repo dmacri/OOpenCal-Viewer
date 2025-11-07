@@ -5,6 +5,7 @@
 
 #include <QMainWindow>
 #include <QStyle>
+#include <QTimer>
 
 #include "utilities/types.h"
 
@@ -15,7 +16,6 @@ class MainWindow;
 
 class QPushButton;
 class QActionGroup;
-class QTimer;
 class ReductionManager;
 
 /** @class MainWindow
@@ -135,7 +135,7 @@ private:
 
 private:
     Ui::MainWindow *ui;
-    std::unique_ptr<QTimer> playbackTimer;
+    QTimer playbackTimer;
     QActionGroup *modelActionGroup = nullptr;
     std::unique_ptr<ReductionManager> reductionManager;
 

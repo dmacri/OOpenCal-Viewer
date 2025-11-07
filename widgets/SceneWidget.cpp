@@ -306,8 +306,8 @@ void SceneWidget::setup2DRulerAxes()
     rulerAxisY->SetTitlePosition(1.2); // Move title further from axis (default is ~0.5)
 
     // Add to renderer but keep hidden initially
-    renderer->AddActor2D(rulerAxisX);
-    renderer->AddActor2D(rulerAxisY);
+    renderer->AddViewProp(rulerAxisX);
+    renderer->AddViewProp(rulerAxisY);
     rulerAxisX->SetVisibility(false);
     rulerAxisY->SetVisibility(false);
 }
@@ -713,6 +713,7 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
         tooltipText += QString("\n  To:   (x2=%1, y2=%2)")
                            .arg(nearestLine->x2, 0, 'f', 2)
                            .arg(nearestLine->y2, 0, 'f', 2);
+        tooltipText += cellValueAtThisPositionAsText();
     }
     else if (QString nodeInfo = getNodeAtWorldPosition(m_lastWorldPos); ! nodeInfo.isEmpty())
     {
@@ -722,6 +723,8 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
                           .arg(m_lastWorldPos[2], 0, 'f', 2);
 
         tooltipText += QString("\n%1").arg(nodeInfo);
+
+        tooltipText += cellValueAtThisPositionAsText();
     }
     else
         tooltipText = "(Outside the grid)";
@@ -729,6 +732,57 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
     // Use m_lastMousePos (Qt coordinates) to position the tooltip
     QPoint globalPos = mapToGlobal(lastMousePos);
     QToolTip::showText(globalPos, tooltipText, this, QRect(lastMousePos, QSize(1, 1)), 0);
+}
+QString SceneWidget::cellValueAtThisPositionAsText() const
+{
+    if (renderer && sceneWidgetVisualizerProxy && settingParameter)
+    {
+        // Get the bounds of the entire scene
+        double* bounds = renderer->ComputeVisiblePropBounds();
+        if (bounds)
+        {
+            // Calculate grid dimensions
+            const double sceneWidth = bounds[1] - bounds[0];
+            const double sceneHeight = bounds[3] - bounds[2];
+            const double cellWidth = sceneWidth / settingParameter->numberOfColumnX;
+            const double cellHeight = sceneHeight / settingParameter->numberOfRowsY;
+
+            // Convert world position to grid indices
+            // Note: VTK Y increases upward, but grid rows increase downward
+            // So we need to flip the Y coordinate
+            int col = static_cast<int>((m_lastWorldPos[0] - bounds[0]) / cellWidth);
+            int row = static_cast<int>((bounds[3] - m_lastWorldPos[1]) / cellHeight);
+
+            // Clamp to valid range
+            col = std::max(0, std::min(col, settingParameter->numberOfColumnX - 1));
+            row = std::max(0, std::min(row, settingParameter->numberOfRowsY - 1));
+
+            QString tooltipText;
+            // Get default cell value
+            std::string cellValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col);
+            if (! cellValue.empty())
+            {
+                tooltipText += QString("\nCell Value: %1").arg(QString::fromStdString(cellValue));
+            }
+
+            // Get individual substate values if available
+            auto substateFields = settingParameter->getSubstateFields();
+            if (! substateFields.empty())
+            {
+                tooltipText += "\nSubstates:";
+                for (const auto& field : substateFields)
+                {
+                    std::string fieldValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col, field.c_str());
+                    if (! fieldValue.empty())
+                    {
+                        tooltipText += QString("\n\t%1: %2").arg(QString::fromStdString(field)).arg(QString::fromStdString(fieldValue));
+                    }
+                }
+            }
+            return tooltipText;
+        }
+    }
+    return {};
 }
 
 void SceneWidget::selectedStepParameter(StepIndex stepNumber)
