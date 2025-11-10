@@ -8,6 +8,8 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build libraries statically" FORCE)
+
 # ============================================
 # Compiler warnings (optional, full strict set)
 # ============================================
@@ -123,6 +125,8 @@ list(APPEND Sources
     widgets/CompilationLogWidget.cpp
     widgets/ReductionDialog.cpp
     widgets/ReductionDisplayWidget.cpp
+    widgets/SubstateDisplayWidget.cpp
+    widgets/SubstatesDockWidget.cpp
     utilities/PluginLoader.cpp
     utilities/ReductionManager.cpp
     utilities/ModelReader.cpp

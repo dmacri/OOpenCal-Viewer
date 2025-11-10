@@ -46,6 +46,7 @@ private slots: // menu actions
     void exportVideoDialog();
     void onLoadPluginRequested();
     void onLoadModelFromDirectoryRequested();
+    void onShowReductionRequested();
 
     // View submenu
     void on2DModeRequested();
@@ -115,6 +116,7 @@ private:
     void setWidgetsEnabledState(bool enabled);
     void enterNoConfigurationFileMode();
 
+    void updateSubstateDockeWidget();
     void switchToModel(const QString &modelName);
     void recreateModelMenuActions();
     void createViewModeActionGroup();

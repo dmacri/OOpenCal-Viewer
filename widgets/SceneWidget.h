@@ -22,9 +22,13 @@
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
 
+// Forward declarations
+class SubstatesDockWidget;
+class SettingParameter;
+
 /** @enum ViewMode
  * @brief Defines the camera view mode for the scene.
- * 
+ *
  * This enum is used to switch between 2D (top-down orthographic) and 3D (perspective with rotation) views. */
 enum class ViewMode
 {
@@ -32,7 +36,6 @@ enum class ViewMode
     Mode3D  ///< 3D perspective view with full camera control
 };
 
-class SettingParameter;
 
 /** @class SceneWidget
  * @brief A widget for 3D visualization using VTK in Qt app.
@@ -139,6 +142,13 @@ public:
     {
         return cameraElevation;
     }
+
+    /** @brief Set the substate dock widget.
+     * 
+     * This allows SceneWidget to update the dock widget when cells are clicked.
+     * 
+     * @param dockWidget Pointer to the SubstatesDockWidget */
+    void setSubstatesDockWidget(SubstatesDockWidget* dockWidget);
 
     /** @brief Callback function for VTK keypress events.
      *  It handles arrow_up and arrow_down keys pressed and changes view of the widget.
@@ -336,7 +346,34 @@ protected:
     /// @brief Returns part of ToolTip for specific position (it contains cell value with substates)
     QString cellValueAtThisPositionAsText() const;
 
-private:
+    /** @brief Convert world coordinates to grid indices.
+     * 
+     * Converts VTK world coordinates to grid row and column indices.
+     * Takes into account the difference in coordinate systems (VTK Y increases upward,
+     * grid rows increase downward).
+     * 
+     * @param worldPos VTK world coordinates
+     * @param outRow Output parameter for row index
+     * @param outCol Output parameter for column index
+     * @return True if coordinates are within valid grid bounds, false otherwise */
+    bool convertWorldToGridCoordinates(const double worldPos[3], int& outRow, int& outCol) const;
+
+    /** @brief Check if world coordinates are within the grid bounds.
+     * 
+     * Determines whether the given world coordinates fall within the visible grid area.
+     * 
+     * @param worldPos VTK world coordinates
+     * @return True if coordinates are within grid bounds, false if outside (background) */
+    bool isWorldPositionInGrid(const double worldPos[3]) const;
+
+protected:
+    /** @brief Handle mouse click events to update substate display.
+     * 
+     * When user clicks on a cell, this method updates the SubstatesDockWidget
+     * with values for that cell.
+     * 
+     * @param event The mouse event */
+    void mousePressEvent(QMouseEvent* event) override;
     /** @brief Proxy for the scene widget visualizer
      *  This proxy provides access to the visualizer implementation
      *  and is responsible for updating the visualization when settings change. */
@@ -347,6 +384,9 @@ private:
 
     /// @brief Currently active model name
     std::string currentModelName;
+
+    /// @brief Pointer to the substate dock widget (not owned by this widget)
+    SubstatesDockWidget* m_substatesDockWidget = nullptr;
 
     /// @brief Current view mode (2D or 3D)
     ViewMode currentViewMode = ViewMode::Mode2D;

@@ -28,10 +28,12 @@
 #include "visualiser/SettingParameter.h"
 #include "visualiser/VideoExporter.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+#include "widgets/SubstatesDockWidget.h"
 #include "widgets/AboutDialog.h"
 #include "widgets/ColorSettingsDialog.h"
 #include "widgets/CompilationLogWidget.h"
 #include "widgets/ConfigDetailsDialog.h"
+#include "widgets/ReductionDialog.h"
 
 
 namespace
@@ -42,6 +44,76 @@ inline std::string sourceFileParentDirectoryAbsolutePath(const std::source_locat
 {
     const auto path2CurrentFile = std::filesystem::absolute(location.file_name());
     return path2CurrentFile.parent_path().string();
+}
+
+/** @brief Returns the starting directory path for OOpenCal models.
+ *
+ * This function determines the appropriate base directory for opening or locating
+ * OOpenCal-related files, following these rules:
+ *
+ * 1. Checks if the environment variable `OOPENCAL_DIR` is set.
+ *    - If yes, uses its value as the base directory.
+ * 2. If not set, falls back to the CMake-defined macro `OOPENCAL_DIR`
+ *    (if available at compile time).
+ * 3. Validates that the directory actually exists.
+ * 4. If the base directory exists, the function attempts to locate the subdirectory
+ *    named `models/` inside it.
+ *    - If the subdirectory exists, it is returned.
+ *    - Otherwise, the base directory itself is returned.
+ * 5. If neither environment variable nor CMake path exists or is invalid,
+ *    an empty QString is returned, meaning the current working directory should be used.
+ *
+ * @note The returned path is absolute and normalized.
+ *
+ * @return QString
+ *         - Absolute path to the `models/` directory if it exists.
+ *         - Absolute path to the base OOpenCal directory if `models/` does not exist.
+ *         - Empty QString if no valid directory could be determined.
+ *
+ * @example
+ * @code
+ * QString startPath = getOOpenCalStartPath();
+ * if (startPath.isEmpty())
+ * {
+ *     startPath = QDir::currentPath(); // fallback to current working directory
+ * }
+ * qDebug() << "Start path:" << startPath;
+ * @endcode */
+QString getOOpenCalStartPath()
+{
+    QString baseDir;
+
+    // Step 1: Try to get OOPENCAL_DIR from environment variable
+    if (qEnvironmentVariableIsSet("OOPENCAL_DIR"))
+    {
+        baseDir = qEnvironmentVariable("OOPENCAL_DIR");
+    }
+
+#ifdef OOPENCAL_DIR
+    // Step 2: If environment not set, use CMake-defined path
+    if (baseDir.isEmpty())
+    {
+        baseDir = QString::fromLocal8Bit(OOPENCAL_DIR);
+    }
+#endif
+
+    // Step 3: Verify that base directory exists
+    QDir dir(baseDir);
+    if (baseDir.isEmpty() || !dir.exists())
+    {
+        // Invalid or missing directory → return empty (current path)
+        return QString();
+    }
+
+    // Step 4: Check if "OOpenCAL/models/" subdirectory exists
+    QDir modelsDir(dir.filePath("OOpenCAL/models"));
+    if (modelsDir.exists())
+    {
+        return modelsDir.absolutePath();
+    }
+
+    // Step 5: Return base directory if "models" does not exist
+    return dir.absolutePath();
 }
 } // namespace
 
@@ -54,6 +126,10 @@ MainWindow::MainWindow(QWidget* parent)
 {
     ui->setupUi(this);
     setWindowTitle(QApplication::applicationName());
+
+    // Initialize substate dock widget from UI
+    ui->substatesDockWidget->initializeFromUI();
+    ui->substatesDockWidget->hide();  // Hidden by default until configuration is loaded
 
     setupConnections();
     configureButtons();
@@ -101,6 +177,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionLoadPlugin, &QAction::triggered, this, &MainWindow::onLoadPluginRequested);
     connect(ui->actionLoadModelFromDirectory, &QAction::triggered, this, &MainWindow::onLoadModelFromDirectoryRequested);
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
+    connect(ui->actionShow_reduction, &QAction::triggered, this, &MainWindow::onShowReductionRequested);
 
     // View mode actions
     connect(ui->action2DMode, &QAction::triggered, this, &MainWindow::on2DModeRequested);
@@ -139,6 +216,16 @@ void MainWindow::initializeSceneWidget(const QString& configFileName)
     ui->sceneWidget->addVisualizer(configFileName.toStdString(), currentStep);
     ui->openConfigurationFileLabel->hide();
     ui->sceneWidget->setHidden(false);
+
+    // Initialize substate dock widget
+    if (ui->substatesDockWidget && ui->sceneWidget->getSettingParameter())
+    {
+        updateSubstateDockeWidget();
+
+        ui->sceneWidget->setSubstatesDockWidget(ui->substatesDockWidget);
+        // Keep dock widget hidden until user clicks on a cell
+        ui->substatesDockWidget->hide();
+    }
 }
 
 void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> availableSteps)
@@ -504,6 +591,9 @@ void MainWindow::switchToModel(const QString& modelName)
 
         ui->sceneWidget->switchModel(modelName.toStdString());
 
+        // Update substate dock widget for new model
+        updateSubstateDockeWidget();
+
         if (! silentMode)
         {
             QMessageBox::
@@ -527,12 +617,24 @@ void MainWindow::switchToModel(const QString& modelName)
         }
     }
 }
+void MainWindow::updateSubstateDockeWidget()
+{
+    if (ui->substatesDockWidget && ui->sceneWidget->getSettingParameter())
+    {
+        auto settingParam = const_cast<SettingParameter*>(ui->sceneWidget->getSettingParameter());
+        settingParam->initializeSubstateInfo();
+        ui->substatesDockWidget->updateSubstates(settingParam);
+    }
+}
 
 void MainWindow::onReloadDataRequested()
 {
     try
     {
         ui->sceneWidget->reloadData();
+
+        // Update substate dock widget after reload
+        updateSubstateDockeWidget();
 
         if (! silentMode)
         {
@@ -554,7 +656,7 @@ void MainWindow::onOpenConfigurationRequested()
     QString configFileName = QFileDialog::getOpenFileName(
         this,
         tr("Open Configuration File"),
-        QString(), // Start in current directory
+        getOOpenCalStartPath(),
         tr("Configuration Files (*.txt *.ini);;All Files (*)")
     );
     
@@ -581,6 +683,9 @@ void MainWindow::openConfigurationFile(const QString& configFileName)
         {
             // Reload with new configuration
             ui->sceneWidget->loadNewConfiguration(configFileName.toStdString(), 0);
+
+            // Update substate dock widget for new configuration
+            updateSubstateDockeWidget();
         }
 
         // Initialize reduction manager for this configuration
@@ -716,10 +821,11 @@ void MainWindow::onLoadPluginRequested()
 
 void MainWindow::onLoadModelFromDirectoryRequested()
 {
-    QString modelDirectory = QFileDialog::getExistingDirectory(this,
-                                                               tr("Load Model from Directory"),
-                                                               ".",
-                                                               QFileDialog::ShowDirsOnly);
+    QString modelDirectory = QFileDialog::getExistingDirectory(
+        this,
+        tr("Load Model from Directory"),
+        getOOpenCalStartPath(),
+        QFileDialog::ShowDirsOnly);
 
     if (modelDirectory.isEmpty())
     {
@@ -1307,6 +1413,7 @@ void MainWindow::initializeReductionManager(const QString& configFileName)
     {
         // No reduction configured
         reductionManager.reset();
+        ui->actionShow_reduction->setEnabled(false);
         return;
     }
 
@@ -1329,10 +1436,38 @@ void MainWindow::initializeReductionManager(const QString& configFileName)
             QString::fromStdString(settingParam->reduction)
         );
         ui->reductionWidget->setReductionManager(reductionManager.get());
+        
+        // Enable "Show Reduction" action if reduction data is available
+        ui->actionShow_reduction->setEnabled(reductionManager && reductionManager->isAvailable());
     }
     catch (const std::exception& e)
     {
         std::cerr << "Error initializing ReductionManager: " << e.what() << std::endl;
         reductionManager.reset();
+        ui->actionShow_reduction->setEnabled(false);
     }
+}
+
+void MainWindow::onShowReductionRequested()
+{
+    // Check if reduction manager is available
+    if (!reductionManager || !reductionManager->isAvailable())
+    {
+        QMessageBox::warning(this, tr("No Reduction Data"),
+            tr("Reduction data is not available for the current configuration."));
+        return;
+    }
+
+    // Get reduction data for current step
+    ReductionData reductionData = reductionManager->getReductionForStep(currentStep);
+    if (reductionData.values.empty())
+    {
+        QMessageBox::information(this, tr("No Data"),
+            tr("No reduction data available for step %1").arg(currentStep));
+        return;
+    }
+
+    // Show reduction dialog
+    ReductionDialog dialog(reductionData.values, currentStep, this);
+    dialog.exec();
 }

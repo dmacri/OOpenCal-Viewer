@@ -31,6 +31,7 @@
 #include "visualiser/Visualizer.hpp"
 #include "visualiser/SettingParameter.h"
 #include "widgets/ColorSettings.h"
+#include "widgets/SubstatesDockWidget.h"
 
 
 namespace
@@ -548,6 +549,9 @@ void SceneWidget::renderVtkScene()
                                                               singleLineTextStep,
                                                               renderer);
 
+    // Reset camera to fit the new scene properly
+    applyCameraAngles();
+
     // Update 2D ruler axes bounds now that data is loaded
     if (currentViewMode == ViewMode::Mode2D)
     {
@@ -594,18 +598,17 @@ QString SceneWidget::getNodeAtWorldPosition(const std::array<double, 3>& worldPo
         return {};
     }
 
+    // Use unified bounds checking
+    if (! isWorldPositionInGrid(worldPos.data()))
+    {
+        return {}; // Outside scene bounds
+    }
+
     // Get the bounds of the entire scene
     double* bounds = renderer->ComputeVisiblePropBounds();
     if (! bounds)
     {
         return {};
-    }
-
-    // Check if the position is within the scene bounds
-    if (worldPos[0] < bounds[0] || worldPos[0] > bounds[1] ||
-        worldPos[1] < bounds[2] || worldPos[1] > bounds[3])
-    {
-        return {}; // Outside scene bounds
     }
 
     // Calculate the width and height of each node's area in world coordinates
@@ -616,8 +619,8 @@ QString SceneWidget::getNodeAtWorldPosition(const std::array<double, 3>& worldPo
     const double nodeHeight = sceneHeight / settingParameter->nNodeY;
 
     // Calculate which node the position is in (0-based indices)
-    const int nodeX = (worldPos[0] - bounds[0]) / nodeWidth;
-    const int nodeY = (worldPos[1] - bounds[2]) / nodeHeight;
+    const int nodeX = static_cast<int>((worldPos[0] - bounds[0]) / nodeWidth);
+    const int nodeY = static_cast<int>((worldPos[1] - bounds[2]) / nodeHeight);
 
     // Check if the calculated node is within bounds
     if (nodeX >= 0 && nodeX < settingParameter->nNodeX &&
@@ -735,54 +738,36 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
 }
 QString SceneWidget::cellValueAtThisPositionAsText() const
 {
-    if (renderer && sceneWidgetVisualizerProxy && settingParameter)
+    if (!sceneWidgetVisualizerProxy || !settingParameter)
+        return {};
+
+    int row = 0, col = 0;
+    if (! convertWorldToGridCoordinates(m_lastWorldPos.data(), row, col))
+        return {};
+
+    QString tooltipText;
+    // Get default cell value
+    std::string cellValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col);
+    if (! cellValue.empty())
     {
-        // Get the bounds of the entire scene
-        double* bounds = renderer->ComputeVisiblePropBounds();
-        if (bounds)
+        tooltipText += QString("\nCell Value: %1").arg(QString::fromStdString(cellValue));
+    }
+
+    // Get individual substate values if available
+    auto substateFields = settingParameter->getSubstateFields();
+    if (! substateFields.empty())
+    {
+        tooltipText += "\nSubstates:";
+        for (const auto& field : substateFields)
         {
-            // Calculate grid dimensions
-            const double sceneWidth = bounds[1] - bounds[0];
-            const double sceneHeight = bounds[3] - bounds[2];
-            const double cellWidth = sceneWidth / settingParameter->numberOfColumnX;
-            const double cellHeight = sceneHeight / settingParameter->numberOfRowsY;
-
-            // Convert world position to grid indices
-            // Note: VTK Y increases upward, but grid rows increase downward
-            // So we need to flip the Y coordinate
-            int col = static_cast<int>((m_lastWorldPos[0] - bounds[0]) / cellWidth);
-            int row = static_cast<int>((bounds[3] - m_lastWorldPos[1]) / cellHeight);
-
-            // Clamp to valid range
-            col = std::max(0, std::min(col, settingParameter->numberOfColumnX - 1));
-            row = std::max(0, std::min(row, settingParameter->numberOfRowsY - 1));
-
-            QString tooltipText;
-            // Get default cell value
-            std::string cellValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col);
-            if (! cellValue.empty())
+            std::string fieldValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col, field.c_str());
+            if (!fieldValue.empty())
             {
-                tooltipText += QString("\nCell Value: %1").arg(QString::fromStdString(cellValue));
+                tooltipText += QString("\n\t%1: %2").arg(QString::fromStdString(field)).arg(QString::fromStdString(fieldValue));
             }
-
-            // Get individual substate values if available
-            auto substateFields = settingParameter->getSubstateFields();
-            if (! substateFields.empty())
-            {
-                tooltipText += "\nSubstates:";
-                for (const auto& field : substateFields)
-                {
-                    std::string fieldValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col, field.c_str());
-                    if (! fieldValue.empty())
-                    {
-                        tooltipText += QString("\n\t%1: %2").arg(QString::fromStdString(field)).arg(QString::fromStdString(fieldValue));
-                    }
-                }
-            }
-            return tooltipText;
         }
     }
-    return {};
+    return tooltipText;
 }
 
 void SceneWidget::selectedStepParameter(StepIndex stepNumber)
@@ -1032,4 +1017,92 @@ void SceneWidget::setCameraElevation(double angle)
 
     // Apply camera angles using helper method
     applyCameraAngles();
+}
+
+void SceneWidget::setSubstatesDockWidget(SubstatesDockWidget* dockWidget)
+{
+    m_substatesDockWidget = dockWidget;
+}
+
+void SceneWidget::mousePressEvent(QMouseEvent* event)
+{
+    // Call parent implementation first
+    QVTKOpenGLNativeWidget::mousePressEvent(event);
+
+    // Update substate dock widget if available
+    if (m_substatesDockWidget && sceneWidgetVisualizerProxy)
+    {
+        // Check if click was inside the grid
+        if (isWorldPositionInGrid(m_lastWorldPos.data()))
+        {
+            int row = 0, col = 0;
+            if (convertWorldToGridCoordinates(m_lastWorldPos.data(), row, col))
+            {
+                // Update substate dock widget with cell values
+                m_substatesDockWidget->updateCellValues(settingParameter.get(), row, col, sceneWidgetVisualizerProxy.get());
+                // Show the dock widget when user clicks on a cell
+                m_substatesDockWidget->show();
+            }
+        }
+        else
+        {
+            // Click was outside grid (on background) - hide the dock widget
+            m_substatesDockWidget->hide();
+        }
+    }
+}
+
+bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& outRow, int& outCol) const
+{
+    if (!renderer || !settingParameter)
+        return false;
+
+    // Get the bounds of the entire scene
+    double* bounds = renderer->ComputeVisiblePropBounds();
+    if (!bounds)
+        return false;
+
+    // Calculate grid dimensions
+    const double sceneWidth = bounds[1] - bounds[0];
+    const double sceneHeight = bounds[3] - bounds[2];
+
+    if (sceneWidth <= 0 || sceneHeight <= 0)
+        return false;
+
+    const double cellWidth = sceneWidth / settingParameter->numberOfColumnX;
+    const double cellHeight = sceneHeight / settingParameter->numberOfRowsY;
+
+    // Convert world position to grid indices
+    // Matrix p[row][col] is indexed from top-left (row=0 at top, col=0 at left)
+    // VTK Y increases upward, but we need to map to matrix row which increases downward
+    int col = static_cast<int>((worldPos[0] - bounds[0]) / cellWidth);
+    int row = static_cast<int>((worldPos[1] - bounds[2]) / cellHeight);
+
+    // Clamp to valid range
+    col = std::max(0, std::min(col, settingParameter->numberOfColumnX - 1));
+    row = std::max(0, std::min(row, settingParameter->numberOfRowsY - 1));
+
+    outRow = row;
+    outCol = col;
+    return true;
+}
+
+bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
+{
+    if (!renderer || !settingParameter)
+        return false;
+
+    // Get the bounds of the entire scene
+    double* bounds = renderer->ComputeVisiblePropBounds();
+    if (! bounds)
+        return false;
+
+    // Check if position is within grid bounds
+    if (worldPos[0] < bounds[0] || worldPos[0] > bounds[1] ||
+        worldPos[1] < bounds[2] || worldPos[1] > bounds[3])
+    {
+        return false;  // Outside grid bounds
+    }
+
+    return true;  // Inside grid bounds
 }

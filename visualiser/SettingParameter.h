@@ -3,11 +3,22 @@
 
 #pragma once
 
-#include <iosfwd>
 #include <string>
 #include <vector>
+#include <map>
+#include <limits>
 
 #include "utilities/types.h"
+
+/** @struct SubstateInfo
+ * @brief Information about a single substate field including display parameters. */
+struct SubstateInfo
+{
+    std::string name;                                           ///< Field name (e.g., "h", "z")
+    double minValue = std::numeric_limits<double>::quiet_NaN(); ///< Minimum value for display (user-editable, NaN if not set)
+    double maxValue = std::numeric_limits<double>::quiet_NaN(); ///< Maximum value for display (user-editable, NaN if not set)
+    std::string format = "";                                    ///< Printf format string (user-editable, empty if not set)
+};
 
 /** @struct SettingParameter
  * @brief Contains parameters for visualization settings and simulation configuration.
@@ -27,6 +38,9 @@ struct SettingParameter
     std::string readMode;       ///< File read mode: "text" or "binary"
     std::string substates;      ///< Substates to read (e.g., "h,z")
     std::string reduction;      ///< Reduction operations (e.g., "sum,min,max")
+    
+    /// @brief Map of substate information (name -> SubstateInfo) for display parameters
+    std::map<std::string, SubstateInfo> substateInfo;
 
     static constexpr int font_size = 18; ///< Font size for text rendering
 
@@ -39,6 +53,11 @@ struct SettingParameter
      * 
      * @return Vector of field names (e.g., {"h", "z"}) or empty vector if substates is empty */
     std::vector<std::string> getSubstateFields() const;
+    
+    /** @brief Initialize substate information from parsed substates.
+     *
+     * Creates SubstateInfo entries for each field in substates. Should be called after substates string is set. */
+    void initializeSubstateInfo();
 
     /// @brief Printing SettingParameter to output stream
     friend std::ostream& operator<<(std::ostream& os, const SettingParameter& sp);
