@@ -1,0 +1,233 @@
+name: Build Qt-VTK Viewer AppImage
+
+on:
+  push:
+    branches:
+      - '**'
+  release:
+    types: [created]
+
+env:
+  PROJECT_NAME: OOpenCal-Viewer
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      ################### checkout & dependencies ###################
+      - name: Checkout main repository
+        uses: actions/checkout@v3
+
+      - name: Checkout OOpenCAL dependency
+        uses: actions/checkout@v3
+        with:
+          repository: alessioderango/OOpenCAL
+          path: deps/OOpenCAL
+          token: ${{ secrets.VisualizerOpenCal }}
+
+      ################### environment & build tools ###################
+      - name: Install build prerequisites
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            ninja-build \
+            qtbase5-dev \
+            qttools5-dev \
+            qttools5-dev-tools \
+            libvtk9-dev \
+            libvtk9-qt-dev \
+            libfreetype-dev \
+            libeigen3-dev \
+            libtiff-dev \
+            libpng-dev \
+            libjpeg-dev \
+            zlib1g-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            patchelf \
+            file \
+            wget
+
+      ################### build application ###################
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOOPENCAL_DIR=${{ github.workspace }}/deps \
+            -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build application
+        run: |
+          cd build
+          cmake --build . --parallel $(nproc)
+
+      - name: Install to temporary directory
+        run: |
+          cd build
+          DESTDIR=${{ github.workspace }}/AppDir cmake --install .
+
+      ################### prepare AppDir structure ###################
+      - name: Create AppDir structure
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/lib
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+          # Copy main executable
+          cp build/${PROJECT_NAME} AppDir/usr/bin/ || \
+          cp AppDir/usr/bin/${PROJECT_NAME} AppDir/usr/bin/ || true
+
+      - name: Copy Qt libraries
+        run: |
+          # Find Qt library path
+          QT_LIB_PATH=$(qmake -query QT_INSTALL_LIBS)
+
+          # Copy essential Qt libraries
+          for lib in Core Gui Widgets OpenGL DBus XcbQpa; do
+            cp -P ${QT_LIB_PATH}/libQt5${lib}.so* AppDir/usr/lib/ || true
+          done
+
+          # Copy Qt plugins
+          QT_PLUGINS=$(qmake -query QT_INSTALL_PLUGINS)
+          mkdir -p AppDir/usr/plugins
+          cp -r ${QT_PLUGINS}/platforms AppDir/usr/plugins/ || true
+          cp -r ${QT_PLUGINS}/xcbglintegrations AppDir/usr/plugins/ || true
+          cp -r ${QT_PLUGINS}/imageformats AppDir/usr/plugins/ || true
+
+      - name: Copy VTK libraries
+        run: |
+          # Find and copy VTK libraries
+          VTK_LIBS=$(find /usr/lib/x86_64-linux-gnu -name "libvtk*.so*" -type f)
+          for lib in $VTK_LIBS; do
+            cp -P $lib AppDir/usr/lib/ || true
+            # Also copy symlinks
+            if [ -L $lib ]; then
+              cp -d $lib AppDir/usr/lib/ || true
+            fi
+          done
+
+          # Copy VTK dependencies
+          for lib in /usr/lib/x86_64-linux-gnu/libvtk*.so*; do
+            [ -e "$lib" ] && cp -P "$lib" AppDir/usr/lib/ || true
+          done
+
+      - name: Copy system dependencies
+        run: |
+          # Function to copy library and its dependencies
+          copy_deps() {
+            local binary=$1
+            ldd "$binary" 2>/dev/null | grep "=> /" | awk '{print $3}' | while read lib; do
+              if [ -f "$lib" ]; then
+                # Skip system libraries that should be on every system
+                case "$lib" in
+                  /lib/x86_64-linux-gnu/libc.so*|\
+                  /lib/x86_64-linux-gnu/libm.so*|\
+                  /lib/x86_64-linux-gnu/libdl.so*|\
+                  /lib/x86_64-linux-gnu/libpthread.so*|\
+                  /lib/x86_64-linux-gnu/librt.so*|\
+                  /lib/x86_64-linux-gnu/ld-linux*.so*)
+                    continue
+                    ;;
+                esac
+                cp -n "$lib" AppDir/usr/lib/ 2>/dev/null || true
+              fi
+            done
+          }
+
+          # Copy dependencies for main executable
+          copy_deps "AppDir/usr/bin/${PROJECT_NAME}"
+
+          # Copy dependencies for Qt and VTK libraries
+          for lib in AppDir/usr/lib/*.so*; do
+            [ -f "$lib" ] && copy_deps "$lib"
+          done
+
+      ################### icons and desktop entry ###################
+      - name: Prepare application icon
+        run: |
+          if [ -f icons/application.png ]; then
+            cp icons/application.png AppDir/usr/share/icons/hicolor/256x256/apps/${PROJECT_NAME}.png
+            cp icons/application.png AppDir/${PROJECT_NAME}.png
+          else
+            # Create a dummy icon if none exists
+            convert -size 256x256 xc:blue AppDir/${PROJECT_NAME}.png
+            cp AppDir/${PROJECT_NAME}.png AppDir/usr/share/icons/hicolor/256x256/apps/${PROJECT_NAME}.png
+          fi
+
+      - name: Create .desktop file
+        run: |
+          cat > AppDir/${PROJECT_NAME}.desktop << EOF
+          [Desktop Entry]
+          Name=${PROJECT_NAME}
+          Exec=${PROJECT_NAME}
+          Icon=${PROJECT_NAME}
+          Type=Application
+          Categories=Utility;Science;
+          EOF
+
+          cp AppDir/${PROJECT_NAME}.desktop AppDir/usr/share/applications/
+
+      - name: Create AppRun script
+        run: |
+          cat > AppDir/AppRun << EOF
+          #!/bin/bash
+          SELF=\$(readlink -f "\$0")
+          HERE=\${SELF%/*}
+
+          # Set up library path
+          export LD_LIBRARY_PATH="\${HERE}/usr/lib:\${LD_LIBRARY_PATH}"
+
+          # Set up Qt plugin path
+          export QT_PLUGIN_PATH="\${HERE}/usr/plugins"
+          export QT_QPA_PLATFORM_PLUGIN_PATH="\${HERE}/usr/plugins/platforms"
+
+          # Disable Qt's automatic high DPI scaling (user can set QT_AUTO_SCREEN_SCALE_FACTOR=1 if needed)
+          export QT_AUTO_SCREEN_SCALE_FACTOR=0
+
+          # Execute the application
+          exec "\${HERE}/usr/bin/${PROJECT_NAME}" "\$@"
+          EOF
+
+          chmod +x AppDir/AppRun
+
+      - name: Fix RPATH for all binaries and libraries
+        run: |
+          # Fix RPATH for main executable
+          patchelf --set-rpath '$ORIGIN/../lib' AppDir/usr/bin/${PROJECT_NAME} || true
+
+          # Fix RPATH for all libraries
+          find AppDir/usr/lib -name "*.so*" -type f -exec \
+            patchelf --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
+
+      ################### create AppImage ###################
+      - name: Download appimagetool
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+
+      - name: Create AppImage
+        run: |
+          # Use --appimage-extract-and-run to work without FUSE in CI environment
+          # Set ARCH explicitly to avoid architecture detection issues
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir ${PROJECT_NAME}-x86_64.AppImage
+          chmod +x ${PROJECT_NAME}-x86_64.AppImage
+
+      ################### artifacts ###################
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-AppImage
+          path: ${{ env.PROJECT_NAME }}-x86_64.AppImage
+
+      ################### release upload ###################
+      - name: Upload AppImage to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.PROJECT_NAME }}-x86_64.AppImage

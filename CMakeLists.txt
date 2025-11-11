@@ -154,7 +154,14 @@ file(GLOB_RECURSE Docs
     CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/*.md"
 )
-set(OTHER_FILES LICENSE .github/workflows/release--deb-package--ubuntu24.04.yml .githooks/pre-commit .clang-format)
+set(OTHER_FILES
+    LICENSE
+    .github/workflows/release--deb-package--ubuntu24.04.yml
+    .github/workflows/release--deb-package-bundled--ubuntu24.04.yml
+    .github/workflows/release--app-image--ubuntu24.04.yml
+    .githooks/pre-commit
+    .clang-format
+)
 
 # ============================================
 # VTK dependencies
