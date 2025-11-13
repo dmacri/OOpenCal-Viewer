@@ -311,7 +311,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
 
                     if (! localStartStepDone) [[unlikely]]
                     {
-                        m[matrixRow][matrixCol].Cell::startStep(sp->step);
+                        m[matrixRow][matrixCol].startStep(sp->step);
                         localStartStepDone = true;
                     }
 
@@ -364,7 +364,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
 
                     if (! localStartStepDone) [[unlikely]]
                     {
-                        m[matrixRow][matrixCol].Cell::startStep(sp->step);
+                        m[matrixRow][matrixCol].startStep(sp->step);
                         localStartStepDone = true;
                     }
 
@@ -372,7 +372,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
                     char* nextTokenPtr = std::find(currentTokenPtr, line.data() + line.size(), '\0');
                     ++nextTokenPtr; // skip '\0'
 
-                    m[matrixRow][matrixCol].Cell::composeElement(currentTokenPtr);
+                    m[matrixRow][matrixCol].composeElement(currentTokenPtr);
 
                     currentTokenPtr = nextTokenPtr;
                 }

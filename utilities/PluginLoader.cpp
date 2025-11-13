@@ -97,7 +97,7 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
     extractPluginMetadata(info);
 
     // Store plugin info
-    loadedPlugins.push_back(info);
+    loadedPlugins.push_back(std::move(info));
 
     clearError();
     return true;

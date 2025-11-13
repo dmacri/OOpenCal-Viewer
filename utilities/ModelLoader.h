@@ -8,6 +8,7 @@
 
 #include <string>
 #include <memory>
+#include <optional>
 
 class Config;
 
@@ -58,9 +59,10 @@ public:
     {
         bool success = false;                    ///< Whether loading succeeded
         std::string compiledModulePath;          ///< Path to compiled .so file
-        std::string modelName;                   ///< Model name from Header.txt
+        std::string outputFileName;              ///< Output file name from Header.txt (e.g., "ball")
+        std::string pluginModelName;             ///< Model name from plugin's getModelName() (e.g., "Ball Model")
         std::shared_ptr<Config> config;          ///< Parsed configuration
-        viz::plugins::CompilationResult* compilationResult = nullptr; ///< Compilation details if compiled
+        std::optional<viz::plugins::CompilationResult> compilationResult; ///< Compilation details if compilation was attempted
     };
 
     /** @brief Create a new ModelLoader instance */

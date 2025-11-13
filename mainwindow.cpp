@@ -34,6 +34,7 @@
 #include "widgets/CompilationLogWidget.h"
 #include "widgets/ConfigDetailsDialog.h"
 #include "widgets/ReductionDialog.h"
+#include "utilities/directoryConstants.h"
 
 
 namespace
@@ -114,6 +115,24 @@ QString getOOpenCalStartPath()
 
     // Step 5: Return base directory if "models" does not exist
     return dir.absolutePath();
+}
+
+void updateMenu2ShowTheSelectedModeAsActive(const QString& modelName, QActionGroup *modelActionGroup)
+{
+    if (modelActionGroup)
+    {
+        bool modelFound = false;
+        for (QAction* action : modelActionGroup->actions())
+        {
+            const bool isCurrent = action->text() == modelName;
+            action->setChecked(isCurrent);
+            modelFound |= isCurrent;
+        }
+        if (! modelFound)
+        {
+            std::cerr << "Model: '" << modelName.toStdString() << "' not found!" << std::endl;
+        }
+    }
 }
 } // namespace
 
@@ -571,7 +590,7 @@ void MainWindow::onUpdateStepPositionOnSlider(StepIndex value)
 
 void MainWindow::onModelSelected()
 {
-    QAction* action = qobject_cast<QAction*>(sender());
+    const QAction* action = qobject_cast<QAction*>(sender());
     if (! action)
         return;
 
@@ -594,6 +613,8 @@ void MainWindow::switchToModel(const QString& modelName)
         // Update substate dock widget for new model
         updateSubstateDockeWidget();
 
+        updateMenu2ShowTheSelectedModeAsActive(modelName, modelActionGroup);
+
         if (! silentMode)
         {
             QMessageBox::
@@ -611,10 +632,7 @@ void MainWindow::switchToModel(const QString& modelName)
 
         // Revert checkbox state to current model
         const auto currentModel = QString::fromStdString(ui->sceneWidget->getCurrentModelName());
-        for (QAction* action : modelActionGroup->actions())
-        {
-            action->setChecked(action->text() == currentModel);
-        }
+        updateMenu2ShowTheSelectedModeAsActive(currentModel, modelActionGroup);
     }
 }
 void MainWindow::updateSubstateDockeWidget()
@@ -668,7 +686,7 @@ void MainWindow::onOpenConfigurationRequested()
     openConfigurationFile(configFileName);
 }
 
-void MainWindow::openConfigurationFile(const QString& configFileName)
+void MainWindow::openConfigurationFile(const QString& configFileName, std::shared_ptr<Config> optionalConfig)
 {
     try
     {
@@ -689,7 +707,8 @@ void MainWindow::openConfigurationFile(const QString& configFileName)
         }
 
         // Initialize reduction manager for this configuration
-        initializeReductionManager(configFileName);
+        // If config is provided, use it; otherwise read from file
+        initializeReductionManager(configFileName, optionalConfig);
 
         // Update UI with new configuration
         showInputFilePathOnBarLabel(configFileName);
@@ -837,33 +856,41 @@ void MainWindow::onLoadModelFromDirectoryRequested()
 
 void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
 {
+    // Enable silent mode temporarily to suppress dialogs during loading
+    bool previousSilentMode = silentMode;
+    silentMode = true;
+
     try
     {
+        // The model directory should contain everything: Header.txt, model .h file, and data files
+        namespace fs = std::filesystem;
+        fs::path actualModelDir = fs::path(modelDirectory.toStdString());
+
         // Show progress dialog
-        QProgressDialog progress(tr("Loading model from directory..."), tr("Cancel"), 0, 0, this);
+        QProgressDialog progress(tr("Loading model from directory: ") + modelDirectory, tr("Cancel"), 0, 0, this);
         progress.setWindowModality(Qt::WindowModal);
-        progress.setMinimumDuration(500);
+        progress.setMinimumDuration(/*ms=*/500);
 
         QApplication::processEvents();
 
-        // Use ModelLoader to handle all loading logic
+        // Step 1: Load and compile model
+        progress.setLabelText(tr("Loading model..."));
+        QApplication::processEvents();
+
         ModelLoader loader;
-        
-        // Set the project root path for include paths during compilation
-        // Get the directory where the executable is located
         loader.getBuilder()->setProjectRootPath(sourceFileParentDirectoryAbsolutePath());
-        
-        const auto result = loader.loadModelFromDirectory(modelDirectory.toStdString());
+        const auto result = loader.loadModelFromDirectory(actualModelDir.string());
 
         if (! result.success)
         {
             progress.close();
+            silentMode = previousSilentMode;
 
             // If compilation was attempted and failed, show detailed error dialog
-            if (result.compilationResult)
+            if (result.compilationResult.has_value())
             {
                 CompilationLogWidget logWidget(this);
-                logWidget.displayCompilationResult(*result.compilationResult);
+                logWidget.displayCompilationResult(result.compilationResult.value());
                 logWidget.exec();
             }
             else
@@ -874,37 +901,72 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
             return;
         }
 
+        // Step 2: Load compiled module
         progress.setLabelText(tr("Loading compiled module..."));
         QApplication::processEvents();
 
-        // Load the compiled module
         PluginLoader& pluginLoader = PluginLoader::instance();
-        if (pluginLoader.loadPlugin(result.compiledModulePath, /*overridePlugin=*/true))
-        {
-            // Refresh the models menu
-            recreateModelMenuActions();
-
-            // Reset reduction manager when model changes
-            reductionManager.reset();
-            updateReductionDisplay();
-
-            progress.close();
-
-            QMessageBox::information(this,
-                                     tr("Model Loaded"),
-                                     tr("Model '%1' loaded successfully from:\n%2\n\nNew model is now available in the Model menu.")
-                                         .arg(QString::fromStdString(result.modelName))
-                                         .arg(modelDirectory));
-        }
-        else
+        if (! pluginLoader.loadPlugin(result.compiledModulePath, /*overridePlugin=*/true))
         {
             progress.close();
+            silentMode = previousSilentMode;
 
             QMessageBox::critical(this,
                                   tr("Module Load Failed"),
                                   tr("Failed to load compiled module:\n%1\n\nError: %2")
                                       .arg(QString::fromStdString(result.compiledModulePath))
                                       .arg(QString::fromStdString(pluginLoader.getLastError())));
+            return;
+        }
+
+        // Step 3: Switch to model
+        progress.setLabelText(tr("Switching to model..."));
+        QApplication::processEvents();
+
+        recreateModelMenuActions();
+        
+        // Get the actual model name from the loaded plugin
+        const auto& loadedPlugins = pluginLoader.getLoadedPlugins();
+        std::string pluginModelName = result.outputFileName; // fallback to output file name
+        if (!loadedPlugins.empty())
+        {
+            pluginModelName = loadedPlugins.back().name;
+        }
+        
+        switchToModel(QString::fromStdString(pluginModelName));
+
+        // Step 4: Load configuration from Header.txt
+        progress.setLabelText(tr("Loading configuration..."));
+        QApplication::processEvents();
+
+        // Build path to Header.txt in the model directory
+        fs::path headerPath = actualModelDir / "Header.txt";
+        
+        if (!fs::exists(headerPath))
+        {
+            progress.close();
+            silentMode = previousSilentMode;
+
+            QMessageBox::critical(this, tr("Configuration Load Failed"),
+                tr("Header.txt not found in model directory:\n%1").arg(QString::fromStdString(actualModelDir.string())));
+            return;
+        }
+
+        // Open configuration using the config object from ModelLoader
+        // This avoids reading the file twice
+        openConfigurationFile(QString::fromStdString(headerPath.string()), result.config);
+
+        progress.close();
+        silentMode = previousSilentMode;
+
+        // Show success message only if not in silent mode
+        if (! silentMode)
+        {
+            QMessageBox::information(this,
+                                     tr("Model Loaded"),
+                                     tr("Model '%1' loaded successfully from:\n%2\n\nConfiguration loaded and ready to use.")
+                                         .arg(QString::fromStdString(pluginModelName))
+                                         .arg(QString::fromStdString(actualModelDir.string())));
         }
     }
     catch (const std::exception& e)
@@ -912,6 +974,9 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         QMessageBox::critical(this, tr("Error"),
             tr("An error occurred while loading the model:\n%1").arg(e.what()));
     }
+
+    // Restore silent mode
+    silentMode = previousSilentMode;
 }
 
 void MainWindow::createViewModeActionGroup()
@@ -1106,14 +1171,10 @@ QString MainWindow::getSmartDisplayName(const QString& filePath, const QStringLi
     QString displayName = fileDir.dirName() + "/" + fileName;
 
     // Count how many files have the same filename
-    int sameNameCount = 0;
-    for (const QString& otherPath : allPaths)
-    {
-        if (QFileInfo(otherPath).fileName() == fileName)
+    const int sameNameCount = std::count_if(allPaths.begin(), allPaths.end(), [&](const QString& otherPath)
         {
-            sameNameCount++;
-        }
-    }
+            return QFileInfo(otherPath).fileName() == fileName;
+        });
 
     // If unique filename, return parent/filename
     if (sameNameCount == 1)
@@ -1202,7 +1263,7 @@ QString MainWindow::generateTooltipForFile(const QString& filePath) const
             ConfigCategory* cat = config.getConfigCategory(category.toStdString(), /*ignoreCase=*/true);
             if (cat)
             {
-                ConfigParameter* param = cat->getConfigParameter(paramName.toStdString());
+                const ConfigParameter* param = cat->getConfigParameter(paramName.toStdString());
                 if (param)
                 {
                     tooltip += QString("&nbsp;&nbsp;• <b>%1:</b> %2<br/>")
@@ -1285,7 +1346,7 @@ void MainWindow::setWidgetsEnabledState(bool enabled)
 }
 
 
-void MainWindow::applyCommandLineOptions(CommandLineParser& cmdParser)
+void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
 {
     // Store silent mode flag
     silentMode = cmdParser.isSilentMode();
@@ -1299,27 +1360,19 @@ void MainWindow::applyCommandLineOptions(CommandLineParser& cmdParser)
         // Check if model is registered
         if (SceneWidgetVisualizerFactory::isModelRegistered(modelName))
         {
-            // Find and check the corresponding action in the menu
-            for (QAction* action : modelActionGroup->actions())
-            {
-                if (action->text() == modelQStr)
-                {
-                    action->setChecked(true);
-                    switchToModel(modelQStr);
+            // Switch to the model (switchToModel now handles menu update)
+            switchToModel(modelQStr);
 
-                    // Reload data with the new model only if configuration was loaded
-                    if (cmdParser.getConfigFile())
-                    {
-                        try
-                        {
-                            ui->sceneWidget->reloadData();
-                        }
-                        catch (const std::exception& e)
-                        {
-                            std::cerr << "Error reloading data with new model: " << e.what() << std::endl;
-                        }
-                    }
-                    break;
+            // Reload data with the new model only if configuration was loaded
+            if (cmdParser.getConfigFile())
+            {
+                try
+                {
+                    ui->sceneWidget->reloadData();
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "Error reloading data with new model: " << e.what() << std::endl;
                 }
             }
         }
@@ -1403,7 +1456,7 @@ void MainWindow::updateReductionDisplay()
     ui->reductionWidget->updateDisplay(currentStep);
 }
 
-void MainWindow::initializeReductionManager(const QString& configFileName)
+void MainWindow::initializeReductionManager(const QString& configFileName, std::shared_ptr<Config> optionalConfig)
 {
     ui->reductionWidget->setReductionManager(nullptr);
 
@@ -1420,15 +1473,28 @@ void MainWindow::initializeReductionManager(const QString& configFileName)
     // Build path to reduction file
     namespace fs = std::filesystem;
     fs::path configPath(configFileName.toStdString());
-    fs::path outputDir = configPath.parent_path() / "Output";
+    fs::path configDir = configPath.parent_path();
     
     // Get output filename from config
     try
     {
-        Config config(configFileName.toStdString());
-        ConfigCategory* generalContext = config.getConfigCategory("GENERAL");
+        if (! optionalConfig)
+        {
+            optionalConfig = std::make_shared<Config>(configFileName.toStdString());
+        }
+        ConfigCategory* generalContext = optionalConfig->getConfigCategory("GENERAL");
         std::string outputFileNameFromCfg = generalContext->getConfigParameter("output_file_name")->getValue<std::string>();
-        fs::path reductionFilePath = outputDir / (outputFileNameFromCfg + "-red.txt");
+        
+        // Determine reduction file directory: check flat structure first, then nested
+        fs::path reductionDir = configDir;
+        fs::path reductionFilePath = reductionDir / (outputFileNameFromCfg + "-red.txt");
+        
+        // If not found in current directory, try Output/ subdirectory
+        if (!fs::exists(reductionFilePath))
+        {
+            reductionDir = configDir / "Output";
+            reductionFilePath = reductionDir / (outputFileNameFromCfg + "-red.txt");
+        }
         
         // Create ReductionManager with the reduction file path and configuration
         reductionManager = std::make_unique<ReductionManager>(

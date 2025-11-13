@@ -59,15 +59,15 @@ bool CppModuleBuilder::moduleExists(const std::string& outputPath)
 }
 
 CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
-                                                   const std::string& outputFile,
-                                                   const std::string& cppStandard)
+                                                  const std::string& outputFile,
+                                                  const std::string& cppStandard)
 {
     lastResult = std::make_unique<CompilationResult>();
     lastResult->sourceFile = sourceFile;
     lastResult->outputFile = outputFile;
 
     // Check if source file exists
-    if (!fs::exists(sourceFile))
+    if (! fs::exists(sourceFile))
     {
         lastResult->success = false;
         lastResult->stderr = "Source file does not exist: " + sourceFile;

@@ -76,17 +76,26 @@ int main(int argc, char* argv[])
     MainWindow mainWindow;
     mainWindow.setSilentMode(cmdParser.isSilentMode());
 
-    // Load configuration file if provided
+    // Load configuration file or model directory if provided
     if (cmdParser.getConfigFile())
     {
-        const auto& configFile = cmdParser.getConfigFile().value();
-        if (std::filesystem::exists(configFile))
+        const auto& path = cmdParser.getConfigFile().value();
+        if (std::filesystem::exists(path))
         {
-            mainWindow.openConfigurationFile(QString::fromStdString(configFile));
+            if (cmdParser.isModelDirectory())
+            {
+                // Load model from directory
+                mainWindow.loadModelFromDirectory(QString::fromStdString(path));
+            }
+            else
+            {
+                // Load configuration from file
+                mainWindow.openConfigurationFile(QString::fromStdString(path));
+            }
         }
         else
         {
-            std::cerr << "Configuration file not found: '" << configFile << "'" << std::endl;
+            std::cerr << "Path not found: '" << path << "'" << std::endl;
         }
     }
 

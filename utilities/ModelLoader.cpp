@@ -11,6 +11,7 @@
 #include "ModelLoader.h"
 #include "config/Config.h"
 #include "CppModuleBuilder.h"
+#include "directoryConstants.h"
 #include "vtk_compile_flags.h"
 
 namespace
@@ -113,7 +114,7 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             return result;
         }
 
-        result.modelName = outputParam->getValue<std::string>();
+        result.outputFileName = outputParam->getValue<std::string>();
 
         // Find C++ header file
         std::string sourceFile = findHeaderFile(modelDirectory);
@@ -128,7 +129,7 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
 
         // Determine output file path
         const std::string outputFile = generateModuleNameForSourceFile(sourceFile);
-        std::cout << "Trying to open: " << outputFile << "'\t" << isFileNewer(sourceFile, outputFile) << std::endl;
+        std::cout << "Trying to open: " << outputFile << "'\t, source never than compiled?: " << std::boolalpha << isFileNewer(sourceFile, outputFile) << std::endl;
 
         // Check if compilation is needed
         if (moduleExists(outputFile))
@@ -141,13 +142,13 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
         }
         else // if module does not exist
         {
-            const std::string wrapperSource = modelDirectory + "/" + result.modelName + "_wrapper.cpp";
+            const std::string wrapperSource = modelDirectory + "/" + result.outputFileName + std::string(DirectoryConstants::WRAPPER_FILE_SUFFIX);
 
             std::cout << "Compiling module: " << sourceFile << std::endl;
 
             // Generate wrapper code
             const auto className = generateClassNameFromCppHeaderFileName(sourceFile);
-            if (! generateWrapper(wrapperSource, result.modelName, className))
+            if (! generateWrapper(wrapperSource, result.outputFileName, className))
             {
                 std::cerr << "Error: Failed to generate wrapper code" << std::endl;
                 result.success = false;
@@ -157,7 +158,6 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             // Compile the wrapper to .so (which includes the model header)
             // Empty string for cppStandard triggers auto-detection in CppModuleBuilder
             auto compilationResult = builder->compileModule(wrapperSource, outputFile, "");
-
             if (! compilationResult.success)
             {
                 std::cerr << "Compilation failed with exit code: " << compilationResult.exitCode << std::endl;
@@ -166,8 +166,26 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
                     std::cerr << "Error output:\n" << compilationResult.stderr << std::endl;
                 }
                 result.success = false;
-                result.compilationResult = new viz::plugins::CompilationResult(compilationResult);
+                result.compilationResult = compilationResult;
                 return result;
+            }
+            
+            constexpr bool removeWrapperAfterSuccessfullCompilation = false;
+            if constexpr(removeWrapperAfterSuccessfullCompilation)
+            {
+                try
+                {
+                    if (fs::exists(wrapperSource))
+                    {
+                        fs::remove(wrapperSource);
+                        std::cout << "Removed wrapper file: " << wrapperSource << std::endl;
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "Warning: Failed to remove wrapper file: " << e.what() << std::endl;
+                    // Don't fail the build if wrapper removal fails
+                }
             }
         }
 
@@ -185,31 +203,21 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
 
 bool ModelLoader::validateDirectory(const std::string& modelDirectory)
 {
-    if (!fs::exists(modelDirectory) || !fs::is_directory(modelDirectory))
+    if (! fs::exists(modelDirectory) || ! fs::is_directory(modelDirectory))
     {
         std::cerr << "Error: Directory does not exist: " << modelDirectory << std::endl;
         return false;
     }
 
-    std::string headerPath = modelDirectory + "/Header.txt";
-    if (!fs::exists(headerPath))
+    const fs::path headerPath = fs::path(modelDirectory) / "Header.txt";
+    if (! fs::exists(headerPath))
     {
         std::cerr << "Error: Header.txt not found in " << modelDirectory << std::endl;
         return false;
     }
 
-    // Check if at least one .h file exists
-    bool hasHeaderFile = false;
-    for (const auto& entry : fs::directory_iterator(modelDirectory))
-    {
-        if (entry.is_regular_file() && entry.path().extension() == ".h")
-        {
-            hasHeaderFile = true;
-            break;
-        }
-    }
-
-    if (!hasHeaderFile)
+    const std::string headerFile = findHeaderFile(modelDirectory);
+    if (headerFile.empty())
     {
         std::cerr << "Error: No C++ header file (.h) found in " << modelDirectory << std::endl;
         return false;
@@ -220,14 +228,16 @@ bool ModelLoader::validateDirectory(const std::string& modelDirectory)
 
 std::string ModelLoader::findHeaderFile(const std::string& modelDirectory)
 {
-    for (const auto& entry : fs::directory_iterator(modelDirectory))
-    {
-        if (entry.is_regular_file() && entry.path().extension() == ".h")
+    auto it = std::ranges::find_if(fs::directory_iterator(modelDirectory), fs::directory_iterator{}, [](const fs::directory_entry& entry)
         {
-            return entry.path().string();
-        }
+            return entry.is_regular_file() && entry.path().extension() == ".h";
+        });
+
+    if (it != fs::directory_iterator{})
+    {
+        return it->path().string();
     }
-    return "";
+    return {};
 }
 
 bool ModelLoader::moduleExists(const std::string& outputPath)

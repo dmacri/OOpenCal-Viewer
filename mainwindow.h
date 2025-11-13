@@ -6,7 +6,7 @@
 #include <QMainWindow>
 #include <QStyle>
 #include <QTimer>
-
+#include <memory>
 #include "utilities/types.h"
 
 namespace Ui
@@ -17,6 +17,8 @@ class MainWindow;
 class QPushButton;
 class QActionGroup;
 class ReductionManager;
+class Config;
+class CommandLineParser;
 
 /** @class MainWindow
  * @brief The main application window class that manages the user interface.
@@ -31,8 +33,10 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    void openConfigurationFile(const QString& configFileName);
-    void applyCommandLineOptions(class CommandLineParser &cmdParser);
+    /// @param config is optional, if not provided: data will be read from file
+    void openConfigurationFile(const QString& configFileName, std::shared_ptr<Config> optionalConfig={});
+    void applyCommandLineOptions(const CommandLineParser& cmdParser);
+    void loadModelFromDirectory(const QString& modelDirectory);
 
     void setSilentMode(bool newSilentMode)
     {
@@ -129,13 +133,17 @@ private:
     QString getSmartDisplayName(const QString &filePath, const QStringList &allPaths) const;
     QString generateTooltipForFile(const QString &filePath) const;
     void updateRecentFilesMenu();
-    void loadModelFromDirectory(const QString& modelDirectory);
-    void initializeReductionManager(const QString& configFileName);
+    
+    /// @brief Initialize reduction manager for the current configuration.
+    /// @param configFileName Path to the configuration file
+    /// @param optionalConfig Optional pre-loaded Config object. If provided, avoids re-reading the file.
+    ///                       If nullptr, the config will be read from configFileName.
+    void initializeReductionManager(const QString& configFileName, std::shared_ptr<Config> optionalConfig = {});
     void updateReductionDisplay();
 
-    static constexpr int MAX_RECENT_FILES = 10;
-
 private:
+
+    static constexpr int MAX_RECENT_FILES = 10;
     Ui::MainWindow *ui;
     QTimer playbackTimer;
     QActionGroup *modelActionGroup = nullptr;
