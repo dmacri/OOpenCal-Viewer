@@ -555,5 +555,48 @@ FilePosition ModelReader<Cell>::getStepStartingPositionInFile(StepIndex step, No
         return it->second.position;
     }
 
-    throw std::out_of_range(std::format("Step {} not found in node {} (available step indices: {})", step, node, stepMap.size() - 1));
+    // Step not found - find closest available steps
+    if (stepMap.empty())
+    {
+        throw std::out_of_range(std::format("Step {} not found in node {} (no steps available)", step, node));
+    }
+
+    // Find closest previous and next steps
+    std::optional<StepIndex> prevStep;
+    std::optional<StepIndex> nextStep;
+
+    for (const auto& [availableStep, _] : stepMap) // unordered_map does not have lower/upper_bound
+    {
+        if (availableStep < step)
+        {
+            if (!prevStep || availableStep > *prevStep)
+            {
+                prevStep = availableStep;
+            }
+        }
+        else if (availableStep > step)
+        {
+            if (!nextStep || availableStep < *nextStep)
+            {
+                nextStep = availableStep;
+            }
+        }
+    }
+
+    // Build error message with nearest steps
+    std::string nearestInfo;
+    if (prevStep && nextStep)
+    {
+        nearestInfo = std::format("Nearest steps: {} (previous), {} (next)", *prevStep, *nextStep);
+    }
+    else if (prevStep)
+    {
+        nearestInfo = std::format("Nearest step: {} (previous)", *prevStep);
+    }
+    else if (nextStep)
+    {
+        nearestInfo = std::format("Nearest step: {} (next)", *nextStep);
+    }
+
+    throw std::out_of_range(std::format("Step {} not found in node {}. {}", step, node, nearestInfo));
 }

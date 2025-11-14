@@ -24,10 +24,14 @@ struct CompilationResult;
  * - Compile C++ header files into shared libraries
  * - Capture compiler output and errors
  * - Report compilation results
+ * - Report progress via callback
  *
  * Example usage:
  * @code
  * CppModuleBuilder builder;
+ * builder.setProgressCallback([](const std::string& msg) {
+ *     std::cout << "Progress: " << msg << std::endl;
+ * });
  * auto result = builder.compileModule("/path/to/XCell.h", "/path/to/output.so");
  * if (!result.success) {
  *     std::cerr << "Compilation failed:\n" << result.stderr << std::endl;
@@ -36,6 +40,8 @@ struct CompilationResult;
 class CppModuleBuilder
 {
 public:
+    /// Callback type for progress reporting
+    using ProgressCallback = std::function<void(const std::string&)>;
     /** @brief Create a new CppModuleBuilder instance
      * @param compilerPath Path to the compiler (e.g., "clang++"). If empty, uses system PATH.
      * @param oopencalDir Path to OOpenCAL base directory for includes. If empty, uses OOPENCAL_DIR env var. */
@@ -86,13 +92,21 @@ public:
     /** @brief Get the project root path */
     const std::string& getProjectRootPath() const
     {
-        return projectRootPath;
+         return projectRootPath; 
+    }
+
+    /** @brief Set progress callback for compilation updates
+     * @param callback Function to call with progress messages */
+    void setProgressCallback(ProgressCallback callback)
+    {
+        progressCallback = callback; 
     }
 
 private:
     std::string compilerPath;
     std::string oopencalDir;
     std::string projectRootPath;
+    ProgressCallback progressCallback;
     std::unique_ptr<CompilationResult> lastResult;
 
     /** @brief Build the compilation command

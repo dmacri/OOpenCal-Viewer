@@ -1254,7 +1254,7 @@ QString MainWindow::generateTooltipForFile(const QString& filePath) const
     // Try to read configuration parameters
     try
     {
-        Config config(filePath.toStdString());
+        Config config(filePath.toStdString(), /*printWarnings=*/false);
 
         tooltip += QString("<b>%1</b><br/>").arg(tr("Configuration parameters:"));
 

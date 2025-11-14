@@ -99,8 +99,16 @@ void CompilationLogWidget::displayCompilationResult(const viz::plugins::Compilat
     }
     else
     {
-        statusText->setText("<span style='color: red; font-weight: bold;'>✗ Compilation Failed (Exit Code: " +
-                            QString::number(result.exitCode) + ")</span>");
+        // Check if this is a compiler not found error
+        if (result.stderr.find("No C++ compiler found") != std::string::npos)
+        {
+            statusText->setText("<span style='color: red; font-weight: bold;'>✗ C++ Compiler Not Found</span>");
+        }
+        else
+        {
+            statusText->setText("<span style='color: red; font-weight: bold;'>✗ Compilation Failed (Exit Code: " +
+                                QString::number(result.exitCode) + ")</span>");
+        }
     }
     // --- File info ---
     QString fileInfo;

@@ -187,10 +187,24 @@ find_package(VTK COMPONENTS
     RenderingOpenGL2
     IOXML
     IOOggTheora
-    REQUIRED
-        GUISupportQt
-        IOLegacy
+    GUISupportQt
+    IOLegacy
 )
+
+if(NOT VTK_FOUND)
+    message(FATAL_ERROR
+        "VTK not found! VTK is too large for automatic download and compilation.\n"
+        "Please install VTK using one of these methods:\n"
+        "  - vcpkg: vcpkg install vtk[qt,opengl]\n"
+        "  - Ubuntu/Debian: sudo apt install libvtk9-dev libvtk9-qt-dev\n"
+        "  - Arch: sudo pacman -S vtk\n"
+        "  - Fedora: sudo dnf install vtk-devel\n"
+        "  - macOS: brew install vtk\n"
+        "  - Or download from: https://vtk.org/download/\n"
+        "After installation, specify VTK_DIR if needed:\n"
+        "  cmake -DVTK_DIR=/path/to/vtk/lib/cmake/vtk-9.x .."
+    )
+endif()
 
 # ============================================
 # Qt setup + dependencies

@@ -33,8 +33,8 @@ void remove_spaces(std::string& s)
 } // namespace
 
 
-Config::Config(const std::string& configuration_path)
-    : configuration_path{configuration_path}
+Config::Config(const std::string& configuration_path, bool printWarnings)
+    : configuration_path{configuration_path}, printWarnings{printWarnings}
 {
     setUpConfigCategories();
 
@@ -187,7 +187,8 @@ void Config::readConfigFile()
         throw std::runtime_error("The path to configuration file is empty!");
     }
 
-    std::cout << std::format("READING '{}'...\n", configuration_path);
+    if (printWarnings)
+        std::cout << std::format("READING '{}'...", configuration_path) << std::endl;
     std::filesystem::path configurationFile(configuration_path);
     if (".txt" == configurationFile.extension())
     {
@@ -219,7 +220,8 @@ void Config::readConfigFileInOOpenCalFormat()
 
         if (line.back() != ':')
         {
-            std::cerr << "WARNING: Category name must end with ':' character, skipping line: " << line << std::endl;
+            if (printWarnings)
+                std::cerr << "WARNING: Category name must end with ':' character, skipping line: " << line << std::endl;
             continue;
         }
 
@@ -252,15 +254,15 @@ void Config::readConfigFileInOOpenCalFormat()
         {
             if (! std::getline(file, line))
             {
-                std::cerr << "WARNING: Unexpected end of file while reading parameters for category '" 
-                          << configCategory->getName() << "'" << std::endl;
+                if (printWarnings)
+                    std::cerr << "WARNING: Unexpected end of file while reading parameters for category '"  << configCategory->getName() << "'" << std::endl;
                 break;
             }
 
             if (line.empty())
             {
-                std::cerr << "WARNING: Empty parameter line in category '" 
-                          << configCategory->getName() << "'" << std::endl;
+                if (printWarnings)
+                    std::cerr << "WARNING: Empty parameter line in category '" << configCategory->getName() << "'" << std::endl;
                 i--; // Don't count this as a parameter
                 continue;
             }
@@ -268,7 +270,8 @@ void Config::readConfigFileInOOpenCalFormat()
             auto pos = line.find('=');
             if (pos == std::string::npos)
             {
-                std::cerr << "WARNING: Invalid parameter line (no '=' found): '" << line << "'" << std::endl;
+                if (printWarnings)
+                    std::cerr << "WARNING: Invalid parameter line (no '=' found): '" << line << "'" << std::endl;
                 i--; // Don't count this as a parameter
                 continue;
             }
@@ -285,8 +288,9 @@ void Config::readConfigFileInOOpenCalFormat()
             }
             catch (const std::exception& e)
             {
-                std::cerr << "WARNING: Failed to set parameter '" << parName << "' in category '" 
-                          << configCategory->getName() << "': " << e.what() << std::endl;
+                if (printWarnings)
+                    std::cerr << "WARNING: Failed to set parameter '" << parName << "' in category '"
+                              << configCategory->getName() << "': " << e.what() << std::endl;
             }
         }
     }

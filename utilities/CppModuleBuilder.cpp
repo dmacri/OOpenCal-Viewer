@@ -12,31 +12,79 @@
 
 namespace fs = std::filesystem;
 
-namespace viz::plugins
+
+namespace
 {
 /** @brief Detect C++ standard from compiler
  * @param userStandard User-provided standard (if empty, auto-detect)
  * @return C++ standard string (e.g., "c++17", "c++23") */
-static std::string detectCppStandard(const std::string& userStandard)
+std::string detectCppStandard(const std::string& userStandard)
 {
     if (! userStandard.empty())
         return userStandard;
 
-    #ifdef __cplusplus
+#ifdef __cplusplus
     if (__cplusplus >= 202302L)
         return "c++23";
     else if (__cplusplus >= 202002L)
         return "c++20";
     else if (__cplusplus >= 201703L)
         return "c++17";
-    #endif
+#endif
     return "c++14";
 }
 
+/** @brief Check if a compiler is available in PATH
+ * @param compiler Compiler name (e.g., "clang++", "g++")
+ * @return true if compiler is available */
+bool isCompilerAvailable(const std::string& compiler)
+{
+    try
+    {
+        // Try to run compiler with --version
+        std::string command = compiler + " --version > /dev/null 2>&1";
+        int exitCode = system(command.c_str());
+        return exitCode == 0;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+/** @brief Find an available C++ compiler
+ * @param preferredCompiler Preferred compiler (e.g., "clang++")
+ * @return Path to available compiler, or empty string if none found */
+std::string findAvailableCompiler(const std::string& preferredCompiler)
+{
+    // Try preferred compiler first
+    if (isCompilerAvailable(preferredCompiler))
+        return preferredCompiler;
+
+    // Fallback compilers in order of preference
+    const std::vector<std::string> fallbacks = {"g++", "clang++", "c++"};
+    for (const auto& compiler : fallbacks)
+    {
+        if (compiler != preferredCompiler && isCompilerAvailable(compiler))
+        {
+            std::cout << "Preferred compiler '" << preferredCompiler << "' not found, using '"
+                      << compiler << "' instead" << std::endl;
+            return compiler;
+        }
+    }
+
+    return ""; // No compiler found
+}
+} // namespace
+
+
+namespace viz::plugins
+{
 CppModuleBuilder::CppModuleBuilder(const std::string& compilerPath,
                                    const std::string& oopencalDir)
     : compilerPath(compilerPath)
     , oopencalDir(oopencalDir)
+    , progressCallback(nullptr)
 {
     // If oopencalDir is empty, try to get it from environment variable
     if (this->oopencalDir.empty())
@@ -74,17 +122,61 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
         return *lastResult;
     }
 
+    // Report progress: checking compiler
+    if (progressCallback)
+        progressCallback("Checking C++ compiler availability...");
+
+    // Find an available compiler (with fallback support)
+    std::string availableCompiler = findAvailableCompiler(compilerPath);
+    if (availableCompiler.empty())
+    {
+        lastResult->success = false;
+        lastResult->stderr = "No C++ compiler found. Please install clang++, g++, or c++.";
+        lastResult->compileCommand = compilerPath + " (not found)";
+        if (progressCallback)
+            progressCallback("ERROR: No C++ compiler found");
+        return *lastResult;
+    }
+
+    // Update compiler path if fallback was used
+    if (availableCompiler != compilerPath)
+    {
+        std::cout << "Using fallback compiler: " << availableCompiler << std::endl;
+        if (progressCallback)
+            progressCallback("Using fallback compiler: " + availableCompiler);
+        compilerPath = availableCompiler;
+    }
+
+    // Report progress: building command
+    if (progressCallback)
+        progressCallback("Preparing compilation command...");
+
     // Build the compilation command
     lastResult->compileCommand = buildCompileCommand(sourceFile, outputFile, cppStandard);
 
     std::cout << "Compiling module: " << sourceFile << std::endl;
     std::cout << "Command: " << lastResult->compileCommand << std::endl;
 
-    // Execute the compilation command
+    // Report progress: starting compilation
+    if (progressCallback)
+        progressCallback("Compilation of module ...");
+
+    // Execute the compilation command with progress reporting
+    int lineCount = 0;
     lastResult->exitCode = executeCommand(
         lastResult->compileCommand,
-        [this](const std::string& line) { lastResult->stdout += line + "\n"; },
-        [this](const std::string& line) { lastResult->stderr += line + "\n"; });
+        [this, &lineCount](const std::string& line) { 
+            lastResult->stdout += line + "\n";
+            // Report compilation progress every 5 lines to avoid too many updates
+            if (progressCallback && !line.empty() && (++lineCount % 5 == 0))
+                progressCallback("Compiling... (" + std::to_string(lineCount) + " lines)");
+        },
+        [this](const std::string& line) { 
+            lastResult->stderr += line + "\n";
+            // Report compilation errors immediately
+            if (progressCallback && !line.empty())
+                progressCallback("Error: " + line);
+        });
 
     // Check if compilation succeeded
     if (lastResult->exitCode == 0 && moduleExists(outputFile))
