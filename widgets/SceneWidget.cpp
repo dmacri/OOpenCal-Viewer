@@ -35,6 +35,7 @@
 #include "visualiser/SettingParameter.h"
 #include "widgets/ColorSettings.h"
 #include "widgets/SubstatesDockWidget.h"
+#include "widgets/CustomInteractorStyle.h"
 
 
 namespace
@@ -272,9 +273,9 @@ void SceneWidget::setupVtkScene()
 
     renderWindow()->SetSize(settingParameter->numberOfColumnX, settingParameter->numberOfRowsY + 10);
 
-    /// An interactor with this style blocks rotation but not zoom.
-    /// Use nullptr in SetInteractorStyle to block everything.
-    vtkNew<vtkInteractorStyleImage> style;
+    /// Use custom interactor style that zooms towards cursor position.
+    /// This provides intuitive zoom behavior when using mouse wheel.
+    vtkNew<CustomInteractorStyle> style;
     interactor()->SetInteractorStyle(style);
 
     renderWindow()->SetWindowName(QApplication::applicationName().toLocal8Bit().data());
@@ -971,8 +972,8 @@ void SceneWidget::setViewMode2D()
 
     currentViewMode = ViewMode::Mode2D;
 
-    // Use vtkInteractorStyleImage which blocks rotation
-    vtkNew<vtkInteractorStyleImage> style;
+    // Use custom interactor style that zooms towards cursor position
+    vtkNew<CustomInteractorStyle> style;
     interactor()->SetInteractorStyle(style);
 
     // Reset camera angles
@@ -1082,8 +1083,8 @@ void SceneWidget::mousePressEvent(QMouseEvent* event)
     // Call parent implementation first
     QVTKOpenGLNativeWidget::mousePressEvent(event);
 
-    // Update substate dock widget if available
-    if (m_substatesDockWidget && sceneWidgetVisualizerProxy)
+    // Update substate dock widget if available (for left clicks without Shift)
+    if (m_substatesDockWidget && sceneWidgetVisualizerProxy && event->button() == Qt::LeftButton && !(event->modifiers() & Qt::ShiftModifier))
     {
         // Check if click was inside the grid
         if (isWorldPositionInGrid(m_lastWorldPos.data()))
@@ -1146,7 +1147,7 @@ bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
         return false;
 
     // Get the bounds of the entire scene
-    double* bounds = renderer->ComputeVisiblePropBounds();
+    const double* bounds = renderer->ComputeVisiblePropBounds();
     if (! bounds)
         return false;
 
@@ -1159,3 +1160,4 @@ bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
 
     return true;  // Inside grid bounds
 }
+

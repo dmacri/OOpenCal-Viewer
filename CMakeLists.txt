@@ -127,6 +127,7 @@ list(APPEND Sources
     widgets/ReductionDisplayWidget.cpp
     widgets/SubstateDisplayWidget.cpp
     widgets/SubstatesDockWidget.cpp
+    widgets/CustomInteractorStyle.cpp
     utilities/PluginLoader.cpp
     utilities/ReductionManager.cpp
     utilities/ModelReader.cpp

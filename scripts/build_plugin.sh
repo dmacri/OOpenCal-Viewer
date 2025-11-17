@@ -93,8 +93,8 @@ resolve_template_dir() {
             fi
         done
 
-        if [[ -n "$qtviewer_dir" && -d "$qtviewer_dir/$DEFAULT_REL_PATH" ]]; then
-            TEMPLATE_DIR="$qtviewer_dir/$DEFAULT_REL_PATH"
+        if [[ -n "$oopencalviewer_dir" && -d "$oopencalviewer_dir/$DEFAULT_REL_PATH" ]]; then
+            TEMPLATE_DIR="$oopencalviewer_dir/$DEFAULT_REL_PATH"
         fi
     fi
 

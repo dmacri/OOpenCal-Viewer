@@ -1,6 +1,7 @@
 #include "Line.h"
 #include "visualiser/Visualizer.hpp"
 #include "widgets/ColorSettings.h"
+#include <limits>
 
 
 namespace
@@ -47,10 +48,52 @@ vtkSmartPointer<vtkPolyData> Visualizer::createLinePolyData(const std::vector<Li
     vtkNew<vtkPoints> pts;
     vtkNew<vtkCellArray> cellLines;
 
+    // Small offset to move grid lines slightly outside the scene to avoid obscuring data at corners
+    // This offset is in world coordinates (typically pixels)
+    constexpr double GRID_LINE_OFFSET = 0.5;
+
+    // Find the bounds of all lines to determine scene extent
+    double minX = std::numeric_limits<double>::max();
+    double maxX = std::numeric_limits<double>::lowest();
+    double minY = std::numeric_limits<double>::max();
+    double maxY = std::numeric_limits<double>::lowest();
+
+    for (const auto& line : lines)
+    {
+        minX = std::min(minX, static_cast<double>(line.x1));
+        minX = std::min(minX, static_cast<double>(line.x2));
+        maxX = std::max(maxX, static_cast<double>(line.x1));
+        maxX = std::max(maxX, static_cast<double>(line.x2));
+        minY = std::min(minY, static_cast<double>(line.y1));
+        minY = std::min(minY, static_cast<double>(line.y2));
+        maxY = std::max(maxY, static_cast<double>(line.y1));
+        maxY = std::max(maxY, static_cast<double>(line.y2));
+    }
+
     for (size_t i = 0; i < lines.size(); ++i)
     {
-        pts->InsertNextPoint(lines[i].x1, nRows - 1 - lines[i].y1, 0.0);
-        pts->InsertNextPoint(lines[i].x2, nRows - 1 - lines[i].y2, 0.0);
+        double x1 = lines[i].x1;
+        double y1 = nRows - 1 - lines[i].y1;
+        double x2 = lines[i].x2;
+        double y2 = nRows - 1 - lines[i].y2;
+
+        // Apply offset based on which edge the line is on
+        // Left edge (x == minX)
+        if (x1 == minX && x2 == minX)
+            x1 = x2 = minX - GRID_LINE_OFFSET;
+        // Right edge (x == maxX)
+        else if (x1 == maxX && x2 == maxX)
+            x1 = x2 = maxX + GRID_LINE_OFFSET;
+
+        // Bottom edge in VTK coords (y == nRows - 1 - maxY) - move down (minus)
+        if (y1 == (nRows - 1 - maxY) && y2 == (nRows - 1 - maxY))
+            y1 = y2 = (nRows - 1 - maxY) - GRID_LINE_OFFSET;
+        // Top edge in VTK coords (y == nRows - 1 - minY) - move up (plus)
+        else if (y1 == (nRows - 1 - minY) && y2 == (nRows - 1 - minY))
+            y1 = y2 = (nRows - 1 - minY) + GRID_LINE_OFFSET;
+
+        pts->InsertNextPoint(x1, y1, 0.0);
+        pts->InsertNextPoint(x2, y2, 0.0);
         cellLines->InsertNextCell(2);
         cellLines->InsertCellPoint(i * 2);
         cellLines->InsertCellPoint(i * 2 + 1);
