@@ -604,9 +604,18 @@
       <string>Recent Files</string>
      </property>
     </widget>
+    <widget class="QMenu" name="menuRecentDirectories">
+     <property name="toolTip">
+      <string>Recent model directories</string>
+     </property>
+     <property name="title">
+      <string>Recent Directories</string>
+     </property>
+    </widget>
     <addaction name="actionOpenConfiguration"/>
     <addaction name="separator"/>
     <addaction name="menuRecentFiles"/>
+    <addaction name="menuRecentDirectories"/>
     <addaction name="separator"/>
     <addaction name="actionLoadModelFromDirectory"/>
     <addaction name="separator"/>
@@ -636,6 +645,8 @@
     </property>
     <addaction name="action2DMode"/>
     <addaction name="action3DMode"/>
+    <addaction name="separator"/>
+    <addaction name="actionGridLines"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuModel"/>
@@ -790,6 +801,20 @@
    </property>
    <property name="text">
     <string>Show reduction</string>
+   </property>
+  </action>
+  <action name="actionGridLines">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Grid Lines</string>
+   </property>
+   <property name="toolTip">
+    <string>Show/hide grid lines between nodes</string>
    </property>
   </action>
  </widget>

@@ -2,6 +2,7 @@
 #include <utility> // std::to_underlying, which requires C++23
 #include <filesystem>
 #include <source_location>
+#include <algorithm>
 #include <QCommonStyle>
 #include <QSettings>
 #include <QDebug>
@@ -20,11 +21,13 @@
 #include "ui_mainwindow.h"
 
 #include "config/Config.h"
+#include "config/ConfigConstants.h"
 #include "utilities/CommandLineParser.h"
 #include "utilities/CppModuleBuilder.h"
 #include "utilities/ModelLoader.h"
 #include "utilities/PluginLoader.h"
 #include "utilities/ReductionManager.h"
+#include "utilities/directoryConstants.h"
 #include "visualiser/SettingParameter.h"
 #include "visualiser/VideoExporter.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
@@ -34,7 +37,6 @@
 #include "widgets/CompilationLogWidget.h"
 #include "widgets/ConfigDetailsDialog.h"
 #include "widgets/ReductionDialog.h"
-#include "utilities/directoryConstants.h"
 
 
 namespace
@@ -156,6 +158,7 @@ MainWindow::MainWindow(QWidget* parent)
     recreateModelMenuActions();
     createViewModeActionGroup();
     updateRecentFilesMenu();
+    updateRecentDirectoriesMenu();
 
     enterNoConfigurationFileMode();
 }
@@ -201,6 +204,7 @@ void MainWindow::connectMenuActions()
     // View mode actions
     connect(ui->action2DMode, &QAction::triggered, this, &MainWindow::on2DModeRequested);
     connect(ui->action3DMode, &QAction::triggered, this, &MainWindow::on3DModeRequested);
+    connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
 
     /// Model selection actions are connected dynamically in createModelMenuActions()
 }
@@ -249,6 +253,9 @@ void MainWindow::initializeSceneWidget(const QString& configFileName)
 
 void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> availableSteps)
 {
+    // Store the list of available steps for intelligent step navigation
+    this->availableSteps = availableSteps;
+    
     const auto lastStepAvailableInAvailableSteps = std::ranges::contains(availableSteps, totalSteps());
     if (! lastStepAvailableInAvailableSteps && ! silentMode)
     {
@@ -265,6 +272,7 @@ void MainWindow::totalStepsNumberChanged(StepIndex totalStepsValue)
     ui->totalStep->setText(QString("/") + QString::number(totalStepsValue));
     ui->updatePositionSlider->setMaximum(static_cast<int>(totalStepsValue));
     ui->positionSpinBox->setMaximum(static_cast<int>(totalStepsValue));
+    ui->speedSpinBox->setMaximum(std::max(static_cast<int>(totalStepsValue), 1)); // std::max to avoid 0 as default step speed
 }
 
 StepIndex MainWindow::totalSteps() const
@@ -507,18 +515,80 @@ void MainWindow::onBackButtonClicked()
     playingRequested(PlayingDirection::Backward);
 }
 
+void MainWindow::navigateToNearestAvailableStep(PlayingDirection direction, StepIndex stepsToMove)
+{
+    if (availableSteps.empty())
+    {
+        return;
+    }
+    
+    const auto directionValue = std::to_underlying(direction);
+    const auto targetStep = currentStep + (stepsToMove * directionValue);
+    
+    // Try to go to the target step
+    if (std::ranges::contains(availableSteps, targetStep))
+    {
+        currentStep = targetStep;
+        setPositionOnWidgets(currentStep);
+        return;
+    }
+    
+    StepIndex nextStep;
+    
+    if (direction == PlayingDirection::Forward)
+    {
+        // Find the nearest available step after the target
+        auto it = std::ranges::upper_bound(availableSteps, targetStep);
+        
+        if (it != availableSteps.end())
+        {
+            nextStep = *it;
+            std::cerr << "Warning: Step " << targetStep << " not available. "
+                      << "Nearest next step is " << nextStep << std::endl;
+        }
+        else
+        {
+            // No available step after target, go to last available
+            nextStep = availableSteps.back();
+            std::cerr << "Warning: Step " << targetStep << " not available. "
+                      << "Going to last available step " << nextStep << std::endl;
+        }
+    }
+    else // PlayingDirection::Backward
+    {
+        // Find the nearest available step before the target
+        auto it = std::ranges::lower_bound(availableSteps, targetStep);
+        
+        if (it != availableSteps.begin())
+        {
+            --it;
+            nextStep = *it;
+            std::cerr << "Warning: Step " << targetStep << " not available. "
+                      << "Nearest previous step is " << nextStep << std::endl;
+        }
+        else
+        {
+            // No available step before target, go to first available
+            nextStep = availableSteps.front();
+            std::cerr << "Warning: Step " << targetStep << " not available. "
+                      << "Going to first available step " << nextStep << std::endl;
+        }
+    }
+    
+    currentStep = nextStep;
+    setPositionOnWidgets(currentStep);
+}
+
 void MainWindow::onLeftButtonClicked()
 {
     const auto stepsPerClick = static_cast<StepIndex>(ui->speedSpinBox->value());
-    currentStep = std::max(currentStep - stepsPerClick, FIRST_STEP_NUMBER);
-    setPositionOnWidgets(currentStep);
+    navigateToNearestAvailableStep(PlayingDirection::Backward, stepsPerClick);
 }
 
 void MainWindow::onRightButtonClicked()
 {
     const auto stepsPerClick = static_cast<StepIndex>(ui->speedSpinBox->value());
-    currentStep = std::min(currentStep + stepsPerClick, totalSteps());
-    setPositionOnWidgets(currentStep);
+    navigateToNearestAvailableStep(PlayingDirection::Forward, stepsPerClick);
 }
 
 bool MainWindow::setPositionOnWidgets(StepIndex stepPosition, bool updateSlider)
@@ -555,12 +625,30 @@ bool MainWindow::setPositionOnWidgets(StepIndex stepPosition, bool updateSlider)
 
 void MainWindow::changeWhichButtonsAreEnabled()
 {
-    ui->rightButton->setDisabled(currentStep == totalSteps());
-    ui->playButton->setDisabled(currentStep == totalSteps());
-    ui->leftButton->setDisabled(currentStep <= FIRST_STEP_NUMBER);
-    ui->backButton->setDisabled(currentStep <= FIRST_STEP_NUMBER);
-    ui->skipBackwardButton->setDisabled(currentStep <= FIRST_STEP_NUMBER);
-    ui->skipForwardButton->setDisabled(currentStep == totalSteps());
+    // Check if there are available steps
+    if (availableSteps.empty())
+    {
+        // No available steps, disable all navigation buttons
+        ui->rightButton->setDisabled(true);
+        ui->playButton->setDisabled(true);
+        ui->leftButton->setDisabled(true);
+        ui->backButton->setDisabled(true);
+        ui->skipBackwardButton->setDisabled(true);
+        ui->skipForwardButton->setDisabled(true);
+        return;
+    }
+    
+    // Check if current step is the last available step
+    const bool isAtLastAvailableStep = (currentStep == availableSteps.back());
+    ui->rightButton->setDisabled(isAtLastAvailableStep);
+    ui->playButton->setDisabled(isAtLastAvailableStep);
+    ui->skipForwardButton->setDisabled(isAtLastAvailableStep);
+    
+    // Check if current step is the first available step
+    const bool isAtFirstAvailableStep = (currentStep == availableSteps.front());
+    ui->leftButton->setDisabled(isAtFirstAvailableStep);
+    ui->backButton->setDisabled(isAtFirstAvailableStep);
+    ui->skipBackwardButton->setDisabled(isAtFirstAvailableStep);
 }
 
 void MainWindow::onStepNumberChanged()
@@ -709,6 +797,9 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Initialize reduction manager for this configuration
         // If config is provided, use it; otherwise read from file
         initializeReductionManager(configFileName, optionalConfig);
+
+        // Synchronize grid lines checkbox with current visibility state
+        syncGridLinesCheckbox();
 
         // Update UI with new configuration
         showInputFilePathOnBarLabel(configFileName);
@@ -940,7 +1031,7 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         QApplication::processEvents();
 
         // Build path to Header.txt in the model directory
-        fs::path headerPath = actualModelDir / "Header.txt";
+        fs::path headerPath = actualModelDir / DirectoryConstants::HEADER_FILE_NAME;
         
         if (!fs::exists(headerPath))
         {
@@ -955,6 +1046,9 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         // Open configuration using the config object from ModelLoader
         // This avoids reading the file twice
         openConfigurationFile(QString::fromStdString(headerPath.string()), result.config);
+
+        // Add directory to recent directories list
+        addToRecentDirectories(QString::fromStdString(actualModelDir.string()));
 
         progress.close();
         silentMode = previousSilentMode;
@@ -1017,6 +1111,18 @@ void MainWindow::on3DModeRequested()
     QMessageBox::information(this,
                              tr("View Mode Changed"),
                              tr("Switched to 3D mode.\nYou can now rotate the camera using mouse or the sliders below."));
+}
+
+void MainWindow::onGridLinesToggled(bool checked)
+{
+    ui->sceneWidget->setGridLinesVisible(checked);
+}
+
+void MainWindow::syncGridLinesCheckbox()
+{
+    // Synchronize the checkbox state with the actual grid lines visibility
+    QSignalBlocker blocker(ui->actionGridLines);
+    ui->actionGridLines->setChecked(ui->sceneWidget->getGridLinesVisible());
 }
 
 void MainWindow::updateCameraControlsVisibility()
@@ -1273,11 +1379,14 @@ QString MainWindow::generateTooltipForFile(const QString& filePath) const
             }
         };
 
-        addParam("GENERAL", "number_steps");
-        addParam("GENERAL", "number_of_rows");
-        addParam("GENERAL", "number_of_columns");
-        addParam("DISTRIBUTED", "number_node_x");
-        addParam("DISTRIBUTED", "number_node_y");
+        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_STEPS);
+        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_ROWS);
+        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_COLUMNS);
+        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_X);
+        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_Y);
+        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_MODE);
+        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_SUBSTATES);
+        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_REDUCTION);
     }
     catch (const std::exception& e)
     {
@@ -1482,8 +1591,8 @@ void MainWindow::initializeReductionManager(const QString& configFileName, std::
         {
             optionalConfig = std::make_shared<Config>(configFileName.toStdString());
         }
-        ConfigCategory* generalContext = optionalConfig->getConfigCategory("GENERAL");
-        std::string outputFileNameFromCfg = generalContext->getConfigParameter("output_file_name")->getValue<std::string>();
+        ConfigCategory* generalContext = optionalConfig->getConfigCategory(ConfigConstants::CATEGORY_GENERAL);
+        std::string outputFileNameFromCfg = generalContext->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME)->getValue<std::string>();
         
         // Determine reduction file directory: check flat structure first, then nested
         fs::path reductionDir = configDir;
@@ -1508,9 +1617,12 @@ void MainWindow::initializeReductionManager(const QString& configFileName, std::
     }
     catch (const std::exception& e)
     {
-        std::cerr << "Error initializing ReductionManager: " << e.what() << std::endl;
         reductionManager.reset();
         ui->actionShow_reduction->setEnabled(false);
+        if (silentMode)
+            std::cerr << "Error initializing ReductionManager: " << e.what() << std::endl;
+        else
+            QMessageBox::warning(this, tr("Reduction initialization error"), tr("Details: ") + e.what());
     }
 }
 
@@ -1536,4 +1648,271 @@ void MainWindow::onShowReductionRequested()
     // Show reduction dialog
     ReductionDialog dialog(reductionData.values, currentStep, this);
     dialog.exec();
+}
+
+void MainWindow::addToRecentDirectories(const QString& directoryPath)
+{
+    // Load existing recent directories list
+    QStringList recentDirectories = loadRecentDirectories();
+
+    // Remove if already exists (to move it to the top)
+    recentDirectories.removeAll(directoryPath);
+
+    // Add to the beginning
+    recentDirectories.prepend(directoryPath);
+
+    // Limit to MAX_RECENT_FILES
+    while (recentDirectories.size() > MAX_RECENT_FILES)
+    {
+        recentDirectories.removeLast();
+    }
+
+    // Save the updated list
+    saveRecentDirectories(recentDirectories);
+
+    // Store the timestamp when this directory was opened
+    QSettings settings;
+    QString timeKey = QString("recentDirectories/time_%1").arg(QString(directoryPath.toUtf8().toBase64()));
+    settings.setValue(timeKey, QDateTime::currentDateTime());
+
+    // Update the menu to reflect the new list
+    updateRecentDirectoriesMenu();
+}
+
+QStringList MainWindow::loadRecentDirectories() const
+{
+    QSettings settings;
+    return settings.value("recentDirectories/list").toStringList();
+}
+
+void MainWindow::saveRecentDirectories(const QStringList& directories) const
+{
+    QSettings settings;
+    settings.setValue("recentDirectories/list", directories);
+}
+
+QString MainWindow::getSmartDisplayNameForDirectory(const QString& directoryPath, const QStringList& allPaths) const
+{
+    QFileInfo dirInfo(directoryPath);
+    
+    // Start with depth = 1 (parent/dirname)
+    int depth = 1;
+    
+    while (depth <= 4)
+    {
+        // Build display name for this directory at current depth
+        QString displayName = dirInfo.fileName();
+        QDir currentDir = dirInfo.dir();
+        
+        for (int d = 0; d < depth; ++d)
+        {
+            displayName = currentDir.dirName() + "/" + displayName;
+            currentDir.cdUp();
+        }
+        
+        // Check if this display name is unique among all paths at this depth
+        bool isUnique = true;
+        
+        for (const QString& otherPath : allPaths)
+        {
+            if (otherPath == directoryPath)
+                continue;
+            
+            // Build the same display name for the other path at current depth
+            QFileInfo otherInfo(otherPath);
+            QString otherDisplayName = otherInfo.fileName();
+            QDir otherDir = otherInfo.dir();
+            
+            for (int d = 0; d < depth; ++d)
+            {
+                otherDisplayName = otherDir.dirName() + "/" + otherDisplayName;
+                otherDir.cdUp();
+            }
+            
+            // If display names match, this depth is not sufficient
+            if (otherDisplayName == displayName)
+            {
+                isUnique = false;
+                break;
+            }
+        }
+        
+        // If unique at this depth, return it
+        if (isUnique)
+        {
+            return displayName;
+        }
+        
+        // Otherwise, try next depth
+        depth++;
+    }
+    
+    // Fallback to full path if still not unique
+    return directoryPath;
+}
+
+QString MainWindow::generateTooltipForDirectory(const QString& directoryPath) const
+{
+    QFileInfo dirInfo(directoryPath);
+
+    // Check if directory exists
+    if (!dirInfo.exists() || !dirInfo.isDir())
+    {
+        return tr("Directory does not exist:\n%1").arg(directoryPath);
+    }
+
+    // Check if Header.txt exists in the directory
+    QString headerPath = QDir(directoryPath).filePath(DirectoryConstants::HEADER_FILE_NAME);
+    if (!QFileInfo::exists(headerPath))
+    {
+        return tr("Directory is empty or does not contain %2:\n%1").arg(directoryPath, DirectoryConstants::HEADER_FILE_NAME);
+    }
+
+    QString tooltip = QString("<b>%1</b><br/>").arg(tr("Full path:"));
+    tooltip += QString("%1<br/><br/>").arg(directoryPath);
+
+    tooltip += QString("<b>%1</b> %2<br/>")
+        .arg(tr("Created:"))
+        .arg(dirInfo.birthTime().toString("yyyy-MM-dd HH:mm:ss"));
+
+    tooltip += QString("<b>%1</b> %2<br/><br/>")
+        .arg(tr("Modified:"))
+        .arg(dirInfo.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
+
+    // Try to read configuration parameters from Header.txt
+    try
+    {
+        Config config(headerPath.toStdString(), /*printWarnings=*/false);
+
+        tooltip += QString("<b>%1</b><br/>").arg(tr("Configuration parameters:"));
+
+        auto addParam = [&](const QString& category, const QString& paramName)
+        {
+            ConfigCategory* cat = config.getConfigCategory(category.toStdString(), /*ignoreCase=*/true);
+            if (cat)
+            {
+                const ConfigParameter* param = cat->getConfigParameter(paramName.toStdString());
+                if (param)
+                {
+                    tooltip += QString("&nbsp;&nbsp;• <b>%1:</b> %2<br/>")
+                                   .arg(paramName)
+                                   .arg(QString::fromStdString(param->getDefaultValue()));
+                }
+            }
+        };
+
+        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_STEPS);
+        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_ROWS);
+        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_COLUMNS);
+        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_X);
+        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_Y);
+        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_MODE);
+        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_SUBSTATES);
+        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_REDUCTION);
+    }
+    catch (const std::exception& e)
+    {
+        tooltip += QString("<br/><i>%1: %2</i>")
+            .arg(tr("Could not read configuration"))
+            .arg(e.what());
+    }
+
+    return tooltip;
+}
+
+void MainWindow::updateRecentDirectoriesMenu()
+{
+    // Clear existing menu items
+    ui->menuRecentDirectories->clear();
+    ui->menuRecentDirectories->setToolTipsVisible(true);
+
+    // Load recent directories list
+    QStringList recentDirectories = loadRecentDirectories();
+
+    // Filter out non-existent directories and those without Header.txt
+    QStringList validDirectories;
+    for (const QString& dirPath : recentDirectories)
+    {
+        QFileInfo dirInfo(dirPath);
+        if (dirInfo.exists() && dirInfo.isDir())
+        {
+            // Check if Header.txt exists in the directory
+            QString headerPath = QDir(dirPath).filePath(DirectoryConstants::HEADER_FILE_NAME);
+            if (QFileInfo::exists(headerPath))
+            {
+                validDirectories.append(dirPath);
+            }
+        }
+    }
+
+    // If there are invalid directories, update the saved list
+    if (validDirectories.size() != recentDirectories.size())
+    {
+        saveRecentDirectories(validDirectories);
+        recentDirectories = validDirectories;
+    }
+
+    // Add menu items for each valid recent directory
+    for (const QString& dirPath : recentDirectories)
+    {
+        // Get last opened time from QSettings
+        QSettings settings;
+        QString timeKey = QString("recentDirectories/time_%1").arg(QString(dirPath.toUtf8().toBase64()));
+        QDateTime lastOpened = settings.value(timeKey, QDateTime::currentDateTime()).toDateTime();
+
+        // Use smart display name (handles duplicate directory names)
+        QString displayName = getSmartDisplayNameForDirectory(dirPath, validDirectories);
+
+        // Format: "directory_name [2024-10-20 15:30:25]"
+        QString actionText = QString("%1 [%2]").arg(displayName).arg(lastOpened.toString("yyyy-MM-dd HH:mm:ss"));
+
+        QAction* action = ui->menuRecentDirectories->addAction(actionText);
+        action->setData(dirPath);
+        action->setToolTip(generateTooltipForDirectory(dirPath));
+
+        connect(action, &QAction::triggered, this, &MainWindow::onRecentDirectoryTriggered);
+    }
+
+    // Add separator and clear action
+    ui->menuRecentDirectories->addSeparator();
+    QAction* clearAction = ui->menuRecentDirectories->addAction(tr("Clear Recent Directories"));
+    connect(clearAction,
+            &QAction::triggered,
+            this,
+            [this]()
+            {
+                saveRecentDirectories(QStringList());
+                updateRecentDirectoriesMenu();
+            });
+}
+
+void MainWindow::onRecentDirectoryTriggered()
+{
+    QAction* action = qobject_cast<QAction*>(sender());
+    if (! action)
+        return;
+
+    QString directoryPath = action->data().toString();
+
+    // Check if directory still exists
+    if (! QFileInfo(directoryPath).exists())
+    {
+        QMessageBox::warning(this, tr("Directory Not Found"),
+            tr("The directory no longer exists:\n%1").arg(directoryPath));
+        updateRecentDirectoriesMenu();
+        return;
+    }
+
+    // Check if Header.txt exists
+    QString headerPath = QDir(directoryPath).filePath(DirectoryConstants::HEADER_FILE_NAME);
+    if (! QFileInfo::exists(headerPath))
+    {
+        QMessageBox::warning(this, tr("Invalid Directory"),
+            tr("The directory does not contain Header.txt:\n%1").arg(directoryPath));
+        updateRecentDirectoriesMenu();
+        return;
+    }
+
+    // Load the model from the directory
+    loadModelFromDirectory(directoryPath);
 }

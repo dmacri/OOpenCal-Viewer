@@ -29,6 +29,7 @@
 #include <vtkPropPicker.h>
 #include "SceneWidget.h"
 #include "config/Config.h"
+#include "config/ConfigConstants.h"
 #include "visualiser/Line.h"
 #include "visualiser/Visualizer.hpp"
 #include "visualiser/SettingParameter.h"
@@ -220,44 +221,44 @@ void SceneWidget::readSettingsFromConfigFile(const std::string& filename)
     Config config(filename);
 
     {
-        ConfigCategory* generalContext = config.getConfigCategory("GENERAL");
-        const std::string outputFileNameFromCfg = generalContext->getConfigParameter("output_file_name")->getValue<std::string>();
+        ConfigCategory* generalContext = config.getConfigCategory(ConfigConstants::CATEGORY_GENERAL);
+        const std::string outputFileNameFromCfg = generalContext->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME)->getValue<std::string>();
         settingParameter->outputFileName = prepareOutputFileName(filename, outputFileNameFromCfg);
-        settingParameter->numberOfColumnX = generalContext->getConfigParameter("number_of_columns")->getValue<int>();
-        settingParameter->numberOfRowsY = generalContext->getConfigParameter("number_of_rows")->getValue<int>();
-        settingParameter->nsteps = generalContext->getConfigParameter("number_steps")->getValue<int>();
+        settingParameter->numberOfColumnX = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_COLUMNS)->getValue<int>();
+        settingParameter->numberOfRowsY = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_ROWS)->getValue<int>();
+        settingParameter->nsteps = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_STEPS)->getValue<int>();
         emit totalNumberOfStepsReadFromConfigFile(settingParameter->nsteps);
     }
 
     {
-        ConfigCategory* execContext = config.getConfigCategory("DISTRIBUTED");
-        settingParameter->nNodeX = execContext->getConfigParameter("number_node_x")->getValue<int>();
-        settingParameter->nNodeY = execContext->getConfigParameter("number_node_y")->getValue<int>();
+        ConfigCategory* execContext = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED);
+        settingParameter->nNodeX = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_X)->getValue<int>();
+        settingParameter->nNodeY = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Y)->getValue<int>();
         /// Notice: there are much more params, which are not used: e.g. border_size_x, border_size_y
     }
 
     {
-        ConfigCategory* visualizationContext = config.getConfigCategory("VISUALIZATION");
+        ConfigCategory* visualizationContext = config.getConfigCategory(ConfigConstants::CATEGORY_VISUALIZATION);
         if (visualizationContext)
         {
             // Read visualization mode (text or binary)
-            auto modeParam = visualizationContext->getConfigParameter("mode");
-            settingParameter->readMode = modeParam ? modeParam->getValue<std::string>() : "text";
+            auto modeParam = visualizationContext->getConfigParameter(ConfigConstants::PARAM_MODE);
+            settingParameter->readMode = modeParam ? modeParam->getValue<std::string>() : ConfigConstants::DEFAULT_MODE;
 
             // Read substates
-            auto substatesParam = visualizationContext->getConfigParameter("substates");
-            settingParameter->substates = substatesParam ? substatesParam->getValue<std::string>() : "";
+            auto substatesParam = visualizationContext->getConfigParameter(ConfigConstants::PARAM_SUBSTATES);
+            settingParameter->substates = substatesParam ? substatesParam->getValue<std::string>() : ConfigConstants::DEFAULT_SUBSTATES;
 
             // Read reduction operations
-            auto reductionParam = visualizationContext->getConfigParameter("reduction");
-            settingParameter->reduction = reductionParam ? reductionParam->getValue<std::string>() : "";
+            auto reductionParam = visualizationContext->getConfigParameter(ConfigConstants::PARAM_REDUCTION);
+            settingParameter->reduction = reductionParam ? reductionParam->getValue<std::string>() : ConfigConstants::DEFAULT_REDUCTION;
         }
         else
         {
-            // Default values if VISUALIZATION section is not present
-            settingParameter->readMode = "text";
-            settingParameter->substates = "";
-            settingParameter->reduction = "";
+            // Default values if ConfigConstants::CATEGORY_VISUALIZATION) section is not present
+            settingParameter->readMode = ConfigConstants::DEFAULT_MODE;
+            settingParameter->substates = ConfigConstants::DEFAULT_SUBSTATES;
+            settingParameter->reduction = ConfigConstants::DEFAULT_REDUCTION;
         }
     }
 }
@@ -579,6 +580,12 @@ void SceneWidget::renderVtkScene()
                                                                      settingParameter->numberOfRowsY + 1,
                                                                      renderer,
                                                                      actorBuildLine);
+
+    // Apply the remembered grid lines visibility state
+    if (actorBuildLine)
+    {
+        actorBuildLine->SetVisibility(gridLinesVisible);
+    }
 
     sceneWidgetVisualizerProxy->getVisualizer().buildStepText(settingParameter->step,
                                                               settingParameter->font_size,
@@ -1033,6 +1040,16 @@ void SceneWidget::setAxesWidgetVisible(bool visible)
     if (axesWidget)
     {
         axesWidget->SetEnabled(visible);
+        triggerRenderUpdate();
+    }
+}
+
+void SceneWidget::setGridLinesVisible(bool visible)
+{
+    gridLinesVisible = visible;
+    if (actorBuildLine)
+    {
+        actorBuildLine->SetVisibility(visible);
         triggerRenderUpdate();
     }
 }

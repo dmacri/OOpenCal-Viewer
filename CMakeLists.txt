@@ -234,17 +234,39 @@ endif()
 # ============================================
 # OOpenCAL include directory (optional)
 # ============================================
-set(OOPENCAL_DIR "/home/dmacri80/Progetto-Visualizer/" CACHE PATH "Path to the base directory of OOpenCAL sources")
+# Default path assumes OOpenCAL is located in a sibling directory
+# Directory structure:
+#   parent/
+#   ├── OOpenCAL/
+#   └── OOpenCAL-Visualiser/
+# OOPENCAL_DIR should point to the parent directory containing OOpenCAL/
+set(OOPENCAL_DIR "${CMAKE_SOURCE_DIR}/.." CACHE PATH "Path to the parent directory containing OOpenCAL sources")
 
 if(OOPENCAL_DIR)
-    message(STATUS "Using OOpenCAL directory: ${OOPENCAL_DIR}")
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        ${OOPENCAL_DIR}
-        ${OOPENCAL_DIR}/OOpenCAL
-    )
+    # Resolve relative path to absolute
+    get_filename_component(OOPENCAL_DIR_ABS "${OOPENCAL_DIR}" ABSOLUTE)
 
-    # Define OOPENCAL_DIR for use in C++ code
-    target_compile_definitions(${PROJECT_NAME} PRIVATE OOPENCAL_DIR="${OOPENCAL_DIR}")
+    # Check if OOpenCAL subdirectory exists
+    if(EXISTS "${OOPENCAL_DIR_ABS}/OOpenCAL")
+        message(STATUS "Using OOpenCAL base directory: ${OOPENCAL_DIR_ABS}")
+        message(STATUS "OOpenCAL found at: ${OOPENCAL_DIR_ABS}/OOpenCAL")
+
+        target_include_directories(${PROJECT_NAME} PRIVATE
+            ${OOPENCAL_DIR_ABS}
+            ${OOPENCAL_DIR_ABS}/OOpenCAL
+        )
+
+        # Define OOPENCAL_DIR for use in C++ code (use absolute path)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE OOPENCAL_DIR="${OOPENCAL_DIR_ABS}")
+    else()
+        message(WARNING "OOpenCAL not found in: ${OOPENCAL_DIR_ABS}/OOpenCAL")
+        message(WARNING "OOPENCAL_DIR should point to the parent directory containing OOpenCAL/")
+        message(WARNING "Current structure should be:")
+        message(WARNING "  ${OOPENCAL_DIR_ABS}/")
+        message(WARNING "  ├── OOpenCAL/")
+        message(WARNING "  └── OOpenCAL-Visualiser/")
+        message(WARNING "Set correct path with: cmake -DOOPENCAL_DIR=/path/to/parent ..")
+    endif()
 else()
     message(WARNING "OOPENCAL_DIR not set! Includes like <OOpenCAL/...> may not work.")
 endif()
@@ -362,7 +384,7 @@ vtk_module_autoinit(
 )
 
 # ============================================
-# Export VTK compile flags to C++ header (this is temporary as long as plugin needs VTK)
+# Export VTK compile flags as compile definition (this is temporary as long as plugin needs VTK)
 # ============================================
 
 # Select the main VTK target (always present)
@@ -407,21 +429,15 @@ foreach(inc IN LISTS VTK_INCLUDES_EXPANDED)
     endif()
 endforeach()
 
-# Generate header file
-set(VTK_FLAGS_HEADER "${CMAKE_BINARY_DIR}/generated/vtk_compile_flags.h")
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+# Escape special characters for use in compile definition
+# Replace backslashes and quotes to ensure proper string literal
+string(REPLACE "\\" "\\\\" VTK_COMPILE_FLAGS_ESCAPED "${VTK_COMPILE_FLAGS_STR}")
+string(REPLACE "\"" "\\\"" VTK_COMPILE_FLAGS_ESCAPED "${VTK_COMPILE_FLAGS_ESCAPED}")
 
-file(WRITE "${VTK_FLAGS_HEADER}" "
-// Auto-generated file: DO NOT EDIT
-#pragma once
-
-namespace BuildInfo
-{
-    static constexpr const char* VTK_COMPILE_FLAGS = R\"(${VTK_COMPILE_FLAGS_STR})\";
-}
-")
-
-target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_BINARY_DIR}/generated")
+# Add as compile definition (accessible as VTK_COMPILE_FLAGS macro in C++)
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    VTK_COMPILE_FLAGS="${VTK_COMPILE_FLAGS_ESCAPED}"
+)
 
 # (Optional) Debug print to verify values
 message(STATUS "VTK compile includes: ${VTK_INCLUDES_EXPANDED}")

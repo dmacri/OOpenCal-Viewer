@@ -8,7 +8,6 @@
 #include "CppModuleBuilder.h"
 #include "process.hpp" // tiny process library
 #include "ModelLoader.h"
-#include "vtk_compile_flags.h" // generated header
 
 namespace fs = std::filesystem;
 
@@ -225,7 +224,7 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
         cmd << " -I\"" << projectRootPath << "/config\"";
     }
 
-    cmd << " " << BuildInfo::VTK_COMPILE_FLAGS; // temorary
+    cmd << " " << VTK_COMPILE_FLAGS; // this is set from CMake, temporary solution (#61)
 
     cmd << " \"" << sourceFile << "\""
         << " -o \"" << outputFile << "\"";

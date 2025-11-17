@@ -113,10 +113,20 @@ public:
     /// @brief Show or hide the orientation axes widget. If true, shows the axes widget; if false, hides it
     void setAxesWidgetVisible(bool visible);
 
+    /// @brief Show or hide grid lines between nodes
+    /// @param visible If true, shows grid lines; if false, hides them
+    void setGridLinesVisible(bool visible);
+
     /// @brief Get the current ViewMode (2D or 3D)
     ViewMode getViewMode() const
     {
         return currentViewMode;
+    }
+
+    /// @brief Get the current grid lines visibility state
+    bool getGridLinesVisible() const
+    {
+        return gridLinesVisible;
     }
 
     /// @brief Set camera azimuth (rotation around Z axis) in degrees
@@ -390,6 +400,9 @@ protected:
 
     /// @brief Current view mode (2D or 3D)
     ViewMode currentViewMode = ViewMode::Mode2D;
+
+    /// @brief Current grid lines visibility state
+    bool gridLinesVisible = true;
 
     /// @brief Current camera azimuth angle (cached to avoid recalculation)
     double cameraAzimuth{};

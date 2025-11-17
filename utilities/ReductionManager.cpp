@@ -56,10 +56,10 @@ void ReductionManager::loadReductionData(const QString& filePath)
 
         if (! parseLine(line, stepNumber, values))
         {
-            errorMessage = QString("Failed to parse line %1 in reduction file: %2").arg(lineNumber).arg(line); // TODO: It should throw?
+            errorMessage = QString("Failed to parse line %1 in reduction file: %2").arg(lineNumber).arg(line);
             file.close();
             dataLoaded = false;
-            return;
+            throw std::runtime_error(errorMessage.toStdString());
         }
 
         reductionDataByStep[stepNumber] = {values};

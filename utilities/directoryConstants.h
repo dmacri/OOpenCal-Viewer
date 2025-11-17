@@ -6,21 +6,19 @@
 
 #pragma once
 
-#include <string_view>
-
 /** @namespace DirectoryConstants
  * @brief Constants for directory and file naming conventions */
 namespace DirectoryConstants
 {
     /// Directory name for nested structure (legacy format)
-    constexpr std::string_view OUTPUT_DIRECTORY = "Output";
+    constexpr const char OUTPUT_DIRECTORY[] = "Output";
 
     /// File extension suffix for reduction data files
-    constexpr std::string_view REDUCTION_FILE_SUFFIX = "-red.txt";
+    constexpr const char REDUCTION_FILE_SUFFIX[] = "-red.txt";
 
     /// File name for model configuration
-    constexpr std::string_view HEADER_FILE_NAME = "Header.txt";
+    constexpr const char HEADER_FILE_NAME[] = "Header.txt";
 
     /// File name for wrapper source code (generated during compilation)
-    constexpr std::string_view WRAPPER_FILE_SUFFIX = "_wrapper.cpp";
+    constexpr const char WRAPPER_FILE_SUFFIX[] = "_wrapper.cpp";
 }

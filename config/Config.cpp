@@ -11,6 +11,7 @@
 #include <INIReader.h>
 
 #include "Config.h"
+#include "ConfigConstants.h"
 
 
 namespace
@@ -43,30 +44,33 @@ Config::Config(const std::string& configuration_path, bool printWarnings)
 
 void Config::setUpConfigCategories()
 {
+    using namespace ConfigConstants;
+
     configCategories.push_back(ConfigCategory{
-        "GENERAL",
+        CATEGORY_GENERAL,
         {
-            {"number_of_columns", "610",  ConfigParameter::int_par},
-            {"number_of_rows",    "496",  ConfigParameter::int_par},
-            {"number_steps",      "4000", ConfigParameter::int_par},
-            {"output_file_name",  "sciddicaTout", ConfigParameter::string_par}
-        }
-    });
-    configCategories.push_back(ConfigCategory{
-        "DISTRIBUTED",
-        {
-            {"border_size_x", "1", ConfigParameter::int_par},
-            {"border_size_y", "1", ConfigParameter::int_par},
-            {"number_node_x", "4", ConfigParameter::int_par},
-            {"number_node_y", "4", ConfigParameter::int_par}
+            {PARAM_NUMBER_OF_COLUMNS, "610",  ConfigParameter::int_par},
+            {PARAM_NUMBER_OF_ROWS,    "496",  ConfigParameter::int_par},
+            {PARAM_NUMBER_STEPS,      "4000", ConfigParameter::int_par},
+            {PARAM_OUTPUT_FILE_NAME,  "sciddicaTout", ConfigParameter::string_par}
         }
     });
 
     configCategories.push_back(ConfigCategory{
-        "LOAD_BALANCING",
+        CATEGORY_DISTRIBUTED,
         {
-            {"firstLB", "100", ConfigParameter::int_par},
-            {"stepLB",  "100", ConfigParameter::int_par}
+            {PARAM_BORDER_SIZE_X, "1", ConfigParameter::int_par},
+            {PARAM_BORDER_SIZE_Y, "1", ConfigParameter::int_par},
+            {PARAM_NUMBER_NODE_X, "4", ConfigParameter::int_par},
+            {PARAM_NUMBER_NODE_Y, "4", ConfigParameter::int_par}
+        }
+    });
+
+    configCategories.push_back(ConfigCategory{
+        CATEGORY_LOAD_BALANCING,
+        {
+            {PARAM_FIRST_LB, "100", ConfigParameter::int_par},
+            {PARAM_STEP_LB,  "100", ConfigParameter::int_par}
         }
     });
 
@@ -89,9 +93,9 @@ void Config::setUpConfigCategories()
 
 
     configCategories.push_back(ConfigCategory{
-        "MULTICUDA",
+        CATEGORY_MULTICUDA,
         {
-            {"number_of_gpus_per_node", "2", ConfigParameter::int_par}
+            {PARAM_NUMBER_OF_GPUS_PER_NODE, "2", ConfigParameter::int_par}
         }
     });
 
@@ -101,18 +105,18 @@ void Config::setUpConfigCategories()
     // });
 
     configCategories.push_back(ConfigCategory{
-        "SHARED",
+        CATEGORY_SHARED,
         {
-            {"chunk_size", "1", ConfigParameter::int_par}
+            {PARAM_CHUNK_SIZE, "1", ConfigParameter::int_par}
         }
     });
 
     configCategories.push_back(ConfigCategory{
-        "VISUALIZATION",
+        CATEGORY_VISUALIZATION,
         {
-            {"substates", "", ConfigParameter::string_par},
-            {"mode", "", ConfigParameter::string_par},
-            {"reduction", "", ConfigParameter::string_par}
+            {PARAM_SUBSTATES, "", ConfigParameter::string_par},
+            {PARAM_MODE,      "", ConfigParameter::string_par},
+            {PARAM_REDUCTION, "", ConfigParameter::string_par}
         }
     });
 }

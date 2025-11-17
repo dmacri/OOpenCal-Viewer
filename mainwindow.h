@@ -55,6 +55,8 @@ private slots: // menu actions
     // View submenu
     void on2DModeRequested();
     void on3DModeRequested();
+    void onGridLinesToggled(bool checked);
+    void syncGridLinesCheckbox();
 
     // Model submenu
     void onModelSelected();
@@ -114,6 +116,11 @@ private:
     StepIndex totalSteps() const;
 
     void changeWhichButtonsAreEnabled();
+    
+    /// @brief Navigate to the nearest available step in the given direction
+    /// @param direction Forward to go to next step, Backward to go to previous step
+    /// @param stepsToMove Number of steps to move
+    void navigateToNearestAvailableStep(PlayingDirection direction, StepIndex stepsToMove);
 
     void recordVideoToFile(const QString &outputFilePath, int fps);
 
@@ -134,6 +141,15 @@ private:
     QString generateTooltipForFile(const QString &filePath) const;
     void updateRecentFilesMenu();
     
+    // Recent directories management
+    void addToRecentDirectories(const QString &directoryPath);
+    QStringList loadRecentDirectories() const;
+    void saveRecentDirectories(const QStringList &directories) const;
+    QString getSmartDisplayNameForDirectory(const QString &directoryPath, const QStringList &allPaths) const;
+    QString generateTooltipForDirectory(const QString &directoryPath) const;
+    void updateRecentDirectoriesMenu();
+    void onRecentDirectoryTriggered();
+    
     /// @brief Initialize reduction manager for the current configuration.
     /// @param configFileName Path to the configuration file
     /// @param optionalConfig Optional pre-loaded Config object. If provided, avoids re-reading the file.
@@ -142,7 +158,6 @@ private:
     void updateReductionDisplay();
 
 private:
-
     static constexpr int MAX_RECENT_FILES = 10;
     Ui::MainWindow *ui;
     QTimer playbackTimer;
@@ -150,6 +165,7 @@ private:
     std::unique_ptr<ReductionManager> reductionManager;
 
     StepIndex currentStep;
+    std::vector<StepIndex> availableSteps;
 
     // Playback state for timer-based playback
     PlayingDirection playbackDirection = PlayingDirection::Forward;

@@ -253,19 +253,25 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
         if (! fp)
             throw std::runtime_error("Cannot open file for node " + std::to_string(node));
 
+        // Clamp coordinates to matrix bounds
+        const int maxX = static_cast<int>(m[0].size()) - 1;
+        const int maxY = static_cast<int>(m.size()) - 1;
+        
+        const int x1 = std::min(offsetXY.x(), maxX);
+        const int y1 = std::min(offsetXY.y(), maxY);
+        const int x2 = std::min(offsetXY.x() + columnAndRow.column, maxX + 1);
+        const int y2 = std::min(offsetXY.y() + columnAndRow.row, maxY + 1);
+        
         // Define boundary lines for the node (bottom and left edges)
-        lines[node * 2] = Line(offsetXY.x(), offsetXY.y(), offsetXY.x() + columnAndRow.column, offsetXY.y());
-        lines[node * 2 + 1] = Line(offsetXY.x(), offsetXY.y(), offsetXY.x(), offsetXY.y() + columnAndRow.row);
+        lines[node * 2] = Line(x1, y1, x2, y1);
+        lines[node * 2 + 1] = Line(x1, y1, x1, y2);
 
         // Add top edge line for nodes in the last row (highest y)
         const NodeIndex nodeRow = node / sp->nNodeX;
         if (nodeRow == sp->nNodeY - 1) // Top row
         {
             const int topLineIndex = 2 * totalNodes + (node % sp->nNodeX);
-            lines[topLineIndex] = Line(offsetXY.x(),
-                                       offsetXY.y() + columnAndRow.row,
-                                       offsetXY.x() + columnAndRow.column,
-                                       offsetXY.y() + columnAndRow.row);
+            lines[topLineIndex] = Line(x1, y2, x2, y2);
         }
 
         // Add right edge line for nodes in the last column (highest x)
@@ -273,10 +279,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
         if (nodeCol == sp->nNodeX - 1) // Rightmost column
         {
             const int rightLineIndex = 2 * totalNodes + sp->nNodeX + nodeRow;
-            lines[rightLineIndex] = Line(offsetXY.x() + columnAndRow.column,
-                                         offsetXY.y(),
-                                         offsetXY.x() + columnAndRow.column,
-                                         offsetXY.y() + columnAndRow.row);
+            lines[rightLineIndex] = Line(x2, y1, x2, y2);
         }
 
         bool localStartStepDone = false;
@@ -300,14 +303,14 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
             for (int row = 0; row < columnAndRow.row; ++row)
             {
                 const int matrixRow = row + offsetXY.y();
-                if (matrixRow >= static_cast<int>(m.size())) // TODO: GB: to fix?
-                    break; // Skip rows that are out of bounds
+                if (matrixRow >= static_cast<int>(m.size()))
+                    continue; // Skip rows that are out of bounds
                     
                 for (int col = 0; col < columnAndRow.column; ++col)
                 {
                     const int matrixCol = col + offsetXY.x();
-                    if (matrixCol >= static_cast<int>(m[matrixRow].size())) // TODO: GB: to fix?
-                        break; // Skip columns that are out of bounds
+                    if (matrixCol >= static_cast<int>(m[matrixRow].size()))
+                        continue; // Skip columns that are out of bounds
 
                     if (! localStartStepDone) [[unlikely]]
                     {
@@ -342,8 +345,16 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
             for (int row = 0; row < columnAndRow.row; ++row)
             {
                 const int matrixRow = row + offsetXY.y();
-                if (matrixRow >= static_cast<int>(m.size())) // TODO: GB: to fix?
-                    break; // Skip rows that are out of bounds
+                if (matrixRow >= static_cast<int>(m.size()))
+                {
+                    // Skip reading this line from file but don't process it
+                    if (! std::getline(fp, line))
+                    {
+                        const auto fileNameTmp = ReaderHelpers::giveMeFileName(sp->outputFileName, node, isBinary);
+                        throw std::runtime_error("Error reading entire line from " + fileNameTmp);
+                    }
+                    continue; // Skip this row - it's out of bounds
+                }
                     
                 if (! std::getline(fp, line))
                 {
@@ -359,8 +370,8 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
                 for (int col = 0; col < columnAndRow.column && *currentTokenPtr; ++col)
                 {
                     const int matrixCol = col + offsetXY.x();
-                    if (matrixCol >= static_cast<int>(m[matrixRow].size())) // TODO: GB: to fix?
-                        break; // Skip columns that are out of bounds
+                    if (matrixCol >= static_cast<int>(m[matrixRow].size()))
+                        continue; // Skip this column - it's out of bounds
 
                     if (! localStartStepDone) [[unlikely]]
                     {
