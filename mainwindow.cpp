@@ -31,6 +31,7 @@
 #include "visualiser/SettingParameter.h"
 #include "visualiser/VideoExporter.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+#include "widgets/SceneWidget.h"
 #include "widgets/SubstatesDockWidget.h"
 #include "widgets/AboutDialog.h"
 #include "widgets/ColorSettingsDialog.h"
@@ -161,6 +162,7 @@ MainWindow::MainWindow(QWidget* parent)
     updateRecentDirectoriesMenu();
 
     enterNoConfigurationFileMode();
+    updateSilentModeUi(isSilentModeEnabled());
 }
 
 void MainWindow::configureUIElements(const QString& configFileName)
@@ -206,7 +208,54 @@ void MainWindow::connectMenuActions()
     connect(ui->action3DMode, &QAction::triggered, this, &MainWindow::on3DModeRequested);
     connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
 
+    // Settings actions
+    connect(ui->actionSilentMode, &QAction::toggled, this, &MainWindow::onSilentModeToggled);
     /// Model selection actions are connected dynamically in createModelMenuActions()
+}
+
+void MainWindow::setSilentMode(bool newSilentMode)
+{
+    if (! ui->actionSilentMode)
+    {
+        return;
+    }
+
+    if (ui->actionSilentMode->isChecked() == newSilentMode)
+    {
+        updateSilentModeUi(newSilentMode);
+        return;
+    }
+
+    {
+        QSignalBlocker blocker(ui->actionSilentMode);
+        ui->actionSilentMode->setChecked(newSilentMode);
+    }
+
+    updateSilentModeUi(newSilentMode);
+}
+
+bool MainWindow::isSilentModeEnabled() const
+{
+    if (! ui->actionSilentMode)
+    {
+        return false;
+    }
+    return ui->actionSilentMode->isChecked();
+}
+
+void MainWindow::updateSilentModeUi(bool checked)
+{
+    if (!ui->actionSilentMode)
+    {
+        return;
+    }
+
+    const QString statusText = checked
+        ? tr("Silent mode enabled: confirmation dialogs are suppressed.")
+        : tr("Silent mode disabled: confirmation dialogs will be shown.");
+
+    ui->actionSilentMode->setStatusTip(statusText);
+    ui->actionSilentMode->setToolTip(statusText);
 }
 
 void MainWindow::configureButtons()
@@ -256,8 +305,11 @@ void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> avail
     // Store the list of available steps for intelligent step navigation
     this->availableSteps = availableSteps;
     
+    // Update button states based on available steps
+    changeWhichButtonsAreEnabled();
+    
     const auto lastStepAvailableInAvailableSteps = std::ranges::contains(availableSteps, totalSteps());
-    if (! lastStepAvailableInAvailableSteps && ! silentMode)
+    if (! lastStepAvailableInAvailableSteps && ! isSilentModeEnabled())
     {
         QMessageBox::warning(this,
                              tr("Number of steps mismatch"),
@@ -367,7 +419,7 @@ void MainWindow::exportVideoDialog()
     try
     {
         recordVideoToFile(outputFilePath, fps);
-        if (! silentMode)
+        if (! isSilentModeEnabled())
         {
             QMessageBox::information(this, tr("Export Complete"),
                                      tr("Video exported successfully to:\n%1").arg(outputFilePath));
@@ -454,9 +506,41 @@ void MainWindow::playingRequested(PlayingDirection direction)
 
 void MainWindow::onPlaybackTimerTick()
 {
-    // Update current step
-    currentStep += static_cast<StepIndex>(std::to_underlying(playbackDirection) * ui->speedSpinBox->value());
-    currentStep = std::clamp<StepIndex>(currentStep, FIRST_STEP_NUMBER, totalSteps());
+    // Calculate target step
+    // Note: We need to use signed arithmetic to handle backward direction correctly
+    // to avoid unsigned integer underflow
+    const auto stepsToMove = static_cast<int>(ui->speedSpinBox->value());
+    const auto directionValue = std::to_underlying(playbackDirection);
+    const auto targetStepSigned = static_cast<int>(currentStep) + (stepsToMove * directionValue);
+    
+    // Clamp to valid range and convert back to unsigned
+    const auto clampedStep = static_cast<StepIndex>(
+        std::clamp(targetStepSigned, static_cast<int>(FIRST_STEP_NUMBER), static_cast<int>(totalSteps()))
+    );
+    
+    // Check if we reached the end
+    if ((playbackDirection == PlayingDirection::Forward && clampedStep >= totalSteps())
+        || (playbackDirection == PlayingDirection::Backward && clampedStep <= FIRST_STEP_NUMBER))
+    {
+        playbackTimer.stop();
+        return;
+    }
+    
+    // Check if target step exists in available steps
+    if (! std::ranges::contains(availableSteps, clampedStep))
+    {
+        // Handle missing step
+        if (! handleMissingStepDuringPlayback(clampedStep, playbackDirection))
+        {
+            playbackTimer.stop();
+            return;
+        }
+        // If handleMissingStepDuringPlayback returns true, currentStep was updated
+    }
+    else
+    {
+        currentStep = clampedStep;
+    }
 
     // Update UI
     {
@@ -468,17 +552,90 @@ void MainWindow::onPlaybackTimerTick()
         }
     }
 
-    // Check if we reached the end
-    if ((playbackDirection == PlayingDirection::Forward && currentStep >= totalSteps())
-        || (playbackDirection == PlayingDirection::Backward && currentStep <= FIRST_STEP_NUMBER))
-    {
-        playbackTimer.stop();
-    }
-
     // Update timer interval in case sleepSpinBox changed
     playbackTimer.setInterval(ui->sleepSpinBox->value());
 }
 
+bool MainWindow::findNearestAvailableStep(StepIndex targetStep, PlayingDirection direction, StepIndex& outNextStep) const
+{
+    if (availableSteps.empty())
+    {
+        return false;
+    }
+    
+    if (direction == PlayingDirection::Forward)
+    {
+        // Find the nearest available step after the target
+        auto it = std::ranges::upper_bound(availableSteps, targetStep);
+        
+        if (it != availableSteps.end())
+        {
+            outNextStep = *it;
+            return true;
+        }
+        
+        return false;
+    }
+    else // PlayingDirection::Backward
+    {
+        // Find the nearest available step before the target
+        auto it = std::ranges::lower_bound(availableSteps, targetStep);
+        
+        if (it != availableSteps.begin())
+        {
+            --it;
+            outNextStep = *it;
+            return true;
+        }
+        
+        return false;
+    }
+}
+
+bool MainWindow::handleMissingStepDuringPlayback(StepIndex targetStep, PlayingDirection direction)
+{
+    StepIndex nextStep;
+    
+    // Try to find the nearest available step in the given direction
+    if (! findNearestAvailableStep(targetStep, direction, nextStep))
+    {
+        // No available step in this direction
+        return false;
+    }
+    
+    // In silent mode, just skip to the next available step
+    if (isSilentModeEnabled())
+    {
+        currentStep = nextStep;
+        return true;
+    }
+    
+    // In normal mode, ask user what to do
+    const QString nextStepText = (direction == PlayingDirection::Forward) 
+        ? tr("next available step is %1").arg(nextStep)
+        : tr("previous available step is %1").arg(nextStep);
+    
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        tr("Missing Step During Playback"),
+        tr("Step %1 is not available.\nThe %2.\n\nDo you want to continue playback skipping to the next available step, "
+           "or stop playback at the current step?")
+            .arg(targetStep)
+            .arg(nextStepText),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes
+    );
+    
+    if (reply == QMessageBox::Yes)
+    {
+        currentStep = nextStep;
+        return true;
+    }
+    else
+    {
+        return false; // Stop playback
+    }
+}
 
 void MainWindow::onPlayButtonClicked()
 {
@@ -500,13 +657,25 @@ void MainWindow::onStopButtonClicked()
 
 void MainWindow::onSkipForwardButtonClicked()
 {
-    currentStep = totalSteps();
+    if (availableSteps.empty())
+    {
+        return;
+    }
+    
+    // Jump to the last available step
+    currentStep = availableSteps.back();
     setPositionOnWidgets(currentStep);
 }
 
 void MainWindow::onSkipBackwardButtonClicked()
 {
-    currentStep = FIRST_STEP_NUMBER;
+    if (availableSteps.empty())
+    {
+        return;
+    }
+    
+    // Jump to the first available step
+    currentStep = availableSteps.front();
     setPositionOnWidgets(currentStep);
 }
 
@@ -522,8 +691,13 @@ void MainWindow::navigateToNearestAvailableStep(PlayingDirection direction, Step
         return;
     }
     
+    // Note: We need to use signed arithmetic to handle backward direction correctly
+    // to avoid unsigned integer underflow
     const auto directionValue = std::to_underlying(direction);
-    const auto targetStep = currentStep + (stepsToMove * directionValue);
+    const auto targetStepSigned = static_cast<int>(currentStep) + (static_cast<int>(stepsToMove) * directionValue);
+    const auto targetStep = static_cast<StepIndex>(
+        std::clamp(targetStepSigned, static_cast<int>(FIRST_STEP_NUMBER), static_cast<int>(totalSteps()))
+    );
     
     // Try to go to the target step
     if (std::ranges::contains(availableSteps, targetStep))
@@ -535,40 +709,32 @@ void MainWindow::navigateToNearestAvailableStep(PlayingDirection direction, Step
     
     StepIndex nextStep;
     
-    if (direction == PlayingDirection::Forward)
+    // Try to find the nearest available step in the given direction
+    if (findNearestAvailableStep(targetStep, direction, nextStep))
     {
-        // Find the nearest available step after the target
-        auto it = std::ranges::upper_bound(availableSteps, targetStep);
-        
-        if (it != availableSteps.end())
+        // Found a step in the given direction
+        if (direction == PlayingDirection::Forward)
         {
-            nextStep = *it;
             std::cerr << "Warning: Step " << targetStep << " not available. "
                       << "Nearest next step is " << nextStep << std::endl;
         }
         else
         {
-            // No available step after target, go to last available
+            std::cerr << "Warning: Step " << targetStep << " not available. "
+                      << "Nearest previous step is " << nextStep << std::endl;
+        }
+    }
+    else
+    {
+        // No step in the given direction, use boundary step
+        if (direction == PlayingDirection::Forward)
+        {
             nextStep = availableSteps.back();
             std::cerr << "Warning: Step " << targetStep << " not available. "
                       << "Going to last available step " << nextStep << std::endl;
         }
-    }
-    else // PlayingDirection::Backward
-    {
-        // Find the nearest available step before the target
-        auto it = std::ranges::lower_bound(availableSteps, targetStep);
-        
-        if (it != availableSteps.begin())
-        {
-            --it;
-            nextStep = *it;
-            std::cerr << "Warning: Step " << targetStep << " not available. "
-                      << "Nearest previous step is " << nextStep << std::endl;
-        }
         else
         {
-            // No available step before target, go to first available
             nextStep = availableSteps.front();
             std::cerr << "Warning: Step " << targetStep << " not available. "
                       << "Going to first available step " << nextStep << std::endl;
@@ -608,7 +774,7 @@ bool MainWindow::setPositionOnWidgets(StepIndex stepPosition, bool updateSlider)
     }
     catch (const std::exception& e)
     {
-        if (! silentMode)
+        if (! isSilentModeEnabled())
         {
             QMessageBox::warning(this,
                                  "Changing position error",
@@ -703,7 +869,7 @@ void MainWindow::switchToModel(const QString& modelName)
 
         updateMenu2ShowTheSelectedModeAsActive(modelName, modelActionGroup);
 
-        if (! silentMode)
+        if (! isSilentModeEnabled())
         {
             QMessageBox::
                 information(this,
@@ -730,6 +896,10 @@ void MainWindow::updateSubstateDockeWidget()
         auto settingParam = const_cast<SettingParameter*>(ui->sceneWidget->getSettingParameter());
         settingParam->initializeSubstateInfo();
         ui->substatesDockWidget->updateSubstates(settingParam);
+
+        // Connect signal for 3D visualization request
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3rdDimensionRequested,
+                this, &MainWindow::onUse3rdDimensionRequested);
     }
 }
 
@@ -742,7 +912,7 @@ void MainWindow::onReloadDataRequested()
         // Update substate dock widget after reload
         updateSubstateDockeWidget();
 
-        if (! silentMode)
+        if (! isSilentModeEnabled())
         {
             QMessageBox::information(this, tr("Data Reloaded"),
                                      tr("Data files successfully reloaded for model: %1")
@@ -814,7 +984,7 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Add to recent files
         addToRecentFiles(configFileName);
 
-        if (! silentMode)
+        if (! isSilentModeEnabled())
         {
             QMessageBox::information(this,
                                      tr("Configuration Loaded"),
@@ -832,6 +1002,11 @@ void MainWindow::onColorSettingsRequested()
     auto* colorSettings = new ColorSettingsDialog(this);
 
     colorSettings->show();
+}
+
+void MainWindow::onSilentModeToggled(bool checked)
+{
+    setSilentMode(checked);
 }
 
 void MainWindow::enterNoConfigurationFileMode()
@@ -948,8 +1123,8 @@ void MainWindow::onLoadModelFromDirectoryRequested()
 void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
 {
     // Enable silent mode temporarily to suppress dialogs during loading
-    bool previousSilentMode = silentMode;
-    silentMode = true;
+    const bool previousSilentMode = isSilentModeEnabled();
+    setSilentMode(true);
 
     try
     {
@@ -975,7 +1150,7 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         if (! result.success)
         {
             progress.close();
-            silentMode = previousSilentMode;
+            setSilentMode(previousSilentMode);
 
             // If compilation was attempted and failed, show detailed error dialog
             if (result.compilationResult.has_value())
@@ -1000,7 +1175,7 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         if (! pluginLoader.loadPlugin(result.compiledModulePath, /*overridePlugin=*/true))
         {
             progress.close();
-            silentMode = previousSilentMode;
+            setSilentMode(previousSilentMode);
 
             QMessageBox::critical(this,
                                   tr("Module Load Failed"),
@@ -1036,7 +1211,7 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         if (!fs::exists(headerPath))
         {
             progress.close();
-            silentMode = previousSilentMode;
+            setSilentMode(previousSilentMode);
 
             QMessageBox::critical(this, tr("Configuration Load Failed"),
                 tr("Header.txt not found in model directory:\n%1").arg(QString::fromStdString(actualModelDir.string())));
@@ -1051,13 +1226,13 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         addToRecentDirectories(QString::fromStdString(actualModelDir.string()));
 
         progress.close();
-        silentMode = previousSilentMode;
+        setSilentMode(previousSilentMode);
 
         // Show success message only if not in silent mode
-        if (! silentMode)
+        if (! isSilentModeEnabled())
         {
             QMessageBox::information(this,
-                                     tr("Model Loaded"),
+                                     tr("Model Changed"),
                                      tr("Model '%1' loaded successfully from:\n%2\n\nConfiguration loaded and ready to use.")
                                          .arg(QString::fromStdString(pluginModelName))
                                          .arg(QString::fromStdString(actualModelDir.string())));
@@ -1070,7 +1245,7 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
     }
 
     // Restore silent mode
-    silentMode = previousSilentMode;
+    setSilentMode(previousSilentMode);
 }
 
 void MainWindow::createViewModeActionGroup()
@@ -1091,9 +1266,18 @@ void MainWindow::on2DModeRequested()
     ui->sceneWidget->setViewMode2D();
     updateCameraControlsVisibility();
 
-    QMessageBox::information(this,
-                             tr("View Mode Changed"),
-                             tr("Switched to 2D mode.\nCamera is now in top-down view with rotation disabled."));
+    // Synchronize menu checkboxes - ensure only 2D mode is checked
+    QSignalBlocker blocker2D(ui->action2DMode);
+    QSignalBlocker blocker3D(ui->action3DMode);
+    ui->action2DMode->setChecked(true);
+    ui->action3DMode->setChecked(false);
+
+    if (! isSilentModeEnabled())
+    {
+        QMessageBox::information(this,
+                                 tr("View Mode Changed"),
+                                 tr("Switched to 2D mode.\nCamera is now in top-down view with rotation disabled."));
+    }
 }
 
 void MainWindow::on3DModeRequested()
@@ -1106,11 +1290,24 @@ void MainWindow::on3DModeRequested()
     ui->azimuthSlider->setValue(0);
     ui->elevationSlider->setValue(0);
 
+    // Reset camera angles to default
+    ui->sceneWidget->setCameraAzimuth(0);
+    ui->sceneWidget->setCameraElevation(0);
+
     updateCameraControlsVisibility();
 
-    QMessageBox::information(this,
-                             tr("View Mode Changed"),
-                             tr("Switched to 3D mode.\nYou can now rotate the camera using mouse or the sliders below."));
+    // Synchronize menu checkboxes - ensure only 3D mode is checked
+    QSignalBlocker blocker2D(ui->action2DMode);
+    QSignalBlocker blocker3D(ui->action3DMode);
+    ui->action3DMode->setChecked(true);
+    ui->action2DMode->setChecked(false);
+
+    if (! isSilentModeEnabled())
+    {
+        QMessageBox::information(this,
+                                 tr("View Mode Changed"),
+                                 tr("Switched to 3D mode.\nYou can now rotate the camera using mouse or the sliders below."));
+    }
 }
 
 void MainWindow::onGridLinesToggled(bool checked)
@@ -1452,13 +1649,15 @@ void MainWindow::setWidgetsEnabledState(bool enabled)
     // View mode actions should always be enabled
     ui->action2DMode->setEnabled(true);
     ui->action3DMode->setEnabled(true);
+
+    changeWhichButtonsAreEnabled();
 }
 
 
 void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
 {
     // Store silent mode flag
-    silentMode = cmdParser.isSilentMode();
+    setSilentMode(cmdParser.isSilentMode());
 
     // Set starting model if specified
     if (cmdParser.getStartingModel())
@@ -1619,7 +1818,7 @@ void MainWindow::initializeReductionManager(const QString& configFileName, std::
     {
         reductionManager.reset();
         ui->actionShow_reduction->setEnabled(false);
-        if (silentMode)
+        if (ui->actionSilentMode->isChecked())
             std::cerr << "Error initializing ReductionManager: " << e.what() << std::endl;
         else
             QMessageBox::warning(this, tr("Reduction initialization error"), tr("Details: ") + e.what());
@@ -1915,4 +2114,19 @@ void MainWindow::onRecentDirectoryTriggered()
 
     // Load the model from the directory
     loadModelFromDirectory(directoryPath);
+}
+
+void MainWindow::onUse3rdDimensionRequested(const std::string& fieldName)
+{
+    // Store the active substate for 3D visualization in MainWindow
+    activeSubstateFor3D = fieldName;
+
+    // Also set it in SceneWidget so it knows which substate to use for 3D
+    ui->sceneWidget->setActiveSubstateFor3D(fieldName);
+
+    // Switch to 3D mode
+    on3DModeRequested();
+
+    // Refresh the visualization with the new substate for the current step
+    ui->sceneWidget->selectedStepParameter(currentStep);
 }

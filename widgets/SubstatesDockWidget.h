@@ -65,6 +65,31 @@ signals:
      * @param fieldName The name of the field */
     void use3rdDimensionRequested(const std::string& fieldName);
 
+private slots:
+    /** @brief Handle min/max value changes from SubstateDisplayWidget.
+     * 
+     * Updates the substateInfo in SettingParameter when user manually changes min/max values.
+     * 
+     * @param fieldName The name of the field
+     * @param minValue The new minimum value (or NaN if not set)
+     * @param maxValue The new maximum value (or NaN if not set) */
+    void onMinMaxValuesChanged(const std::string& fieldName, double minValue, double maxValue);
+
+    /** @brief Calculate and set minimum value for a field.
+     * 
+     * @param fieldName The name of the field */
+    void onCalculateMinimumRequested(const std::string& fieldName);
+
+    /** @brief Calculate and set minimum value > 0 for a field.
+     * 
+     * @param fieldName The name of the field */
+    void onCalculateMinimumGreaterThanZeroRequested(const std::string& fieldName);
+
+    /** @brief Calculate and set maximum value for a field.
+     * 
+     * @param fieldName The name of the field */
+    void onCalculateMaximumRequested(const std::string& fieldName);
+
 private:
     /** @brief Clear all substate widgets. */
     void clearWidgets();
@@ -73,4 +98,6 @@ private:
     QWidget* m_containerWidget;
     QVBoxLayout* m_containerLayout;
     std::map<std::string, SubstateDisplayWidget*> m_substateWidgets;
+    SettingParameter* m_currentSettingParameter = nullptr;
+    class ISceneWidgetVisualizer* m_currentVisualizer = nullptr;
 };

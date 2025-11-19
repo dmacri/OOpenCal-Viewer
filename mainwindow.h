@@ -38,9 +38,14 @@ public:
     void applyCommandLineOptions(const CommandLineParser& cmdParser);
     void loadModelFromDirectory(const QString& modelDirectory);
 
-    void setSilentMode(bool newSilentMode)
+    void setSilentMode(bool newSilentMode);
+    bool isSilentModeEnabled() const;
+
+    /// @brief Get the name of the substate field currently used for 3D visualization
+    /// @return Field name (e.g., "h", "z") or empty string if no 3D substate is active
+    std::string getActiveSubstateFor3D() const
     {
-        silentMode = newSilentMode;
+        return activeSubstateFor3D;
     }
 
 private slots: // menu actions
@@ -62,17 +67,22 @@ private slots: // menu actions
     void onModelSelected();
     void onReloadDataRequested();
 
+    // Settings submenu
+    void onSilentModeToggled(bool checked);
+    void onColorSettingsRequested();
+
     // Help submenu:
     void showAboutThisApplicationDialog();
 
     // other slots
     void onStepNumberChanged();
-    void onColorSettingsRequested();
 
     void onAzimuthChanged(int value);
     void onElevationChanged(int value);
     void onCameraOrientationChanged(double azimuth, double elevation);
     void syncCameraSliders();
+
+    void onUse3rdDimensionRequested(const std::string& fieldName);
 
     void onPlayButtonClicked();
     void onStopButtonClicked();
@@ -157,6 +167,21 @@ private:
     void initializeReductionManager(const QString& configFileName, std::shared_ptr<Config> optionalConfig = {});
     void updateReductionDisplay();
 
+    /// @brief Handle missing step during playback
+    /// @param targetStep The step that was attempted but not found
+    /// @param direction The playback direction
+    /// @return true if playback should continue, false if it should stop
+    bool handleMissingStepDuringPlayback(StepIndex targetStep, PlayingDirection direction);
+    
+    /// @brief Find the nearest available step in the given direction
+    /// @param targetStep The target step to search from
+    /// @param direction Forward to find next step, Backward to find previous step
+    /// @param outNextStep Output parameter: the found step (only valid if function returns true)
+    /// @return true if a step was found in the given direction, false otherwise
+    bool findNearestAvailableStep(StepIndex targetStep, PlayingDirection direction, StepIndex& outNextStep) const;
+
+    void updateSilentModeUi(bool checked);
+
 private:
     static constexpr int MAX_RECENT_FILES = 10;
     Ui::MainWindow *ui;
@@ -167,6 +192,9 @@ private:
     StepIndex currentStep;
     std::vector<StepIndex> availableSteps;
 
+    /// @brief Name of the substate field currently used for 3D visualization (empty if none)
+    std::string activeSubstateFor3D;
+
     // Playback state for timer-based playback
     PlayingDirection playbackDirection = PlayingDirection::Forward;
 
@@ -176,7 +204,4 @@ private:
     QString compilationFailedMessage;
     QString deleteSuccessfulMessage;
     QString deleteFailedMessage;
-
-    // Command-line options
-    bool silentMode = false;
 };

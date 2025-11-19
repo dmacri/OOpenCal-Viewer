@@ -7,11 +7,11 @@
 #pragma once
 
 #include <QWidget>
-#include <QSpinBox>
-#include <QLineEdit>
-#include <QLabel>
-#include <QPushButton>
 
+class QLineEdit;
+class QLabel;
+class QDoubleSpinBox;
+class QPushButton;
 class SettingParameter;
 
 /** @class SubstateDisplayWidget
@@ -91,12 +91,66 @@ signals:
      * @param fieldName The name of the field */
     void use3rdDimensionRequested(const std::string& fieldName);
 
+    /** @brief Signal emitted when min or max values change.
+     * 
+     * @param fieldName The name of the field
+     * @param minValue The new minimum value (or NaN if not set)
+     * @param maxValue The new maximum value (or NaN if not set) */
+    void minMaxValuesChanged(const std::string& fieldName, double minValue, double maxValue);
+
+    /** @brief Signal emitted when user requests to calculate minimum value.
+     * 
+     * @param fieldName The name of the field */
+    void calculateMinimumRequested(const std::string& fieldName);
+
+    /** @brief Signal emitted when user requests to calculate minimum > 0.
+     * 
+     * @param fieldName The name of the field */
+    void calculateMinimumGreaterThanZeroRequested(const std::string& fieldName);
+
+    /** @brief Signal emitted when user requests to calculate maximum value.
+     * 
+     * @param fieldName The name of the field */
+    void calculateMaximumRequested(const std::string& fieldName);
+
+private slots:
+    /** @brief Calculate and set minimum value from all cells in current step.
+     * 
+     * Finds the minimum value across all cells and sets it as the min value. */
+    void onCalculateMinimum();
+
+    /** @brief Calculate and set minimum value > 0 from all cells in current step.
+     * 
+     * Finds the minimum value > 0 across all cells and sets it as the min value. */
+    void onCalculateMinimumGreaterThanZero();
+
+    /** @brief Calculate and set maximum value from all cells in current step.
+     * 
+     * Finds the maximum value across all cells and sets it as the max value. */
+    void onCalculateMaximum();
+
+    /// @brief This is sum of onCalculateMinimumGreaterThanZero() and onCalculateMaximum()
+    void onCalculateMinimumGreaterThanZeroAndMaximum();
+
+protected:
+    /// @brief Override context menu event to add custom actions.
+    void contextMenuEvent(QContextMenuEvent* event) override;
+
+    /// @brief Override event filter to intercept right-click on child widgets.
+    bool eventFilter(QObject* obj, QEvent* event) override;
+
 private:
-    /** @brief Setup the UI layout. */
+    /// @brief Setup the UI layout.
     void setupUI();
 
-    /** @brief Connect signals and slots. */
+    /// @brief Connect signals and slots.
     void connectSignals();
+
+    /// @brief Update button enabled state based on min/max values.
+    void updateButtonState();
+
+    /// @brief Install event filter on all child widgets to catch right-click.
+    void installEventFiltersOnChildren();
 
     std::string m_fieldName;
 

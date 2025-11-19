@@ -133,22 +133,46 @@ void SceneWidget::triggerRenderUpdate()
 
 void SceneWidget::applyCameraAngles()
 {
-    // Reset camera to default position
+    // Temporarily disable VTK warnings.
+    //
+    // Reason:
+    // When the camera elevation approaches ±90 degrees, the view-up vector becomes
+    // nearly parallel to the view-plane normal. VTK interprets this as an invalid
+    // camera configuration and emits warnings such as:
+    //   "Resetting view-up since view plane normal is parallel"
+    //
+    // These warnings normally occur during ResetCamera(), which internally adjusts
+    // the camera to maintain a valid orientation. Since we intentionally allow
+    // near-vertical camera angles, these warnings are expected and not useful here.
+    bool oldWarningState = vtkObject::GetGlobalWarningDisplay();
+    vtkObject::GlobalWarningDisplayOff();
+
     auto camera = renderer->GetActiveCamera();
     if (! camera)
+    {
+        vtkObject::SetGlobalWarningDisplay(oldWarningState);
         return;
+    }
 
+    // Reset camera to a known baseline orientation
     camera->SetPosition(0, 0, 1);
     camera->SetFocalPoint(0, 0, 0);
     camera->SetViewUp(0, 1, 0);
 
-    // Apply stored transformations in order: azimuth first, then elevation
+    // Apply azimuth rotation (horizontal)
     camera->Azimuth(cameraAzimuth);
-    camera->Elevation(cameraElevation);
 
-    // Reset camera bounds and render
+    // Clamp elevation to avoid exactly ±90° and prevent singularities
+    double clampedElevation = std::clamp(cameraElevation, -89.9, 89.9);
+    camera->Elevation(clampedElevation);
+
+    // Recompute camera bounds for the current renderer
     renderer->ResetCamera();
+
     triggerRenderUpdate();
+
+    // Restore previous warning state
+    vtkObject::SetGlobalWarningDisplay(oldWarningState);
 }
 
 void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
@@ -159,8 +183,8 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
     // Read stage state from files for the current step
     sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
 
-    // Refresh VTK visualization elements
-    sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor);
+    // Refresh VTK visualization with optional 3D substate support
+    refreshVisualizationWithOptional3DSubstate();
 
     // Update load balancing lines if we have any
     if (settingParameter->numberOfLines > 0)
@@ -178,6 +202,57 @@ void SceneWidget::prepareStageWithCurrentNodeConfiguration()
 {
     // Initialize the visualizer stage with current node configuration
     sceneWidgetVisualizerProxy->prepareStage(settingParameter->nNodeX, settingParameter->nNodeY);
+}
+
+void SceneWidget::drawVisualizationWithOptional3DSubstate()
+{
+    // Remove old actor from renderer to avoid "shadow" artifacts
+    if (gridActor && renderer)
+    {
+        renderer->RemoveActor(gridActor);
+    }
+    
+    // Check if we should use 3D substate visualization
+    if (! activeSubstateFor3D.empty() && settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
+    {
+        const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
+        if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
+        {
+            sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY, 
+                                                              settingParameter->numberOfColumnX, 
+                                                              renderer, 
+                                                              gridActor,
+                                                              activeSubstateFor3D,
+                                                              substateInfo.minValue,
+                                                              substateInfo.maxValue);
+            return;
+        }
+    }
+    
+    // Fallback to regular 2D visualization
+    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor);
+}
+
+void SceneWidget::refreshVisualizationWithOptional3DSubstate()
+{
+    // Check if we should use 3D substate visualization
+    if (!activeSubstateFor3D.empty() && settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
+    {
+        const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
+        if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
+        {
+            sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY, 
+                                                                    settingParameter->numberOfColumnX, 
+                                                                    gridActor,
+                                                                    activeSubstateFor3D,
+                                                                    substateInfo.minValue,
+                                                                    substateInfo.maxValue);
+            return;
+        }
+    }
+    
+    // Fallback to regular 2D visualization
+    sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor);
 }
 
 void SceneWidget::addVisualizer(const std::string& filename, StepIndex stepNumber)
@@ -575,7 +650,8 @@ void SceneWidget::renderVtkScene()
     lines.resize(settingParameter->numberOfLines);
     sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
 
-    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor);
+    // Draw VTK visualization with optional 3D substate support
+    drawVisualizationWithOptional3DSubstate();
 
     sceneWidgetVisualizerProxy->getVisualizer().buildLoadBalanceLine(lines,
                                                                      settingParameter->numberOfRowsY + 1,
@@ -971,6 +1047,16 @@ void SceneWidget::setViewMode2D()
         return;
 
     currentViewMode = ViewMode::Mode2D;
+    
+    // Disable 3D substate visualization when switching to 2D mode
+    activeSubstateFor3D.clear();
+    
+    // Redraw visualization in 2D mode (without 3D substate)
+    if (settingParameter && sceneWidgetVisualizerProxy)
+    {
+        drawVisualizationWithOptional3DSubstate();
+        renderWindow()->Render();
+    }
 
     // Use custom interactor style that zooms towards cursor position
     vtkNew<CustomInteractorStyle> style;
@@ -1055,6 +1141,11 @@ void SceneWidget::setGridLinesVisible(bool visible)
     }
 }
 
+void SceneWidget::setActiveSubstateFor3D(const std::string& fieldName)
+{
+    activeSubstateFor3D = fieldName;
+}
+
 void SceneWidget::setCameraAzimuth(double angle)
 {
     // Store the new azimuth value
@@ -1127,10 +1218,13 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
     const double cellHeight = sceneHeight / settingParameter->numberOfRowsY;
 
     // Convert world position to grid indices
-    // Matrix p[row][col] is indexed from top-left (row=0 at top, col=0 at left)
-    // VTK Y increases upward, but we need to map to matrix row which increases downward
+    // Points are positioned with Y inverted: (nRows - 1 - row)
+    // So we need to invert the row calculation to get the correct matrix index
     int col = static_cast<int>((worldPos[0] - bounds[0]) / cellWidth);
     int row = static_cast<int>((worldPos[1] - bounds[2]) / cellHeight);
+    
+    // Invert row to match the inverted Y coordinates used in visualization
+    row = settingParameter->numberOfRowsY - 1 - row;
 
     // Clamp to valid range
     col = std::max(0, std::min(col, settingParameter->numberOfColumnX - 1));

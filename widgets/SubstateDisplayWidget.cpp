@@ -3,7 +3,14 @@
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QGroupBox>
+#include <QMenu>
+#include <QAction>
+#include <QContextMenuEvent>
+#include <QEvent>
+#include <QSpinBox>
+#include <QLineEdit>
+#include <QLabel>
+#include <QPushButton>
 #include <limits>
 #include <cmath>
 #include <cctype>
@@ -22,6 +29,12 @@ SubstateDisplayWidget::SubstateDisplayWidget(const std::string& fieldName, QWidg
 {
     setupUI();
     connectSignals();
+    
+    // Enable context menu for the widget
+    setContextMenuPolicy(Qt::CustomContextMenu);
+    
+    // Install event filter on all child widgets to intercept right-click
+    installEventFiltersOnChildren();
 }
 
 void SubstateDisplayWidget::setupUI()
@@ -119,6 +132,15 @@ void SubstateDisplayWidget::connectSignals()
     connect(m_use3dButton, &QPushButton::clicked, this, [this]() {
         emit use3rdDimensionRequested(m_fieldName);
     });
+
+    // Connect spinbox value changes to update button state
+    connect(m_minSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &SubstateDisplayWidget::updateButtonState);
+    connect(m_maxSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &SubstateDisplayWidget::updateButtonState);
+
+    // Initial button state
+    updateButtonState();
 }
 
 void SubstateDisplayWidget::setCellValue(const std::string& value)
@@ -232,4 +254,100 @@ bool SubstateDisplayWidget::hasMinValue() const
 bool SubstateDisplayWidget::hasMaxValue() const
 {
     return m_maxSpinBox->value() != m_maxSpinBox->minimum();
+}
+
+void SubstateDisplayWidget::updateButtonState()
+{
+    // Button is enabled only if both min and max values are set
+    const bool hasMin = hasMinValue();
+    const bool hasMax = hasMaxValue();
+    const bool isEnabled = hasMin && hasMax;
+    
+    m_use3dButton->setEnabled(isEnabled);
+    
+    // Update tooltip to explain why button might be disabled
+    if (isEnabled)
+    {
+        m_use3dButton->setToolTip("Use this field as 3rd dimension in 3D visualization");
+    }
+    else
+    {
+        m_use3dButton->setToolTip("Set both Min and Max values to enable 3D visualization");
+    }
+
+    // Emit signal with current min/max values so they can be stored in substateInfo
+    emit minMaxValuesChanged(m_fieldName, getMinValue(), getMaxValue());
+}
+
+void SubstateDisplayWidget::installEventFiltersOnChildren()
+{
+    // Install event filter on all child widgets to intercept right-click
+    m_minSpinBox->installEventFilter(this);
+    m_maxSpinBox->installEventFilter(this);
+    m_formatLineEdit->installEventFilter(this);
+    m_use3dButton->installEventFilter(this);
+    m_nameLabel->installEventFilter(this);
+    m_valueLabel->installEventFilter(this);
+}
+
+bool SubstateDisplayWidget::eventFilter(QObject* obj, QEvent* event)
+{
+    // Intercept right-click (context menu) on child widgets
+    if (event->type() == QEvent::ContextMenu)
+    {
+        // Forward context menu event to this widget's contextMenuEvent
+        auto contextEvent = static_cast<QContextMenuEvent*>(event);
+        contextMenuEvent(contextEvent);
+        return true;  // Event handled
+    }
+    
+    // Let other events pass through
+    return QWidget::eventFilter(obj, event);
+}
+
+void SubstateDisplayWidget::contextMenuEvent(QContextMenuEvent* event)
+{
+    // Create context menu for the widget
+    QMenu menu;
+    
+    // Add calculation actions with icons
+    auto calcMinAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate minimum");
+    connect(calcMinAction, &QAction::triggered, this, &SubstateDisplayWidget::onCalculateMinimum);
+    
+    auto calcMinGtZeroAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate minimum > 0");
+    connect(calcMinGtZeroAction, &QAction::triggered, this, &SubstateDisplayWidget::onCalculateMinimumGreaterThanZero);
+    
+    menu.addSeparator();
+    
+    auto calcMaxAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate maximum");
+    connect(calcMaxAction, &QAction::triggered, this, &SubstateDisplayWidget::onCalculateMaximum);
+
+    menu.addSeparator();
+
+    auto calcMaxAndMinGtZeroAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate maximum and minimum > 0");
+    connect(calcMaxAndMinGtZeroAction, &QAction::triggered, this, &SubstateDisplayWidget::onCalculateMinimumGreaterThanZeroAndMaximum);
+    
+    // Show menu at cursor position
+    menu.exec(event->globalPos());
+}
+
+void SubstateDisplayWidget::onCalculateMinimum()
+{
+    emit calculateMinimumRequested(m_fieldName);
+}
+
+void SubstateDisplayWidget::onCalculateMinimumGreaterThanZero()
+{
+    emit calculateMinimumGreaterThanZeroRequested(m_fieldName);
+}
+
+void SubstateDisplayWidget::onCalculateMaximum()
+{
+    emit calculateMaximumRequested(m_fieldName);
+}
+
+void SubstateDisplayWidget::onCalculateMinimumGreaterThanZeroAndMaximum()
+{
+    emit onCalculateMinimumGreaterThanZero();
+    emit onCalculateMaximum();
 }

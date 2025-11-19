@@ -51,6 +51,9 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
     if (!settingParameter)
         return;
 
+    // Store reference to current setting parameter
+    m_currentSettingParameter = settingParameter;
+
     // Clear existing widgets
     clearWidgets();
 
@@ -73,9 +76,17 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
             widget->setFormat(it->second.format);
         }
 
-        // Connect signal
+        // Connect signals
         connect(widget, &SubstateDisplayWidget::use3rdDimensionRequested,
                 this, &SubstatesDockWidget::use3rdDimensionRequested);
+        connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged),
+                this, &SubstatesDockWidget::onMinMaxValuesChanged);
+        connect(widget, &SubstateDisplayWidget::calculateMinimumRequested,
+                this, &SubstatesDockWidget::onCalculateMinimumRequested);
+        connect(widget, &SubstateDisplayWidget::calculateMinimumGreaterThanZeroRequested,
+                this, &SubstatesDockWidget::onCalculateMinimumGreaterThanZeroRequested);
+        connect(widget, &SubstateDisplayWidget::calculateMaximumRequested,
+                this, &SubstatesDockWidget::onCalculateMaximumRequested);
 
         m_containerLayout->addWidget(widget);
         m_substateWidgets[field] = widget;
@@ -95,6 +106,9 @@ void SubstatesDockWidget::updateCellValues(SettingParameter* settingParameter, i
 {
     if (!settingParameter || !visualizer)
         return;
+
+    // Store visualizer for later use in calculations
+    m_currentVisualizer = visualizer;
 
     // Update header with row/col information (x=col, y=row for clarity)
     auto headerLabel = findChild<QLabel*>("cellHeaderLabel");
@@ -153,4 +167,135 @@ void SubstatesDockWidget::clearWidgets()
         delete item;
     }
     m_substateWidgets.clear();
+}
+
+void SubstatesDockWidget::onMinMaxValuesChanged(const std::string& fieldName, double minValue, double maxValue)
+{
+    // Update the substateInfo in SettingParameter with the new values
+    if (m_currentSettingParameter)
+    {
+        auto it = m_currentSettingParameter->substateInfo.find(fieldName);
+        if (it != m_currentSettingParameter->substateInfo.end())
+        {
+            it->second.minValue = minValue;
+            it->second.maxValue = maxValue;
+        }
+    }
+}
+
+void SubstatesDockWidget::onCalculateMinimumRequested(const std::string& fieldName)
+{
+    if (!m_currentSettingParameter || !m_currentVisualizer)
+        return;
+
+    double minValue = std::numeric_limits<double>::max();
+    bool found = false;
+
+    // Iterate through all cells in current step
+    for (int row = 0; row < m_currentSettingParameter->numberOfRowsY; ++row)
+    {
+        for (int col = 0; col < m_currentSettingParameter->numberOfColumnX; ++col)
+        {
+            try
+            {
+                std::string cellValueStr = m_currentVisualizer->getCellStringEncoding(row, col, fieldName.c_str());
+                double cellValue = std::stod(cellValueStr);
+                minValue = std::min(minValue, cellValue);
+                found = true;
+            }
+            catch (const std::exception&)
+            {
+                // Skip cells that can't be parsed
+            }
+        }
+    }
+
+    if (found)
+    {
+        // Update the widget
+        auto it = m_substateWidgets.find(fieldName);
+        if (it != m_substateWidgets.end())
+        {
+            it->second->setMinValue(minValue);
+        }
+    }
+}
+
+void SubstatesDockWidget::onCalculateMinimumGreaterThanZeroRequested(const std::string& fieldName)
+{
+    if (!m_currentSettingParameter || !m_currentVisualizer)
+        return;
+
+    double minValue = std::numeric_limits<double>::max();
+    bool found = false;
+
+    // Iterate through all cells in current step
+    for (int row = 0; row < m_currentSettingParameter->numberOfRowsY; ++row)
+    {
+        for (int col = 0; col < m_currentSettingParameter->numberOfColumnX; ++col)
+        {
+            try
+            {
+                std::string cellValueStr = m_currentVisualizer->getCellStringEncoding(row, col, fieldName.c_str());
+                double cellValue = std::stod(cellValueStr);
+                if (cellValue > 0.0)
+                {
+                    minValue = std::min(minValue, cellValue);
+                    found = true;
+                }
+            }
+            catch (const std::exception&)
+            {
+                // Skip cells that can't be parsed
+            }
+        }
+    }
+
+    if (found)
+    {
+        // Update the widget
+        auto it = m_substateWidgets.find(fieldName);
+        if (it != m_substateWidgets.end())
+        {
+            it->second->setMinValue(minValue);
+        }
+    }
+}
+
+void SubstatesDockWidget::onCalculateMaximumRequested(const std::string& fieldName)
+{
+    if (!m_currentSettingParameter || !m_currentVisualizer)
+        return;
+
+    double maxValue = std::numeric_limits<double>::lowest();
+    bool found = false;
+
+    // Iterate through all cells in current step
+    for (int row = 0; row < m_currentSettingParameter->numberOfRowsY; ++row)
+    {
+        for (int col = 0; col < m_currentSettingParameter->numberOfColumnX; ++col)
+        {
+            try
+            {
+                std::string cellValueStr = m_currentVisualizer->getCellStringEncoding(row, col, fieldName.c_str());
+                double cellValue = std::stod(cellValueStr);
+                maxValue = std::max(maxValue, cellValue);
+                found = true;
+            }
+            catch (const std::exception&)
+            {
+                // Skip cells that can't be parsed
+            }
+        }
+    }
+
+    if (found)
+    {
+        // Update the widget
+        auto it = m_substateWidgets.find(fieldName);
+        if (it != m_substateWidgets.end())
+        {
+            it->second->setMaxValue(maxValue);
+        }
+    }
 }

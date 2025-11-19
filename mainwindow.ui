@@ -624,8 +624,6 @@
     <addaction name="separator"/>
     <addaction name="actionExport_Video"/>
     <addaction name="separator"/>
-    <addaction name="actionColor_settings"/>
-    <addaction name="separator"/>
     <addaction name="actionQuit"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
@@ -648,9 +646,18 @@
     <addaction name="separator"/>
     <addaction name="actionGridLines"/>
    </widget>
+   <widget class="QMenu" name="menuSettings">
+    <property name="title">
+     <string>Settings</string>
+    </property>
+    <addaction name="actionSilentMode"/>
+    <addaction name="separator"/>
+    <addaction name="actionColor_settings"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuModel"/>
    <addaction name="menuView"/>
+   <addaction name="menuSettings"/>
    <addaction name="menuHelp"/>
   </widget>
   <action name="actionOpenConfiguration">
@@ -815,6 +822,17 @@
    </property>
    <property name="toolTip">
     <string>Show/hide grid lines between nodes</string>
+   </property>
+  </action>
+  <action name="actionSilentMode">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Silent Mode</string>
+   </property>
+   <property name="toolTip">
+    <string>Suppress confirmation dialogs during automation</string>
    </property>
   </action>
  </widget>

@@ -66,6 +66,12 @@ public:
     /// @brief Refresh the VTK windows.
     virtual void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor) = 0;
 
+    /// @brief Draw the visualization using VTK with 3D substate height mapping.
+    virtual void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue) = 0;
+
+    /// @brief Refresh the VTK windows with 3D substate height mapping.
+    virtual void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue) = 0;
+
     /// @brief Get the visualizer instance.
     virtual Visualizer& getVisualizer() = 0;
 
