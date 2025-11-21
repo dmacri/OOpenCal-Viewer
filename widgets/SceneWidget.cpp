@@ -166,6 +166,15 @@ void SceneWidget::applyCameraAngles()
     double clampedElevation = std::clamp(cameraElevation, -89.9, 89.9);
     camera->Elevation(clampedElevation);
 
+    // Apply roll rotation (around Y axis)
+    camera->Roll(cameraRoll);
+
+    // Apply pitch rotation (around Z axis)
+    camera->Pitch(cameraPitch);
+
+    // Apply yaw rotation (around X axis)
+    camera->Yaw(cameraYaw);
+
     // Recompute camera bounds for the current renderer
     renderer->ResetCamera();
 
@@ -569,9 +578,10 @@ void SceneWidget::cameraCallbackFunction(vtkObject* caller, long unsigned int ev
             // Update internal state
             self->cameraAzimuth = azimuth;
             self->cameraElevation = elevation;
+            // Note: Roll, Pitch, and Yaw are not extracted from VTK camera here, they're maintained separately
 
             // Emit signal with actual values
-            emit self->cameraOrientationChanged(azimuth, elevation);
+            emit self->cameraOrientationChanged(azimuth, elevation, self->cameraRoll, self->cameraPitch, self->cameraYaw);
         }
     }
 }
@@ -1065,6 +1075,9 @@ void SceneWidget::setViewMode2D()
     // Reset camera angles
     cameraAzimuth = {};
     cameraElevation = {};
+    cameraRoll = {};
+    cameraPitch = {};
+    cameraYaw = {};
 
     // Set camera to top-down view
     auto camera = renderer->GetActiveCamera();
@@ -1159,6 +1172,33 @@ void SceneWidget::setCameraElevation(double angle)
 {
     // Store the new elevation value
     cameraElevation = angle;
+
+    // Apply camera angles using helper method
+    applyCameraAngles();
+}
+
+void SceneWidget::setCameraRoll(double angle)
+{
+    // Store the new roll value
+    cameraRoll = angle;
+
+    // Apply camera angles using helper method
+    applyCameraAngles();
+}
+
+void SceneWidget::setCameraPitch(double angle)
+{
+    // Store the new pitch value
+    cameraPitch = angle;
+
+    // Apply camera angles using helper method
+    applyCameraAngles();
+}
+
+void SceneWidget::setCameraYaw(double angle)
+{
+    // Store the new yaw value
+    cameraYaw = angle;
 
     // Apply camera angles using helper method
     applyCameraAngles();

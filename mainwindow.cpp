@@ -347,14 +347,20 @@ void MainWindow::connectSliders()
 {
     connect(ui->updatePositionSlider, &QSlider::valueChanged, this, &MainWindow::onUpdateStepPositionOnSlider);
 
-    // Camera control sliders
-    connect(ui->azimuthSlider, &QSlider::valueChanged, this, &MainWindow::onAzimuthChanged);
-    connect(ui->azimuthSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), ui->azimuthSlider, &QSlider::setValue);
-    connect(ui->azimuthSlider, &QSlider::valueChanged, ui->azimuthSpinBox, &QSpinBox::setValue);
+    // Camera rotation controls - Roll (X axis)
+    connect(ui->rollSlider, &QSlider::valueChanged, this, &MainWindow::onRollChanged);
+    connect(ui->rollSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), ui->rollSlider, &QSlider::setValue);
+    connect(ui->rollSlider, &QSlider::valueChanged, ui->rollSpinBox, &QSpinBox::setValue);
 
-    connect(ui->elevationSlider, &QSlider::valueChanged, this, &MainWindow::onElevationChanged);
-    connect(ui->elevationSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), ui->elevationSlider, &QSlider::setValue);
-    connect(ui->elevationSlider, &QSlider::valueChanged, ui->elevationSpinBox, &QSpinBox::setValue);
+    // Camera rotation controls - Pitch (Y axis)
+    connect(ui->pitchSlider, &QSlider::valueChanged, this, &MainWindow::onPitchChanged);
+    connect(ui->pitchSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), ui->pitchSlider, &QSlider::setValue);
+    connect(ui->pitchSlider, &QSlider::valueChanged, ui->pitchSpinBox, &QSpinBox::setValue);
+
+    // Camera rotation controls - Yaw (Z axis)
+    connect(ui->yawSlider, &QSlider::valueChanged, this, &MainWindow::onYawChanged);
+    connect(ui->yawSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), ui->yawSlider, &QSlider::setValue);
+    connect(ui->yawSlider, &QSlider::valueChanged, ui->yawSpinBox, &QSpinBox::setValue);
 
     // Update sliders when camera changes (e.g., via mouse rotation in 3D mode)
     connect(ui->sceneWidget, &SceneWidget::cameraOrientationChanged, this, &MainWindow::onCameraOrientationChanged);
@@ -1284,15 +1290,27 @@ void MainWindow::on3DModeRequested()
 {
     ui->sceneWidget->setViewMode3D();
 
-    // Reset sliders to default position (0, 0) when entering 3D mode
-    QSignalBlocker azimuthBlocker(ui->azimuthSlider);
-    QSignalBlocker elevationBlocker(ui->elevationSlider);
-    ui->azimuthSlider->setValue(0);
-    ui->elevationSlider->setValue(0);
+    // Reset rotation controls to default when entering 3D mode
+    QSignalBlocker rollBlocker(ui->rollSlider);
+    QSignalBlocker pitchBlocker(ui->pitchSlider);
+    QSignalBlocker yawBlocker(ui->yawSlider);
+    QSignalBlocker rollSpinBoxBlocker(ui->rollSpinBox);
+    QSignalBlocker pitchSpinBoxBlocker(ui->pitchSpinBox);
+    QSignalBlocker yawSpinBoxBlocker(ui->yawSpinBox);
+    
+    ui->rollSlider->setValue(0);
+    ui->rollSpinBox->setValue(0);
+    ui->pitchSlider->setValue(0);
+    ui->pitchSpinBox->setValue(0);
+    ui->yawSlider->setValue(0);
+    ui->yawSpinBox->setValue(0);
 
     // Reset camera angles to default
     ui->sceneWidget->setCameraAzimuth(0);
     ui->sceneWidget->setCameraElevation(0);
+    ui->sceneWidget->setCameraRoll(0);
+    ui->sceneWidget->setCameraPitch(0);
+    ui->sceneWidget->setCameraYaw(0);
 
     updateCameraControlsVisibility();
 
@@ -1331,38 +1349,56 @@ void MainWindow::updateCameraControlsVisibility()
 void MainWindow::syncCameraSliders()
 {
     // Sync sliders with current camera position
-    const double azimuth = ui->sceneWidget->getCameraAzimuth();
-    const double elevation = ui->sceneWidget->getCameraElevation();
+    const double roll = ui->sceneWidget->getCameraRoll();
+    const double pitch = ui->sceneWidget->getCameraPitch();
+    const double yaw = ui->sceneWidget->getCameraYaw();
 
-    QSignalBlocker azimuthBlocker(ui->azimuthSlider);
-    QSignalBlocker elevationBlocker(ui->elevationSlider);
+    QSignalBlocker rollBlocker(ui->rollSlider);
+    QSignalBlocker pitchBlocker(ui->pitchSlider);
+    QSignalBlocker yawBlocker(ui->yawSlider);
+    QSignalBlocker rollSpinBoxBlocker(ui->rollSpinBox);
+    QSignalBlocker pitchSpinBoxBlocker(ui->pitchSpinBox);
+    QSignalBlocker yawSpinBoxBlocker(ui->yawSpinBox);
 
-    ui->azimuthSlider->setValue(static_cast<int>(azimuth));
-    ui->elevationSlider->setValue(static_cast<int>(elevation));
+    ui->rollSlider->setValue(static_cast<int>(roll));
+    ui->rollSpinBox->setValue(static_cast<int>(roll));
+    ui->pitchSlider->setValue(static_cast<int>(pitch));
+    ui->pitchSpinBox->setValue(static_cast<int>(pitch));
+    ui->yawSlider->setValue(static_cast<int>(yaw));
+    ui->yawSpinBox->setValue(static_cast<int>(yaw));
 }
 
-void MainWindow::onAzimuthChanged(int value)
+void MainWindow::onRollChanged(int value)
 {
-    ui->sceneWidget->setCameraAzimuth(value);
+    ui->sceneWidget->setCameraRoll(value);
 }
 
-void MainWindow::onElevationChanged(int value)
+void MainWindow::onPitchChanged(int value)
 {
-    ui->sceneWidget->setCameraElevation(value);
+    ui->sceneWidget->setCameraPitch(value);
 }
 
-void MainWindow::onCameraOrientationChanged(double azimuth, double elevation)
+void MainWindow::onYawChanged(int value)
+{
+    ui->sceneWidget->setCameraYaw(value);
+}
+
+void MainWindow::onCameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw)
 {
     // Block signals to avoid circular updates
-    QSignalBlocker azimuthBlocker(ui->azimuthSlider);
-    QSignalBlocker elevationBlocker(ui->elevationSlider);
-    QSignalBlocker azimuthSpinBoxBlocker(ui->azimuthSpinBox);
-    QSignalBlocker elevationSpinBoxBlocker(ui->elevationSpinBox);
+    QSignalBlocker rollBlocker(ui->rollSlider);
+    QSignalBlocker pitchBlocker(ui->pitchSlider);
+    QSignalBlocker yawBlocker(ui->yawSlider);
+    QSignalBlocker rollSpinBoxBlocker(ui->rollSpinBox);
+    QSignalBlocker pitchSpinBoxBlocker(ui->pitchSpinBox);
+    QSignalBlocker yawSpinBoxBlocker(ui->yawSpinBox);
 
-    ui->azimuthSlider->setValue(static_cast<int>(azimuth));
-    ui->azimuthSpinBox->setValue(static_cast<int>(azimuth));
-    ui->elevationSlider->setValue(static_cast<int>(elevation));
-    ui->elevationSpinBox->setValue(static_cast<int>(elevation));
+    ui->rollSlider->setValue(static_cast<int>(roll));
+    ui->rollSpinBox->setValue(static_cast<int>(roll));
+    ui->pitchSlider->setValue(static_cast<int>(pitch));
+    ui->pitchSpinBox->setValue(static_cast<int>(pitch));
+    ui->yawSlider->setValue(static_cast<int>(yaw));
+    ui->yawSpinBox->setValue(static_cast<int>(yaw));
 }
 
 // ============================================================================
