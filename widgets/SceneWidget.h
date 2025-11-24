@@ -419,6 +419,12 @@ protected:
     bool isWorldPositionInGrid(const double worldPos[3]) const;
 
 protected:
+    /** @brief Setup CustomInteractorStyle with wait cursor callbacks.
+     * 
+     * This helper method creates a CustomInteractorStyle and configures it to show
+     * a wait cursor during zoom/pan operations. Used in both 2D and 3D view modes. */
+    void setupInteractorStyleWithWaitCursor();
+
     /** @brief Draw VTK visualization with optional 3D substate support (initial rendering).
      * 
      * This helper method handles both 2D and 3D visualization based on activeSubstateFor3D.

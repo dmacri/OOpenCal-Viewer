@@ -2,6 +2,7 @@
  * @brief Implementation of CustomInteractorStyle for cursor-based zoom. */
 
 #include "CustomInteractorStyle.h"
+#include "utilities/WaitCursorGuard.h"
 #include <vtkCamera.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkRenderWindow.h>
@@ -13,13 +14,18 @@
 
 vtkStandardNewMacro(CustomInteractorStyle);
 
+
 void CustomInteractorStyle::OnMouseWheelForward()
 {
+    WaitCursorGuard waitCursor("Zooming in...");
+    
     ZoomTowardsCursor(0.9);  // Zoom in by 10%
 }
 
 void CustomInteractorStyle::OnMouseWheelBackward()
 {
+    WaitCursorGuard waitCursor("Zooming out...");
+    
     ZoomTowardsCursor(1.1);  // Zoom out by 10%
 }
 
@@ -155,6 +161,9 @@ void CustomInteractorStyle::OnLeftButtonDown()
         const int* pos = this->Interactor->GetEventPosition();
         m_lastMouseX = pos[0];
         m_lastMouseY = pos[1];
+        
+        // Create wait cursor guard for panning (persists until OnLeftButtonUp)
+        WaitCursorGuard::changeIcon(/*waitingIcon=*/true);
     }
     else
     {
@@ -168,6 +177,8 @@ void CustomInteractorStyle::OnLeftButtonUp()
     if (m_isPanning)
     {
         m_isPanning = false;
+        
+        WaitCursorGuard::changeIcon(/*waitingIcon=*/false);
     }
     else
     {

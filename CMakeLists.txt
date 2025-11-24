@@ -134,6 +134,7 @@ list(APPEND Sources
     utilities/CommandLineParser.cpp
     utilities/ModelLoader.cpp
     utilities/CppModuleBuilder.cpp
+    utilities/WaitCursorGuard.cpp
 )
 file(GLOB Resources
     LIST_DIRECTORIES false
@@ -231,6 +232,25 @@ endif()
 if (ENABLE_SANITIZERS)
     enable_project_sanitizers(${PROJECT_NAME})
 endif()
+
+# ============================================
+# Project root definition for the viewer
+# Adds compile definition OOPENCAL_VIEWER_ROOT
+# Default = current project source directory
+# Can be overridden by: -DOOPENCAL_VIEWER_ROOT=/custom/path
+# ============================================
+set(OOPENCAL_VIEWER_ROOT "${CMAKE_SOURCE_DIR}" CACHE PATH
+    "Path to the OOpenCAL-Viewer project root directory")
+
+# Resolve to absolute path
+get_filename_component(OOPENCAL_VIEWER_ROOT_ABS "${OOPENCAL_VIEWER_ROOT}" ABSOLUTE)
+
+message(STATUS "Using OOPENCAL_VIEWER_ROOT: ${OOPENCAL_VIEWER_ROOT_ABS}")
+
+# Export define to C++ code
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    OOPENCAL_VIEWER_ROOT="${OOPENCAL_VIEWER_ROOT_ABS}"
+)
 
 # ============================================
 # OOpenCAL include directory (optional)

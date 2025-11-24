@@ -19,6 +19,7 @@
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "utilities/WaitCursorGuard.h"
 
 #include "config/Config.h"
 #include "config/ConfigConstants.h"
@@ -361,6 +362,9 @@ void MainWindow::connectSliders()
     connect(ui->yawSlider, &QSlider::valueChanged, this, &MainWindow::onYawChanged);
     connect(ui->yawSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), ui->yawSlider, &QSlider::setValue);
     connect(ui->yawSlider, &QSlider::valueChanged, ui->yawSpinBox, &QSpinBox::setValue);
+
+    // Reset camera button
+    connect(ui->resetCameraButton, &QPushButton::clicked, this, &MainWindow::onResetCameraRequested);
 
     // Update sliders when camera changes (e.g., via mouse rotation in 3D mode)
     connect(ui->sceneWidget, &SceneWidget::cameraOrientationChanged, this, &MainWindow::onCameraOrientationChanged);
@@ -1128,6 +1132,9 @@ void MainWindow::onLoadModelFromDirectoryRequested()
 
 void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
 {
+    // Show wait cursor during model loading
+    WaitCursorGuard waitCursor("Loading model from directory...");
+    
     // Enable silent mode temporarily to suppress dialogs during loading
     const bool previousSilentMode = isSilentModeEnabled();
     setSilentMode(true);
@@ -1250,7 +1257,7 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
             tr("An error occurred while loading the model:\n%1").arg(e.what()));
     }
 
-    // Restore silent mode
+    // Restore silent mode (cursor restored automatically by WaitCursorGuard destructor)
     setSilentMode(previousSilentMode);
 }
 
@@ -1381,6 +1388,31 @@ void MainWindow::onPitchChanged(int value)
 void MainWindow::onYawChanged(int value)
 {
     ui->sceneWidget->setCameraYaw(value);
+}
+
+void MainWindow::onResetCameraRequested()
+{
+    // Reset all camera angles to initial state
+    ui->sceneWidget->setCameraAzimuth(0);
+    ui->sceneWidget->setCameraElevation(0);
+    ui->sceneWidget->setCameraRoll(0);
+    ui->sceneWidget->setCameraPitch(0);
+    ui->sceneWidget->setCameraYaw(0);
+    
+    // Reset all sliders to 0
+    QSignalBlocker rollBlocker(ui->rollSlider);
+    QSignalBlocker pitchBlocker(ui->pitchSlider);
+    QSignalBlocker yawBlocker(ui->yawSlider);
+    QSignalBlocker rollSpinBoxBlocker(ui->rollSpinBox);
+    QSignalBlocker pitchSpinBoxBlocker(ui->pitchSpinBox);
+    QSignalBlocker yawSpinBoxBlocker(ui->yawSpinBox);
+    
+    ui->rollSlider->setValue(0);
+    ui->rollSpinBox->setValue(0);
+    ui->pitchSlider->setValue(0);
+    ui->pitchSpinBox->setValue(0);
+    ui->yawSlider->setValue(0);
+    ui->yawSpinBox->setValue(0);
 }
 
 void MainWindow::onCameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw)
@@ -2154,6 +2186,9 @@ void MainWindow::onRecentDirectoryTriggered()
 
 void MainWindow::onUse3rdDimensionRequested(const std::string& fieldName)
 {
+    // Show wait cursor during view mode change
+    WaitCursorGuard waitCursor("Switching to 3D substate visualization...");
+
     // Store the active substate for 3D visualization in MainWindow
     activeSubstateFor3D = fieldName;
 
@@ -2165,4 +2200,6 @@ void MainWindow::onUse3rdDimensionRequested(const std::string& fieldName)
 
     // Refresh the visualization with the new substate for the current step
     ui->sceneWidget->selectedStepParameter(currentStep);
+    
+    // Cursor restored automatically by WaitCursorGuard destructor
 }

@@ -7,6 +7,7 @@
 #include <string>
 #include <QApplication>
 #include "utilities/directoryConstants.h"
+#include "utilities/WaitCursorGuard.h"
 #include <vtkCallbackCommand.h>
 #include <vtkInteractorStyleImage.h>
 #include <vtkInteractorStyleTrackballCamera.h>
@@ -359,8 +360,7 @@ void SceneWidget::setupVtkScene()
 
     /// Use custom interactor style that zooms towards cursor position.
     /// This provides intuitive zoom behavior when using mouse wheel.
-    vtkNew<CustomInteractorStyle> style;
-    interactor()->SetInteractorStyle(style);
+    setupInteractorStyleWithWaitCursor();
 
     renderWindow()->SetWindowName(QApplication::applicationName().toLocal8Bit().data());
 
@@ -564,8 +564,8 @@ void SceneWidget::cameraCallbackFunction(vtkObject* caller, long unsigned int ev
         if (camera)
         {
             // Get actual camera orientation from VTK
-            double* position = camera->GetPosition();
-            double* focalPoint = camera->GetFocalPoint();
+            const double* position = camera->GetPosition();
+            const double* focalPoint = camera->GetFocalPoint();
 
             // Calculate azimuth and elevation from camera position
             double dx = position[0] - focalPoint[0];
@@ -735,7 +735,7 @@ QString SceneWidget::getNodeAtWorldPosition(const std::array<double, 3>& worldPo
     }
 
     // Get the bounds of the entire scene
-    double* bounds = renderer->ComputeVisiblePropBounds();
+    const double* bounds = renderer->ComputeVisiblePropBounds();
     if (! bounds)
     {
         return {};
@@ -1056,6 +1056,9 @@ void SceneWidget::setViewMode2D()
     if (! interactor())
         return;
 
+    // Show wait cursor during view mode change
+    WaitCursorGuard waitCursor("Switching to 2D mode...");
+
     currentViewMode = ViewMode::Mode2D;
     
     // Disable 3D substate visualization when switching to 2D mode
@@ -1069,8 +1072,7 @@ void SceneWidget::setViewMode2D()
     }
 
     // Use custom interactor style that zooms towards cursor position
-    vtkNew<CustomInteractorStyle> style;
-    interactor()->SetInteractorStyle(style);
+    setupInteractorStyleWithWaitCursor();
 
     // Reset camera angles
     cameraAzimuth = {};
@@ -1112,6 +1114,8 @@ void SceneWidget::setViewMode2D()
         rulerAxisX->SetVisibility(false);
         rulerAxisY->SetVisibility(false);
     }
+    
+    // Cursor restored automatically by WaitCursorGuard destructor
 }
 
 void SceneWidget::setViewMode3D()
@@ -1119,11 +1123,14 @@ void SceneWidget::setViewMode3D()
     if (! interactor())
         return;
 
+    // Show wait cursor during view mode change
+    WaitCursorGuard waitCursor("Switching to 3D mode...");
+
     currentViewMode = ViewMode::Mode3D;
 
-    // Use vtkInteractorStyleTrackballCamera which allows full 3D rotation
-    vtkNew<vtkInteractorStyleTrackballCamera> style;
-    interactor()->SetInteractorStyle(style);
+    // Use CustomInteractorStyle which supports both 3D rotation (TrackballCamera)
+    // and cursor-based zoom with wait cursor feedback
+    setupInteractorStyleWithWaitCursor();
 
     // Show orientation axes in 3D mode
     setAxesWidgetVisible(true);
@@ -1133,6 +1140,8 @@ void SceneWidget::setViewMode3D()
     rulerAxisY->SetVisibility(false);
 
     std::cout << "Switched to 3D view mode" << std::endl;
+    
+    // Cursor restored automatically by WaitCursorGuard destructor
 }
 
 void SceneWidget::setAxesWidgetVisible(bool visible)
@@ -1243,8 +1252,8 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
         return false;
 
     // Get the bounds of the entire scene
-    double* bounds = renderer->ComputeVisiblePropBounds();
-    if (!bounds)
+    const double* bounds = renderer->ComputeVisiblePropBounds();
+    if (! bounds)
         return false;
 
     // Calculate grid dimensions
@@ -1295,3 +1304,8 @@ bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
     return true;  // Inside grid bounds
 }
 
+void SceneWidget::setupInteractorStyleWithWaitCursor()
+{
+    vtkNew<CustomInteractorStyle> style;
+    interactor()->SetInteractorStyle(style);
+}

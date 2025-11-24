@@ -22,12 +22,30 @@ namespace fs = std::filesystem;
 /// Get the directory containing this executable (project root)
 static std::string getProjectRootPath()
 {
-    // Try to get from environment variable first
-    const char* envPath = std::getenv("QT_VTK_VIEWER_ROOT");
-    if (envPath)
-        return envPath;
+    // 1. Prefer environment variable first
+    if (const char* envPath = std::getenv("OOPENCAL_VIEWER_ROOT"))
+    {
+        if (! std::string(envPath).empty())
+        {
+            return envPath;
+        }
+    }
 
-    // Otherwise, return empty - caller should set it
+// 2. Use compile-time define provided by CMake (if exists and directory is valid)
+#ifdef OOPENCAL_VIEWER_ROOT
+    {
+        const std::string viewerPath = OOPENCAL_VIEWER_ROOT;
+
+        // Only use it if it points to an existing directory
+        std::error_code ec; // this is used to use version which does not throw
+        if (std::filesystem::exists(viewerPath, ec) && std::filesystem::is_directory(viewerPath, ec))
+        {
+            return viewerPath;
+        }
+    }
+#endif
+
+    // 3. Fallback: nothing available → return empty string
     return "";
 }
 
@@ -158,7 +176,7 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
 
             // Compile the wrapper to .so (which includes the model header)
             // Empty string for cppStandard triggers auto-detection in CppModuleBuilder
-            auto compilationResult = builder->compileModule(wrapperSource, outputFile, "");
+            auto compilationResult = builder->compileModule(wrapperSource, outputFile);
             if (! compilationResult.success)
             {
                 std::cerr << "Compilation failed with exit code: " << compilationResult.exitCode << std::endl;

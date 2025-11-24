@@ -176,6 +176,16 @@
         </widget>
        </item>
        <item>
+        <widget class="QPushButton" name="resetCameraButton">
+         <property name="toolTip">
+          <string>Reset camera to initial position and orientation</string>
+         </property>
+         <property name="text">
+          <string>Reset Camera</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="camera3DHorizontalSpacer">
          <property name="orientation">
           <enum>Qt::Orientation::Horizontal</enum>

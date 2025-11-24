@@ -80,6 +80,7 @@ private slots: // menu actions
     void onRollChanged(int value);
     void onPitchChanged(int value);
     void onYawChanged(int value);
+    void onResetCameraRequested();
     void onCameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw);
     void syncCameraSliders();
 

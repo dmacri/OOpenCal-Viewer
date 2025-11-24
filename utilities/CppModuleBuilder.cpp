@@ -219,6 +219,7 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
     // Add Qt-VTK-viewer project include paths if available
     if (! projectRootPath.empty())
     {
+        std::cout << "Project root path: " << projectRootPath << std::endl;
         cmd << " -I\"" << projectRootPath << "\"";
         cmd << " -I\"" << projectRootPath << "/visualiserProxy\"";
         cmd << " -I\"" << projectRootPath << "/config\"";
