@@ -117,6 +117,16 @@ public:
     /// @param visible If true, shows grid lines; if false, hides them
     void setGridLinesVisible(bool visible);
 
+    /// @brief Show or hide flat scene background in 3D mode
+    /// @param visible If true, shows flat background; if false, hides it
+    void setFlatSceneBackgroundVisible(bool visible);
+
+    /// @brief Get the current flat scene background visibility state
+    bool getFlatSceneBackgroundVisible() const
+    {
+        return flatSceneBackgroundVisible;
+    }
+
     /// @brief Get the current ViewMode (2D or 3D)
     ViewMode getViewMode() const
     {
@@ -198,6 +208,14 @@ public:
     /// 
     /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to disable
     void setActiveSubstateFor3D(const std::string& fieldName);
+
+    /// @brief Initialize and draw 3D substate visualization for the current step.
+    /// 
+    /// This method should be called when activating 3D substate visualization to initialize
+    /// the scene with the quad mesh surface. Subsequent step updates will use refresh instead.
+    /// 
+    /// @note Call this after setActiveSubstateFor3D() to actually render the visualization
+    void initializeAndDraw3DSubstateVisualization();
 
     /** @brief Callback function for VTK keypress events.
      *  It handles arrow_up and arrow_down keys pressed and changes view of the widget.
@@ -343,6 +361,13 @@ protected:
      * whenever the grid color setting changes. */
     void refreshGridColorFromSettings();
 
+    /** @brief Apply grid lines visibility and semi-transparency settings.
+     *
+     * This helper method sets the grid lines visibility state and applies
+     * semi-transparency (50% opacity) to the grid lines actor.
+     * Should be called after buildLoadBalanceLine() to ensure proper appearance. */
+    void applyGridLinesSettings();
+
     /** @brief Connects the VTK keyboard callback to the interactor.
      *
      * This method registers a key press observer on the VTK interactor associated
@@ -465,8 +490,14 @@ protected:
     /// @brief Current grid lines visibility state
     bool gridLinesVisible = true;
 
+    /// @brief Flat scene background visibility state (shown in 3D mode)
+    bool flatSceneBackgroundVisible = true;
+
     /// @brief Name of the substate field currently used for 3D visualization (empty if none)
     std::string activeSubstateFor3D;
+
+    /// @brief Flag to use quad mesh surface for 3D substate visualization instead of height bars
+    bool useQuadMeshFor3DSubstate = true;
 
     /// @brief Current camera azimuth angle (cached to avoid recalculation)
     double cameraAzimuth{};
@@ -493,6 +524,10 @@ protected:
      *  The grid provides information about what part was calculated by which node
      *  @note: The type is vtkSmartPointer instead of auto-maintained vtkNew because we need to be able to reset the object */
     vtkSmartPointer<vtkActor> gridActor;
+
+    /** @brief Actor for flat background scene in 3D mode: Renders a flat colored plane at Z=0
+     *  @note: The type is vtkSmartPointer instead of auto-maintained vtkNew because we need to be able to reset the object */
+    vtkSmartPointer<vtkActor> backgroundActor;
 
     /** @brief Actor for load balancing lines: This actor is responsible for rendering the load balancing lines.
      *  @note: The type is vtkSmartPointer instead of auto-maintained vtkNew because we need to be able to reset the object */

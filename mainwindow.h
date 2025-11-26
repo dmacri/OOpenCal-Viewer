@@ -62,6 +62,8 @@ private slots: // menu actions
     void on3DModeRequested();
     void onGridLinesToggled(bool checked);
     void syncGridLinesCheckbox();
+    void onFlatSceneBackgroundToggled(bool checked);
+    void syncFlatSceneBackgroundCheckbox();
 
     // Model submenu
     void onModelSelected();

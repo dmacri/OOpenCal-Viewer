@@ -208,6 +208,7 @@ void MainWindow::connectMenuActions()
     connect(ui->action2DMode, &QAction::triggered, this, &MainWindow::on2DModeRequested);
     connect(ui->action3DMode, &QAction::triggered, this, &MainWindow::on3DModeRequested);
     connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
+    connect(ui->actionFlatSceneBackground, &QAction::triggered, this, &MainWindow::onFlatSceneBackgroundToggled);
 
     // Settings actions
     connect(ui->actionSilentMode, &QAction::toggled, this, &MainWindow::onSilentModeToggled);
@@ -981,6 +982,9 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Synchronize grid lines checkbox with current visibility state
         syncGridLinesCheckbox();
 
+        // Synchronize flat scene background checkbox with current visibility state
+        syncFlatSceneBackgroundCheckbox();
+
         // Update UI with new configuration
         showInputFilePathOnBarLabel(configFileName);
 
@@ -1285,6 +1289,9 @@ void MainWindow::on2DModeRequested()
     ui->action2DMode->setChecked(true);
     ui->action3DMode->setChecked(false);
 
+    // Synchronize flat scene background checkbox (disabled in 2D mode)
+    syncFlatSceneBackgroundCheckbox();
+
     if (! isSilentModeEnabled())
     {
         QMessageBox::information(this,
@@ -1327,6 +1334,9 @@ void MainWindow::on3DModeRequested()
     ui->action3DMode->setChecked(true);
     ui->action2DMode->setChecked(false);
 
+    // Synchronize flat scene background checkbox (enabled in 3D mode)
+    syncFlatSceneBackgroundCheckbox();
+
     if (! isSilentModeEnabled())
     {
         QMessageBox::information(this,
@@ -1345,6 +1355,22 @@ void MainWindow::syncGridLinesCheckbox()
     // Synchronize the checkbox state with the actual grid lines visibility
     QSignalBlocker blocker(ui->actionGridLines);
     ui->actionGridLines->setChecked(ui->sceneWidget->getGridLinesVisible());
+}
+
+void MainWindow::onFlatSceneBackgroundToggled(bool checked)
+{
+    ui->sceneWidget->setFlatSceneBackgroundVisible(checked);
+}
+
+void MainWindow::syncFlatSceneBackgroundCheckbox()
+{
+    // Synchronize the checkbox state with the actual flat scene background visibility
+    QSignalBlocker blocker(ui->actionFlatSceneBackground);
+    ui->actionFlatSceneBackground->setChecked(ui->sceneWidget->getFlatSceneBackgroundVisible());
+    
+    // In 2D mode, disable the checkbox (always show background)
+    const bool is3DMode = (ui->sceneWidget->getViewMode() == ViewMode::Mode3D);
+    ui->actionFlatSceneBackground->setEnabled(is3DMode);
 }
 
 void MainWindow::updateCameraControlsVisibility()
@@ -2198,8 +2224,8 @@ void MainWindow::onUse3rdDimensionRequested(const std::string& fieldName)
     // Switch to 3D mode
     on3DModeRequested();
 
-    // Refresh the visualization with the new substate for the current step
-    ui->sceneWidget->selectedStepParameter(currentStep);
+    // Initialize and draw the 3D substate visualization (this will create the quad mesh)
+    ui->sceneWidget->initializeAndDraw3DSubstateVisualization();
     
     // Cursor restored automatically by WaitCursorGuard destructor
 }

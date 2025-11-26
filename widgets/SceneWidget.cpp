@@ -109,6 +109,7 @@ SceneWidget::SceneWidget(QWidget* parent)
     , settingParameter{ std::make_unique<SettingParameter>() }
     , currentModelName{ sceneWidgetVisualizerProxy->getModelName() }
     , gridActor{ vtkSmartPointer<vtkActor>::New() }
+    , backgroundActor{ vtkSmartPointer<vtkActor>::New() }
     , actorBuildLine{ vtkSmartPointer<vtkActor2D>::New() }
 {
     enableToolTipWhenMouseAboveWidget();
@@ -216,10 +217,14 @@ void SceneWidget::prepareStageWithCurrentNodeConfiguration()
 
 void SceneWidget::drawVisualizationWithOptional3DSubstate()
 {
-    // Remove old actor from renderer to avoid "shadow" artifacts
+    // Remove old actors from renderer to avoid "shadow" artifacts
     if (gridActor && renderer)
     {
         renderer->RemoveActor(gridActor);
+    }
+    if (backgroundActor && renderer)
+    {
+        renderer->RemoveActor(backgroundActor);
     }
     
     // Check if we should use 3D substate visualization
@@ -228,13 +233,37 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
         if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
         {
-            sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY, 
-                                                              settingParameter->numberOfColumnX, 
-                                                              renderer, 
-                                                              gridActor,
-                                                              activeSubstateFor3D,
-                                                              substateInfo.minValue,
-                                                              substateInfo.maxValue);
+            // Draw flat background scene if enabled
+            if (flatSceneBackgroundVisible)
+            {
+                sceneWidgetVisualizerProxy->drawFlatSceneBackground(settingParameter->numberOfRowsY,
+                                                                    settingParameter->numberOfColumnX,
+                                                                    renderer,
+                                                                    backgroundActor);
+            }
+
+            // Use quad mesh surface for better 3D visualization
+            if (useQuadMeshFor3DSubstate)
+            {
+                sceneWidgetVisualizerProxy->drawWithVTK3DSubstateQuadMesh(settingParameter->numberOfRowsY, 
+                                                                          settingParameter->numberOfColumnX, 
+                                                                          renderer, 
+                                                                          gridActor,
+                                                                          activeSubstateFor3D,
+                                                                          substateInfo.minValue,
+                                                                          substateInfo.maxValue);
+            }
+            else
+            {
+                // Fallback to old height bar visualization
+                sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY, 
+                                                                  settingParameter->numberOfColumnX, 
+                                                                  renderer, 
+                                                                  gridActor,
+                                                                  activeSubstateFor3D,
+                                                                  substateInfo.minValue,
+                                                                  substateInfo.maxValue);
+            }
             return;
         }
     }
@@ -251,12 +280,34 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
         const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
         if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
         {
-            sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY, 
-                                                                    settingParameter->numberOfColumnX, 
-                                                                    gridActor,
-                                                                    activeSubstateFor3D,
-                                                                    substateInfo.minValue,
-                                                                    substateInfo.maxValue);
+            // Refresh flat background scene if enabled
+            if (flatSceneBackgroundVisible && backgroundActor && backgroundActor->GetMapper())
+            {
+                sceneWidgetVisualizerProxy->refreshFlatSceneBackground(settingParameter->numberOfRowsY,
+                                                                       settingParameter->numberOfColumnX,
+                                                                       backgroundActor);
+            }
+
+            // Use quad mesh surface for better 3D visualization
+            if (useQuadMeshFor3DSubstate)
+            {
+                sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstateQuadMesh(settingParameter->numberOfRowsY, 
+                                                                                settingParameter->numberOfColumnX, 
+                                                                                gridActor,
+                                                                                activeSubstateFor3D,
+                                                                                substateInfo.minValue,
+                                                                                substateInfo.maxValue);
+            }
+            else
+            {
+                // Fallback to old height bar visualization
+                sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY, 
+                                                                        settingParameter->numberOfColumnX, 
+                                                                        gridActor,
+                                                                        activeSubstateFor3D,
+                                                                        substateInfo.minValue,
+                                                                        substateInfo.maxValue);
+            }
             return;
         }
     }
@@ -668,11 +719,8 @@ void SceneWidget::renderVtkScene()
                                                                      renderer,
                                                                      actorBuildLine);
 
-    // Apply the remembered grid lines visibility state
-    if (actorBuildLine)
-    {
-        actorBuildLine->SetVisibility(gridLinesVisible);
-    }
+    // Apply grid lines visibility and semi-transparency settings
+    applyGridLinesSettings();
 
     sceneWidgetVisualizerProxy->getVisualizer().buildStepText(settingParameter->step,
                                                               settingParameter->font_size,
@@ -1001,6 +1049,7 @@ void SceneWidget::clearScene()
 
     // Reset VTK actors
     gridActor = vtkSmartPointer<vtkActor>::New();
+    backgroundActor = vtkSmartPointer<vtkActor>::New();
     actorBuildLine = vtkSmartPointer<vtkActor2D>::New();
 }
 
@@ -1064,10 +1113,20 @@ void SceneWidget::setViewMode2D()
     // Disable 3D substate visualization when switching to 2D mode
     activeSubstateFor3D.clear();
     
+    // In 2D mode, flat scene background is always visible (it's the 2D visualization itself)
+    flatSceneBackgroundVisible = true;
+    
+    // Clear the 3D background actor (remove any 3D artifacts)
+    if (backgroundActor && renderer)
+    {
+        renderer->RemoveActor(backgroundActor);
+        backgroundActor = vtkSmartPointer<vtkActor>::New();
+    }
+    
     // Redraw visualization in 2D mode (without 3D substate)
     if (settingParameter && sceneWidgetVisualizerProxy)
     {
-        drawVisualizationWithOptional3DSubstate();
+        drawVisualizationWithOptional3DSubstate(); // TODO: GB: Should it be called from 2D `SceneWidget::setViewMode2D()`?
         renderWindow()->Render();
     }
 
@@ -1099,6 +1158,20 @@ void SceneWidget::setViewMode2D()
     // Hide orientation axes in 2D mode
     setAxesWidgetVisible(false);
 
+    // Setup 2D ruler axes (bounds will be updated when data is loaded)
+    setup2DRulerAxes();
+
+    // Rebuild grid lines (they were removed when switching to 3D substate)
+    if (settingParameter && sceneWidgetVisualizerProxy && !lines.empty())
+    {
+        sceneWidgetVisualizerProxy->getVisualizer().buildLoadBalanceLine(lines,
+                                                                         settingParameter->numberOfRowsY + 1,
+                                                                         renderer,
+                                                                         actorBuildLine);
+        // Apply grid lines visibility and semi-transparency settings
+        applyGridLinesSettings();
+    }
+
     // Update and show 2D ruler axes only if we have valid data
     double bounds[6];
     renderer->ComputeVisiblePropBounds(bounds);
@@ -1114,6 +1187,8 @@ void SceneWidget::setViewMode2D()
         rulerAxisX->SetVisibility(false);
         rulerAxisY->SetVisibility(false);
     }
+
+    renderWindow()->Render();
     
     // Cursor restored automatically by WaitCursorGuard destructor
 }
@@ -1139,6 +1214,13 @@ void SceneWidget::setViewMode3D()
     rulerAxisX->SetVisibility(false);
     rulerAxisY->SetVisibility(false);
 
+    // Clear any 2D background artifacts before rendering 3D scene
+    if (backgroundActor && renderer)
+    {
+        renderer->RemoveActor(backgroundActor);
+        backgroundActor = vtkSmartPointer<vtkActor>::New();
+    }
+
     std::cout << "Switched to 3D view mode" << std::endl;
     
     // Cursor restored automatically by WaitCursorGuard destructor
@@ -1159,6 +1241,18 @@ void SceneWidget::setGridLinesVisible(bool visible)
     if (actorBuildLine)
     {
         actorBuildLine->SetVisibility(visible);
+        triggerRenderUpdate();
+    }
+}
+
+void SceneWidget::setFlatSceneBackgroundVisible(bool visible)
+{
+    flatSceneBackgroundVisible = visible;
+    
+    // Update background actor visibility
+    if (backgroundActor)
+    {
+        backgroundActor->SetVisibility(visible);
         triggerRenderUpdate();
     }
 }
@@ -1308,4 +1402,39 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
 {
     vtkNew<CustomInteractorStyle> style;
     interactor()->SetInteractorStyle(style);
+}
+
+void SceneWidget::applyGridLinesSettings()
+{
+    // Apply the remembered grid lines visibility state and set semi-transparency
+    if (actorBuildLine)
+    {
+        actorBuildLine->SetVisibility(gridLinesVisible);
+        // Set grid lines to semi-transparent (50% opacity)
+        actorBuildLine->GetProperty()->SetOpacity(0.5);
+    }
+}
+
+void SceneWidget::initializeAndDraw3DSubstateVisualization()
+{
+    // Read the current step data from files
+    lines.resize(settingParameter->numberOfLines);
+    sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+
+    // Draw the 3D substate visualization (initializes the scene with quad mesh)
+    drawVisualizationWithOptional3DSubstate();
+
+    // Update load balancing lines if we have any
+    if (settingParameter->numberOfLines > 0)
+    {
+        sceneWidgetVisualizerProxy->getVisualizer().refreshBuildLoadBalanceLine(lines,
+                                                                                settingParameter->numberOfRowsY + 1,
+                                                                                actorBuildLine);
+    }
+
+    // Update step number display
+    sceneWidgetVisualizerProxy->getVisualizer().buildStepLine(settingParameter->step, singleLineTextStep);
+
+    // Trigger render update
+    triggerRenderUpdate();
 }
