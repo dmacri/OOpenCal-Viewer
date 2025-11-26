@@ -496,9 +496,6 @@ protected:
     /// @brief Name of the substate field currently used for 3D visualization (empty if none)
     std::string activeSubstateFor3D;
 
-    /// @brief Flag to use quad mesh surface for 3D substate visualization instead of height bars
-    bool useQuadMeshFor3DSubstate = true;
-
     /// @brief Current camera azimuth angle (cached to avoid recalculation)
     double cameraAzimuth{};
 

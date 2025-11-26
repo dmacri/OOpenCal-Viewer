@@ -233,6 +233,13 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
         if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
         {
+            // Clear old background actor to remove any 2D artifacts
+            if (backgroundActor && renderer)
+            {
+                renderer->RemoveActor(backgroundActor);
+                backgroundActor = vtkSmartPointer<vtkActor>::New();
+            }
+
             // Draw flat background scene if enabled
             if (flatSceneBackgroundVisible)
             {
@@ -242,28 +249,14 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                                     backgroundActor);
             }
 
-            // Use quad mesh surface for better 3D visualization
-            if (useQuadMeshFor3DSubstate)
-            {
-                sceneWidgetVisualizerProxy->drawWithVTK3DSubstateQuadMesh(settingParameter->numberOfRowsY, 
-                                                                          settingParameter->numberOfColumnX, 
-                                                                          renderer, 
-                                                                          gridActor,
-                                                                          activeSubstateFor3D,
-                                                                          substateInfo.minValue,
-                                                                          substateInfo.maxValue);
-            }
-            else
-            {
-                // Fallback to old height bar visualization
-                sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY, 
-                                                                  settingParameter->numberOfColumnX, 
-                                                                  renderer, 
-                                                                  gridActor,
-                                                                  activeSubstateFor3D,
-                                                                  substateInfo.minValue,
-                                                                  substateInfo.maxValue);
-            }
+            sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY,
+                                                              settingParameter->numberOfColumnX,
+                                                              renderer,
+                                                              gridActor,
+                                                              activeSubstateFor3D,
+                                                              substateInfo.minValue,
+                                                              substateInfo.maxValue);
+
             return;
         }
     }
@@ -288,26 +281,12 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                        backgroundActor);
             }
 
-            // Use quad mesh surface for better 3D visualization
-            if (useQuadMeshFor3DSubstate)
-            {
-                sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstateQuadMesh(settingParameter->numberOfRowsY, 
-                                                                                settingParameter->numberOfColumnX, 
-                                                                                gridActor,
-                                                                                activeSubstateFor3D,
-                                                                                substateInfo.minValue,
-                                                                                substateInfo.maxValue);
-            }
-            else
-            {
-                // Fallback to old height bar visualization
-                sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY, 
-                                                                        settingParameter->numberOfColumnX, 
-                                                                        gridActor,
-                                                                        activeSubstateFor3D,
-                                                                        substateInfo.minValue,
-                                                                        substateInfo.maxValue);
-            }
+            sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY,
+                                                                    settingParameter->numberOfColumnX,
+                                                                    gridActor,
+                                                                    activeSubstateFor3D,
+                                                                    substateInfo.minValue,
+                                                                    substateInfo.maxValue);
             return;
         }
     }
