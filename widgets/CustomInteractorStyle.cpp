@@ -17,16 +17,16 @@ vtkStandardNewMacro(CustomInteractorStyle);
 
 void CustomInteractorStyle::OnMouseWheelForward()
 {
-    WaitCursorGuard waitCursor("Zooming in...");
+    WaitCursorGuard waitCursor("Zooming out...");
     
-    ZoomTowardsCursor(0.9);  // Zoom in by 10%
+    ZoomTowardsCursor(1.1);  // Zoom out by 10%
 }
 
 void CustomInteractorStyle::OnMouseWheelBackward()
 {
-    WaitCursorGuard waitCursor("Zooming out...");
+    WaitCursorGuard waitCursor("Zooming in...");
     
-    ZoomTowardsCursor(1.1);  // Zoom out by 10%
+    ZoomTowardsCursor(0.9);  // Zoom in by 10%
 }
 
 void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)

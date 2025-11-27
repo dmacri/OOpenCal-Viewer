@@ -10,6 +10,7 @@
 #include <QEvent>
 #include <QPushButton>
 #include <QColorDialog>
+#include <QCheckBox>
 #include "SubstateDisplayWidget.h"
 #include "ui_SubstateDisplayWidget.h"
 
@@ -74,6 +75,11 @@ void SubstateDisplayWidget::connectSignals()
             this, &SubstateDisplayWidget::updateButtonState);
     connect(ui->maxSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
             this, &SubstateDisplayWidget::updateButtonState);
+
+    // Connect noValue changes
+    connect(ui->noValueCheckBox, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onNoValueCheckBoxChanged);
+    connect(ui->noValueDoubleSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &SubstateDisplayWidget::onNoValueSpinBoxChanged);
 
     // Install event filters on spinboxes to detect focus out
     ui->minSpinBox->installEventFilter(this);
@@ -286,11 +292,10 @@ void SubstateDisplayWidget::contextMenuEvent(QContextMenuEvent* event)
     QMenu menu;
     
     // Add calculation actions with icons
+    // Note: "Calculate minimum > 0" and "Calculate maximum and minimum > 0" are removed
+    // Instead, when noValue is enabled, the calculate functions will skip noValue automatically
     auto calcMinAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate minimum");
     connect(calcMinAction, &QAction::triggered, this, &SubstateDisplayWidget::onCalculateMinimum);
-    
-    auto calcMinGtZeroAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate minimum > 0");
-    connect(calcMinGtZeroAction, &QAction::triggered, this, &SubstateDisplayWidget::onCalculateMinimumGreaterThanZero);
     
     menu.addSeparator();
     
@@ -299,8 +304,13 @@ void SubstateDisplayWidget::contextMenuEvent(QContextMenuEvent* event)
 
     menu.addSeparator();
 
-    auto calcMaxAndMinGtZeroAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate maximum and minimum > 0");
-    connect(calcMaxAndMinGtZeroAction, &QAction::triggered, this, &SubstateDisplayWidget::onCalculateMinimumGreaterThanZeroAndMaximum);
+    // Show "Calculate maximum and minimum"
+    auto calcMaxAndMinAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate maximum and minimum");
+    connect(calcMaxAndMinAction, &QAction::triggered, this, [this]() {
+        emit calculateMinimumRequested(fieldName());
+        emit calculateMaximumRequested(fieldName());
+        emit visualizationRefreshRequested();
+    });
     
     // Show menu at cursor position
     menu.exec(event->globalPos());
@@ -425,4 +435,51 @@ void SubstateDisplayWidget::setActive(bool active)
         setStyleSheet("");
         setAutoFillBackground(false);
     }
+}
+
+double SubstateDisplayWidget::getNoValue() const
+{
+    const double value = ui->noValueDoubleSpinBox->value();
+    // Return NaN if value is the "empty" sentinel (-1e9)
+    if (value == emptyValue)
+        return std::numeric_limits<double>::quiet_NaN();
+    return value;
+}
+
+void SubstateDisplayWidget::setNoValue(double value)
+{
+    if (std::isnan(value))
+        ui->noValueDoubleSpinBox->setValue(emptyValue);  // Empty state
+    else
+        ui->noValueDoubleSpinBox->setValue(value);
+}
+
+bool SubstateDisplayWidget::isNoValueEnabled() const
+{
+    return ui->noValueCheckBox->isChecked();
+}
+
+void SubstateDisplayWidget::setNoValueEnabled(bool enabled)
+{
+    ui->noValueCheckBox->setChecked(enabled);
+    ui->noValueDoubleSpinBox->setEnabled(enabled);
+}
+
+void SubstateDisplayWidget::onNoValueSpinBoxChanged()
+{
+    // Enable spinbox only if checkbox is checked
+    if (ui->noValueCheckBox->isChecked())
+    {
+        emit noValueChanged(fieldName(), getNoValue(), true);
+        emit visualizationRefreshRequested();
+    }
+}
+
+void SubstateDisplayWidget::onNoValueCheckBoxChanged()
+{
+    // Enable/disable spinbox based on checkbox state
+    ui->noValueDoubleSpinBox->setEnabled(ui->noValueCheckBox->isChecked());
+    
+    emit noValueChanged(fieldName(), getNoValue(), ui->noValueCheckBox->isChecked());
+    emit visualizationRefreshRequested();
 }

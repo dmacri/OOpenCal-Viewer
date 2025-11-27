@@ -31,7 +31,7 @@ SubstatesDockWidget::SubstatesDockWidget(QWidget* parent)
 {
     // Initialize will be called after UI setup in MainWindow
     // Set initial size - narrower for two-column layout
-    setMinimumWidth(240);
+    setMinimumWidth(285);
 }
 
 void SubstatesDockWidget::initializeFromUI()
@@ -78,6 +78,9 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
             widget->setFormat(it->second.format);
             widget->setMinColor(it->second.minColor);
             widget->setMaxColor(it->second.maxColor);
+            widget->setNoValue(it->second.noValue);
+            // Restore noValue enabled state from saved configuration
+            widget->setNoValueEnabled(it->second.noValueEnabled);
         }
 
         // Connect signals
@@ -95,6 +98,8 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
                 this, &SubstatesDockWidget::onCalculateMaximumRequested);
         connect(widget, &SubstateDisplayWidget::colorsChanged,
                 this, &SubstatesDockWidget::onColorsChanged);
+        connect(widget, QOverload<const std::string&, double, bool>::of(&SubstateDisplayWidget::noValueChanged),
+                this, &SubstatesDockWidget::onNoValueChanged);
         connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested,
                 this, &SubstatesDockWidget::onVisualizationRefreshRequested);
 
@@ -219,6 +224,16 @@ void SubstatesDockWidget::onCalculateMinimumRequested(const std::string& fieldNa
     double minValue = std::numeric_limits<double>::max();
     bool found = false;
 
+    // Get noValue if enabled
+    double noValue = std::numeric_limits<double>::quiet_NaN();
+    bool noValueEnabled = false;
+    auto substateIt = m_currentSettingParameter->substateInfo.find(fieldName);
+    if (substateIt != m_currentSettingParameter->substateInfo.end())
+    {
+        noValue = substateIt->second.noValue;
+        noValueEnabled = substateIt->second.noValueEnabled;
+    }
+
     // Iterate through all cells in current step
     for (int row = 0; row < m_currentSettingParameter->numberOfRowsY; ++row)
     {
@@ -228,6 +243,11 @@ void SubstatesDockWidget::onCalculateMinimumRequested(const std::string& fieldNa
             {
                 std::string cellValueStr = m_currentVisualizer->getCellStringEncoding(row, col, fieldName.c_str());
                 double cellValue = std::stod(cellValueStr);
+                
+                // Skip noValue if it's enabled
+                if (noValueEnabled && !std::isnan(noValue) && cellValue == noValue)
+                    continue;
+                
                 minValue = std::min(minValue, cellValue);
                 found = true;
             }
@@ -298,6 +318,16 @@ void SubstatesDockWidget::onCalculateMaximumRequested(const std::string& fieldNa
     double maxValue = std::numeric_limits<double>::lowest();
     bool found = false;
 
+    // Get noValue if enabled
+    double noValue = std::numeric_limits<double>::quiet_NaN();
+    bool noValueEnabled = false;
+    auto substateIt = m_currentSettingParameter->substateInfo.find(fieldName);
+    if (substateIt != m_currentSettingParameter->substateInfo.end())
+    {
+        noValue = substateIt->second.noValue;
+        noValueEnabled = substateIt->second.noValueEnabled;
+    }
+
     // Iterate through all cells in current step
     for (int row = 0; row < m_currentSettingParameter->numberOfRowsY; ++row)
     {
@@ -307,6 +337,11 @@ void SubstatesDockWidget::onCalculateMaximumRequested(const std::string& fieldNa
             {
                 std::string cellValueStr = m_currentVisualizer->getCellStringEncoding(row, col, fieldName.c_str());
                 double cellValue = std::stod(cellValueStr);
+                
+                // Skip noValue if it's enabled
+                if (noValueEnabled && !std::isnan(noValue) && cellValue == noValue)
+                    continue;
+                
                 maxValue = std::max(maxValue, cellValue);
                 found = true;
             }
@@ -369,6 +404,20 @@ void SubstatesDockWidget::setActiveSubstate(const std::string& fieldName)
         if (it != m_substateWidgets.end())
         {
             it->second->setActive(true);
+        }
+    }
+}
+
+void SubstatesDockWidget::onNoValueChanged(const std::string& fieldName, double noValue, bool isEnabled)
+{
+    // Update substateInfo with new noValue and enabled state
+    if (m_currentSettingParameter)
+    {
+        auto it = m_currentSettingParameter->substateInfo.find(fieldName);
+        if (it != m_currentSettingParameter->substateInfo.end())
+        {
+            it->second.noValue = noValue;
+            it->second.noValueEnabled = isEnabled;
         }
     }
 }

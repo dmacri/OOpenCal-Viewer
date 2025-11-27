@@ -127,6 +127,15 @@ private slots:
      * Refreshes the visualization when colors, min/max values, or other settings change. */
     void onVisualizationRefreshRequested();
 
+    /** @brief Handle noValue changes from SubstateDisplayWidget.
+     * 
+     * Updates the substateInfo in SettingParameter when user changes noValue.
+     * 
+     * @param fieldName The name of the field
+     * @param noValue The new noValue (or NaN if not set)
+     * @param isEnabled True if noValue checkbox is checked */
+    void onNoValueChanged(const std::string& fieldName, double noValue, bool isEnabled);
+
 private:
     /** @brief Clear all substate widgets. */
     void clearWidgets();
