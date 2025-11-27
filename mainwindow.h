@@ -87,6 +87,8 @@ private slots: // menu actions
     void syncCameraSliders();
 
     void onUse3rdDimensionRequested(const std::string& fieldName);
+    void onUse2DRequested(const std::string& fieldName);
+    void onDeactivateRequested();
 
     void onPlayButtonClicked();
     void onStopButtonClicked();
@@ -146,6 +148,9 @@ private:
     void recreateModelMenuActions();
     void createViewModeActionGroup();
     void updateCameraControlsVisibility();
+
+    /// @brief Clear all active substates (2D and 3D)
+    void clearActiveSubstates();
 
     // Recent files management
     void addToRecentFiles(const QString &filePath);

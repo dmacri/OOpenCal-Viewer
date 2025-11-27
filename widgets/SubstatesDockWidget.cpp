@@ -4,6 +4,7 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QFrame>
+#include <QPushButton>
 #include "SubstatesDockWidget.h"
 #include "SubstateDisplayWidget.h"
 #include "visualiser/SettingParameter.h"
@@ -26,6 +27,7 @@ SubstatesDockWidget::SubstatesDockWidget(QWidget* parent)
     , m_scrollArea(nullptr)
     , m_containerWidget(nullptr)
     , m_containerLayout(nullptr)
+    , m_deactivateButton(nullptr)
 {
     // Initialize will be called after UI setup in MainWindow
     // Set initial size - narrower for two-column layout
@@ -74,11 +76,15 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
             widget->setMinValue(it->second.minValue);
             widget->setMaxValue(it->second.maxValue);
             widget->setFormat(it->second.format);
+            widget->setMinColor(it->second.minColor);
+            widget->setMaxColor(it->second.maxColor);
         }
 
         // Connect signals
         connect(widget, &SubstateDisplayWidget::use3rdDimensionRequested,
                 this, &SubstatesDockWidget::use3rdDimensionRequested);
+        connect(widget, &SubstateDisplayWidget::use2DRequested,
+                this, &SubstatesDockWidget::use2DRequested);
         connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged),
                 this, &SubstatesDockWidget::onMinMaxValuesChanged);
         connect(widget, &SubstateDisplayWidget::calculateMinimumRequested,
@@ -87,6 +93,10 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
                 this, &SubstatesDockWidget::onCalculateMinimumGreaterThanZeroRequested);
         connect(widget, &SubstateDisplayWidget::calculateMaximumRequested,
                 this, &SubstatesDockWidget::onCalculateMaximumRequested);
+        connect(widget, &SubstateDisplayWidget::colorsChanged,
+                this, &SubstatesDockWidget::onColorsChanged);
+        connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested,
+                this, &SubstatesDockWidget::onVisualizationRefreshRequested);
 
         m_containerLayout->addWidget(widget);
         m_substateWidgets[field] = widget;
@@ -100,6 +110,16 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
 
     // Add stretch at the end to push widgets to the top
     m_containerLayout->addStretch();
+    
+    // Add deactivate button at the bottom (only create once)
+    if (!m_deactivateButton)
+    {
+        m_deactivateButton = new QPushButton("Deactivate Substate");
+        m_deactivateButton->setMaximumHeight(24);
+        m_deactivateButton->setStyleSheet("QPushButton { font-size: 9pt; padding: 3px; background-color: #f8e8e8; }");
+        connect(m_deactivateButton, &QPushButton::clicked, this, &SubstatesDockWidget::onDeactivateClicked);
+    }
+    m_containerLayout->addWidget(m_deactivateButton);
 }
 
 void SubstatesDockWidget::updateCellValues(SettingParameter* settingParameter, int row, int col, class ISceneWidgetVisualizer* visualizer)
@@ -155,9 +175,17 @@ void SubstatesDockWidget::saveParametersToSettings(SettingParameter* settingPara
 
 void SubstatesDockWidget::clearWidgets()
 {
-    // Remove all widgets from layout except header (first 2 items: label + separator)
-    // Start from index 2 to preserve header
-    while (m_containerLayout->count() > 2)
+    // Remove all widgets from layout except:
+    // - First 2 items: label + separator (header)
+    // - Last 2 items: stretch + deactivate button (footer)
+    // We need to count total items and remove only the middle ones (substates)
+    
+    // Count total items
+    int totalItems = m_containerLayout->count();
+    
+    // Remove items from index 2 to (totalItems - 2)
+    // This preserves header (0-1) and footer (totalItems-2 to totalItems-1)
+    while (m_containerLayout->count() > 4)  // Keep: header (2) + stretch (1) + button (1)
     {
         QLayoutItem* item = m_containerLayout->takeAt(2);
         if (QWidget* widget = item->widget())
@@ -296,6 +324,51 @@ void SubstatesDockWidget::onCalculateMaximumRequested(const std::string& fieldNa
         if (it != m_substateWidgets.end())
         {
             it->second->setMaxValue(maxValue);
+        }
+    }
+}
+
+void SubstatesDockWidget::onDeactivateClicked()
+{
+    emit deactivateRequested();
+}
+
+void SubstatesDockWidget::onColorsChanged(const std::string& fieldName, const std::string& minColor, const std::string& maxColor)
+{
+    // Update the substateInfo in SettingParameter with the new colors
+    if (m_currentSettingParameter)
+    {
+        auto it = m_currentSettingParameter->substateInfo.find(fieldName);
+        if (it != m_currentSettingParameter->substateInfo.end())
+        {
+            it->second.minColor = minColor;
+            it->second.maxColor = maxColor;
+        }
+    }
+}
+
+void SubstatesDockWidget::onVisualizationRefreshRequested()
+{
+    // Emit signal to request visualization refresh
+    // This will be handled by MainWindow/SceneWidget which has access to the gridActor
+    emit visualizationRefreshRequested();
+}
+
+void SubstatesDockWidget::setActiveSubstate(const std::string& fieldName)
+{
+    // Deactivate all widgets first
+    for (auto& [name, widget] : m_substateWidgets)
+    {
+        widget->setActive(false);
+    }
+    
+    // Activate the specified widget if it exists
+    if (!fieldName.empty())
+    {
+        auto it = m_substateWidgets.find(fieldName);
+        if (it != m_substateWidgets.end())
+        {
+            it->second->setActive(true);
         }
     }
 }

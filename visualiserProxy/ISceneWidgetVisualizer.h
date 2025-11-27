@@ -61,10 +61,10 @@ public:
     virtual void readStageStateFromFilesForStep(SettingParameter* sp, Line* lines) = 0;
 
     /// @brief Draw the visualization using VTK.
-    virtual void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor) = 0;
+    virtual void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const struct SubstateInfo* substateInfo = nullptr) = 0;
 
     /// @brief Refresh the VTK windows.
-    virtual void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor) = 0;
+    virtual void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const struct SubstateInfo* substateInfo = nullptr) = 0;
 
     /// @brief Draw the visualization using VTK with 3D substate as quad mesh surface.
     virtual void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue) = 0;

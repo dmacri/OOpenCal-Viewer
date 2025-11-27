@@ -1,7 +1,7 @@
+#include <limits>
 #include "Line.h"
 #include "visualiser/Visualizer.hpp"
-#include "widgets/ColorSettings.h"
-#include <limits>
+#include "widgets/ColorSettings.h"  // ColorSettings
 
 
 namespace
@@ -168,4 +168,77 @@ vtkNew<vtkActor2D> Visualizer::buildStepText(StepIndex step,
     stepLineTextActor->GetPositionCoordinate()->SetValue(0.05, 0.85);
     renderer->AddViewProp(stepLineTextActor);
     return stepLineTextActor;
+}
+
+void Visualizer::drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor)
+{
+    // Validate inputs
+    if (!backgroundActor || !renderer)
+    {
+        return;
+    }
+
+    const auto numberOfPoints = nRows * nCols;
+    vtkNew<vtkDoubleArray> pointValues;
+    pointValues->SetNumberOfTuples(numberOfPoints);
+
+    // Set scalar values - all same value for uniform color
+    for (int row = 0; row < nRows; row++)
+    {
+        for (int col = 0; col < nCols; col++)
+        {
+            int pointIndex = row * nCols + col;
+            pointValues->SetValue(pointIndex, 0);  // All points have same value for uniform color
+        }
+    }
+
+    vtkNew<vtkLookupTable> lut;
+    lut->SetNumberOfTableValues(1);  // Only one color needed
+
+    // Set uniform color for the background plane from settings
+    const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
+    lut->SetTableValue(0, sceneColor.redF(), sceneColor.greenF(), sceneColor.blueF(), 1.0);
+
+    // Create flat plane at Z=0
+    vtkNew<vtkPoints> points;
+    for (int row = 0; row < nRows; row++)
+    {
+        for (int col = 0; col < nCols; col++)
+        {
+            // Z=0 for flat background plane
+            points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/0);
+        }
+    }
+
+    vtkNew<vtkStructuredGrid> structuredGrid;
+    structuredGrid->SetDimensions(nCols, nRows, 1);
+    structuredGrid->SetPoints(points);
+    structuredGrid->GetPointData()->SetScalars(pointValues);
+
+    vtkNew<vtkDataSetMapper> backgroundMapper;
+    backgroundMapper->UpdateDataObject();
+    backgroundMapper->SetInputData(structuredGrid);
+    backgroundMapper->SetLookupTable(lut);
+    backgroundMapper->SetScalarRange(0, 0);  // Single color
+
+    backgroundActor->SetMapper(backgroundMapper);
+    renderer->AddActor(backgroundActor);
+}
+
+void Visualizer::refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor)
+{
+    // Validate input
+    if (! backgroundActor || ! backgroundActor->GetMapper())
+    {
+        return;
+    }
+
+    if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(backgroundActor->GetMapper()->GetLookupTable()))
+    {
+        // Keep uniform color from settings - no need to update from cell data
+        const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
+        lut->SetTableValue(0, sceneColor.redF(), sceneColor.greenF(), sceneColor.blueF(), 1.0);
+        backgroundActor->GetMapper()->SetLookupTable(lut);
+        backgroundActor->GetMapper()->Update();
+    }
 }

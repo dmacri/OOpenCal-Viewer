@@ -191,15 +191,15 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
     // Resize lines vector to match expected number of lines
     lines.resize(settingParameter->numberOfLines);
 
-    // Read stage state from files for the current step
-    sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
-
-    // Refresh VTK visualization with optional 3D substate support
-    refreshVisualizationWithOptional3DSubstate();
-
-    // Update load balancing lines if we have any
-    if (settingParameter->numberOfLines > 0)
+    if (settingParameter && settingParameter->numberOfLines > 0)
     {
+        // Read stage state from files for the current step
+        sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+
+        // Refresh VTK visualization with optional 3D substate support
+        refreshVisualizationWithOptional3DSubstate();
+
+        // Update load balancing lines if we have any
         sceneWidgetVisualizerProxy->getVisualizer().refreshBuildLoadBalanceLine(lines,
                                                                                 settingParameter->numberOfRowsY + 1,
                                                                                 actorBuildLine);
@@ -262,7 +262,12 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     }
     
     // Fallback to regular 2D visualization
-    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor);
+    const SubstateInfo* substateInfo2D = nullptr;
+    if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
+    {
+        substateInfo2D = &settingParameter->substateInfo[activeSubstateFor2D];
+    }
+    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, substateInfo2D);
 }
 
 void SceneWidget::refreshVisualizationWithOptional3DSubstate()
@@ -292,7 +297,12 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
     }
     
     // Fallback to regular 2D visualization
-    sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor);
+    const SubstateInfo* substateInfo2D = nullptr;
+    if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
+    {
+        substateInfo2D = &settingParameter->substateInfo[activeSubstateFor2D];
+    }
+    sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor, substateInfo2D);
 }
 
 void SceneWidget::addVisualizer(const std::string& filename, StepIndex stepNumber)
@@ -551,10 +561,7 @@ void SceneWidget::keypressCallbackFunction(vtkObject* caller, long unsigned int 
         try
         {
             // Load and update visualization using helper method
-            sw->loadAndUpdateVisualizationForCurrentStep();
-
-            // Trigger render update
-            sw->triggerRenderUpdate();
+            sw->refreshVisualization();
         }
         catch (const std::runtime_error& re)
         {
@@ -941,9 +948,7 @@ void SceneWidget::upgradeModelInCentralPanel()
 
     try
     {
-        loadAndUpdateVisualizationForCurrentStep();
-
-        triggerRenderUpdate();
+        refreshVisualization();
         QApplication::processEvents();
     }
     catch (const std::runtime_error& re)
@@ -1239,6 +1244,19 @@ void SceneWidget::setFlatSceneBackgroundVisible(bool visible)
 void SceneWidget::setActiveSubstateFor3D(const std::string& fieldName)
 {
     activeSubstateFor3D = fieldName;
+}
+
+void SceneWidget::setActiveSubstateFor2D(const std::string& fieldName)
+{
+    activeSubstateFor2D = fieldName;
+    // Refresh visualization to apply the new 2D substate only if settingParameter is initialized
+    refreshVisualization();
+}
+
+void SceneWidget::refreshVisualization()
+{
+    loadAndUpdateVisualizationForCurrentStep();
+    triggerRenderUpdate();
 }
 
 void SceneWidget::setCameraAzimuth(double angle)

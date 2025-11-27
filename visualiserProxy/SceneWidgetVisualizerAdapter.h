@@ -73,14 +73,14 @@ public:
         m_impl.modelReader.readStageStateFromFilesForStep(m_impl.p, sp, lines);
     }
 
-    void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor) override
+    void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const struct SubstateInfo* substateInfo = nullptr) override
     {
-        m_impl.visualiser.drawWithVTK(m_impl.p, nRows, nCols, renderer, gridActor);
+        m_impl.visualiser.drawWithVTK(m_impl.p, nRows, nCols, renderer, gridActor, substateInfo);
     }
 
-    void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor) override
+    void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const struct SubstateInfo* substateInfo = nullptr) override
     {
-        m_impl.visualiser.refreshWindowsVTK(m_impl.p, nRows, nCols, gridActor);
+        m_impl.visualiser.refreshWindowsVTK(m_impl.p, nRows, nCols, gridActor, substateInfo);
     }
 
     void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue) override
@@ -95,12 +95,12 @@ public:
 
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor) override
     {
-        m_impl.visualiser.drawFlatSceneBackground(m_impl.p, nRows, nCols, renderer, backgroundActor);
+        m_impl.visualiser.drawFlatSceneBackground(nRows, nCols, renderer, backgroundActor);
     }
 
     void refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor) override
     {
-        m_impl.visualiser.refreshFlatSceneBackground(m_impl.p, nRows, nCols, backgroundActor);
+        m_impl.visualiser.refreshFlatSceneBackground(nRows, nCols, backgroundActor);
     }
 
     Visualizer& getVisualizer() override

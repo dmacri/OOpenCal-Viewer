@@ -26,6 +26,7 @@ ColorSettingsDialog::ColorSettingsDialog(QWidget* parent)
     connect(ui->btnTextColor, &QPushButton::clicked, this, &ColorSettingsDialog::onTextColorClicked);
     connect(ui->btnGridColor, &QPushButton::clicked, this, &ColorSettingsDialog::onGridColorClicked);
     connect(ui->btnHighlightColor, &QPushButton::clicked, this, &ColorSettingsDialog::onHighlightColorClicked);
+    connect(ui->btnFlatSceneBackgroundColor, &QPushButton::clicked, this, &ColorSettingsDialog::onFlatSceneBackgroundColorClicked);
 
     // Load current settings
     loadSettings();
@@ -69,6 +70,14 @@ void ColorSettingsDialog::onHighlightColorClicked()
     }
 }
 
+void ColorSettingsDialog::onFlatSceneBackgroundColorClicked()
+{
+    if (selectColor(m_flatSceneBackgroundColor, tr("Select Flat Scene Background Color")))
+    {
+        updateColorPreviews();
+    }
+}
+
 void ColorSettingsDialog::onResetColors()
 {
     auto reply = QMessageBox::question(this, 
@@ -82,6 +91,7 @@ void ColorSettingsDialog::onResetColors()
         m_textColor = ColorSettings::DEFAULT_TEXT;
         m_gridColor = ColorSettings::DEFAULT_GRID;
         m_highlightColor = ColorSettings::DEFAULT_HIGHLIGHT;
+        m_flatSceneBackgroundColor = ColorSettings::DEFAULT_FLAT_SCENE_BACKGROUND;
         updateColorPreviews();
     }
 }
@@ -94,6 +104,7 @@ void ColorSettingsDialog::onAccepted()
     settings.setTextColor(m_textColor);
     settings.setGridColor(m_gridColor);
     settings.setHighlightColor(m_highlightColor);
+    settings.setFlatSceneBackgroundColor(m_flatSceneBackgroundColor);
     settings.saveSettings();
 
     accept();
@@ -112,6 +123,7 @@ void ColorSettingsDialog::updateColorPreviews()
     updateColorButton(ui->btnTextColor, m_textColor);
     updateColorButton(ui->btnGridColor, m_gridColor);
     updateColorButton(ui->btnHighlightColor, m_highlightColor);
+    updateColorButton(ui->btnFlatSceneBackgroundColor, m_flatSceneBackgroundColor);
 
     // Update preview text
     QString style = QString("color: %1; background-color: %2;")
@@ -147,6 +159,7 @@ void ColorSettingsDialog::loadSettings()
     m_textColor = settings.textColor();
     m_gridColor = settings.gridColor();
     m_highlightColor = settings.highlightColor();
+    m_flatSceneBackgroundColor = settings.flatSceneBackgroundColor();
 }
 
 void ColorSettingsDialog::saveSettings()
@@ -156,5 +169,6 @@ void ColorSettingsDialog::saveSettings()
     settings.setTextColor(m_textColor);
     settings.setGridColor(m_gridColor);
     settings.setHighlightColor(m_highlightColor);
+    settings.setFlatSceneBackgroundColor(m_flatSceneBackgroundColor);
     settings.saveSettings();
 }

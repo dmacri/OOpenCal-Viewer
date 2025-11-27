@@ -59,11 +59,31 @@ public:
      * @param settingParameter The setting parameter to update */
     void saveParametersToSettings(SettingParameter* settingParameter);
 
+    /** @brief Set active substate widget (highlights it).
+     * 
+     * @param fieldName The name of the field to highlight, or empty to clear all */
+    void setActiveSubstate(const std::string& fieldName);
+
 signals:
     /** @brief Signal emitted when a field is requested to be used as 3rd dimension.
      * 
      * @param fieldName The name of the field */
     void use3rdDimensionRequested(const std::string& fieldName);
+
+    /** @brief Signal emitted when a field is requested to be used as 2D visualization.
+     * 
+     * @param fieldName The name of the field */
+    void use2DRequested(const std::string& fieldName);
+
+    /** @brief Signal emitted when deactivation of substate is requested.
+     * 
+     * Requests to deactivate any active substate (use default colors) */
+    void deactivateRequested();
+
+    /** @brief Signal emitted when visualization needs to be refreshed.
+     * 
+     * Emitted when colors, min/max values, or other visualization settings change. */
+    void visualizationRefreshRequested();
 
 private slots:
     /** @brief Handle min/max value changes from SubstateDisplayWidget.
@@ -90,6 +110,23 @@ private slots:
      * @param fieldName The name of the field */
     void onCalculateMaximumRequested(const std::string& fieldName);
 
+    /** @brief Handle deactivate button click */
+    void onDeactivateClicked();
+
+    /** @brief Handle color changes from SubstateDisplayWidget.
+     * 
+     * Updates the substateInfo in SettingParameter when user changes colors.
+     * 
+     * @param fieldName The name of the field
+     * @param minColor The new minimum color (hex string or empty)
+     * @param maxColor The new maximum color (hex string or empty) */
+    void onColorsChanged(const std::string& fieldName, const std::string& minColor, const std::string& maxColor);
+
+    /** @brief Handle visualization refresh request from SubstateDisplayWidget.
+     * 
+     * Refreshes the visualization when colors, min/max values, or other settings change. */
+    void onVisualizationRefreshRequested();
+
 private:
     /** @brief Clear all substate widgets. */
     void clearWidgets();
@@ -97,6 +134,7 @@ private:
     QScrollArea* m_scrollArea;
     QWidget* m_containerWidget;
     QVBoxLayout* m_containerLayout;
+    class QPushButton* m_deactivateButton;
     std::map<std::string, SubstateDisplayWidget*> m_substateWidgets;
     SettingParameter* m_currentSettingParameter = nullptr;
     class ISceneWidgetVisualizer* m_currentVisualizer = nullptr;

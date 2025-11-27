@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <cmath>
+#include <cstdint>
 #include <vtkActor2D.h>
 #include <vtkCellArray.h>
 #include <vtkCoordinate.h>
@@ -25,10 +27,11 @@
 #include <vtkPolyDataNormals.h>
 #include <vtkCellData.h>
 #include <vtkProperty.h>
-#include <cmath>
 
 #include "utilities/types.h"    // StepIndex
-#include "OOpenCAL/base/Cell.h"  // Color
+#include "OOpenCAL/base/Cell.h" // Color
+#include "visualiser/SettingParameter.h" // SubstateInfo
+#include "widgets/ColorSettings.h" // ColorSettings
 
 class Line;
 
@@ -42,9 +45,9 @@ class Visualizer
 {
 public:
     template<class Matrix>
-    void drawWithVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor);
+    void drawWithVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const SubstateInfo* substateInfo = nullptr);
     template<class Matrix>
-    void refreshWindowsVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor);
+    void refreshWindowsVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const SubstateInfo* substateInfo = nullptr);
 
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
@@ -54,11 +57,9 @@ public:
     void refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue);
 
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
-    template<class Matrix>
-    void drawFlatSceneBackground(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor);
+    void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor);
     /// @brief Refresh flat background plane colors.
-    template<class Matrix>
-    void refreshFlatSceneBackground(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor);
+    void refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor);
 
     void buildLoadBalanceLine(const std::vector<Line>& lines, int nRows, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor2D> actorBuildLine);
     void refreshBuildLoadBalanceLine(const std::vector<Line> &lines, int nRows, vtkActor2D* lineActor);
@@ -67,7 +68,7 @@ public:
 
 private:
     template<class Matrix>
-    void buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p);
+    void buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p, const struct SubstateInfo* substateInfo = nullptr);
 
     /** @brief Build 3D quad mesh surface for 3D substate visualization (healed quad approach).
      * 
@@ -97,7 +98,7 @@ private:
 ////////////////////////////////////////////////////////////////////
 
 template <class Matrix>
-void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor)
+void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const SubstateInfo* substateInfo)
 {
     const auto numberOfPoints = nRows * nCols;
     vtkNew<vtkDoubleArray> pointValues;
@@ -134,7 +135,7 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
     structuredGrid->SetPoints(points);
     structuredGrid->GetPointData()->SetScalars(pointValues);
 
-    buidColor(lut, nCols, nRows, p);
+    buidColor(lut, nCols, nRows, p, substateInfo);
 
     vtkNew<vtkDataSetMapper> gridMapper;
     gridMapper->UpdateDataObject();
@@ -147,11 +148,11 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
 }
 
 template<class Matrix>
-void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor)
+void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const SubstateInfo* substateInfo)
 {
     if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(gridActor->GetMapper()->GetLookupTable()))
     {
-        buidColor(lut, nCols, nRows, p);
+        buidColor(lut, nCols, nRows, p, substateInfo);
         gridActor->GetMapper()->SetLookupTable(lut);
         gridActor->GetMapper()->Update();
     }
@@ -182,19 +183,108 @@ inline double toUnitColor(double channel)
 }
 
 template<class Matrix>
-void Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix &p)
+void Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix &p, const SubstateInfo* substateInfo)
 {
     for (int r = 0; r < nRows; ++r)
     {
         for (int c = 0; c < nCols; ++c)
         {
-            const auto color = p[r][c].outputValue(nullptr);
+            Color color(0, 0, 0, 255);  // Default: opaque black
+            double alpha = 1.0;
+            
+            // If substateInfo with colors is provided, use gradient coloring
+            if (substateInfo && !substateInfo->minColor.empty() && !substateInfo->maxColor.empty())
+            {
+                // Get substate value for this cell
+                const char* fieldNamePtr = substateInfo->name.empty() ? nullptr : substateInfo->name.c_str();
+                std::string cellValue = p[r][c].stringEncoding(fieldNamePtr);
+                
+                try
+                {
+                    double value = std::stod(cellValue);
+                    double minVal = substateInfo->minValue;
+                    double maxVal = substateInfo->maxValue;
+                    
+                    // Check if value is noValue (out of range or equals noValue)
+                    bool isNoValue = false;
+                    if (std::isnan(minVal) || std::isnan(maxVal))
+                    {
+                        // Min/max not set - use default coloring
+                        isNoValue = false;
+                    }
+                    else if (!std::isnan(substateInfo->noValue) && value == substateInfo->noValue)
+                    {
+                        // Value equals noValue
+                        isNoValue = true;
+                    }
+                    else if (value < minVal || value > maxVal)
+                    {
+                        // Value out of range
+                        isNoValue = true;
+                    }
+                    
+                    if (isNoValue)
+                    {
+                        // Use flat scene background color for noValue
+                        const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
+                        color = Color(
+                            static_cast<std::uint8_t>(sceneColor.red()),
+                            static_cast<std::uint8_t>(sceneColor.green()),
+                            static_cast<std::uint8_t>(sceneColor.blue()),
+                            255
+                        );
+                    }
+                    else
+                    {
+                        // Normalize value to [0, 1]
+                        double normalized = (value - minVal) / (maxVal - minVal);
+                        
+                        // Parse min and max colors (hex format: #RRGGBB)
+                        auto parseHexColor = [](const std::string& hex) -> std::tuple<int, int, int> {
+                            if (hex.length() != 7 || hex[0] != '#')
+                                return {0, 0, 0};
+                            int r = std::stoi(hex.substr(1, 2), nullptr, 16);
+                            int g = std::stoi(hex.substr(3, 2), nullptr, 16);
+                            int b = std::stoi(hex.substr(5, 2), nullptr, 16);
+                            return {r, g, b};
+                        };
+                        
+                        auto [minR, minG, minB] = parseHexColor(substateInfo->minColor);
+                        auto [maxR, maxG, maxB] = parseHexColor(substateInfo->maxColor);
+                        
+                        // Interpolate between min and max colors
+                        int r = static_cast<int>(minR + (maxR - minR) * normalized);
+                        int g = static_cast<int>(minG + (maxG - minG) * normalized);
+                        int b = static_cast<int>(minB + (maxB - minB) * normalized);
+                        
+                        color = Color(static_cast<std::uint8_t>(r), static_cast<std::uint8_t>(g), static_cast<std::uint8_t>(b), 255);
+                    }
+                }
+                catch (const std::exception&)
+                {
+                    // Failed to parse value - use flat scene background color
+                    const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
+                    color = Color(
+                        static_cast<std::uint8_t>(sceneColor.red()),
+                        static_cast<std::uint8_t>(sceneColor.green()),
+                        static_cast<std::uint8_t>(sceneColor.blue()),
+                        255
+                    );
+                }
+            }
+            else
+            {
+                // Use default outputValue coloring
+                const char* fieldNamePtr = nullptr;
+                color = p[r][c].outputValue(fieldNamePtr);
+            }
+            
             lut->SetTableValue(
                 (nRows - 1 - r) * nCols + c,
                 toUnitColor(color.getRed()),
                 toUnitColor(color.getGreen()),
                 toUnitColor(color.getBlue()),
-                1.0 // alpha channel – keep as 1.0 for full opacity (optional scaling)
+                alpha
             );
         }
     }
@@ -428,80 +518,5 @@ void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCo
         // Update mapper with new data
         mapper->SetInputData(surfacePolyData);
         mapper->Update();
-    }
-}
-
-// Flat Scene Background Methods
-
-template<class Matrix>
-void Visualizer::drawFlatSceneBackground(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor)
-{
-    // Validate inputs
-    if (!backgroundActor || !renderer)
-    {
-        return;
-    }
-
-    const auto numberOfPoints = nRows * nCols;
-    vtkNew<vtkDoubleArray> pointValues;
-    pointValues->SetNumberOfTuples(numberOfPoints);
-    
-    // Set scalar values - all same value for uniform color
-    for (int row = 0; row < nRows; row++)
-    {
-        for (int col = 0; col < nCols; col++)
-        {
-            int pointIndex = row * nCols + col;
-            pointValues->SetValue(pointIndex, 0);  // All points have same value for uniform color
-        }
-    }
-
-    vtkNew<vtkLookupTable> lut;
-    lut->SetNumberOfTableValues(1);  // Only one color needed
-    
-    // Set uniform light gray color for the background plane
-    lut->SetTableValue(0, 0.8, 0.8, 0.8, 1.0);  // Light gray, fully opaque
-
-    // Create flat plane at Z=0
-    vtkNew<vtkPoints> points;
-    for (int row = 0; row < nRows; row++)
-    {
-        for (int col = 0; col < nCols; col++)
-        {
-            // Z=0 for flat background plane
-            points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/0);
-        }
-    }
-
-    vtkNew<vtkStructuredGrid> structuredGrid;
-    structuredGrid->SetDimensions(nCols, nRows, 1);
-    structuredGrid->SetPoints(points);
-    structuredGrid->GetPointData()->SetScalars(pointValues);
-
-    vtkNew<vtkDataSetMapper> backgroundMapper;
-    backgroundMapper->UpdateDataObject();
-    backgroundMapper->SetInputData(structuredGrid);
-    backgroundMapper->SetLookupTable(lut);
-    backgroundMapper->SetScalarRange(0, 0);  // Single color
-
-    backgroundActor->SetMapper(backgroundMapper);
-    renderer->AddActor(backgroundActor);
-}
-
-template<class Matrix>
-void Visualizer::refreshFlatSceneBackground(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor)
-{
-    // Validate input
-    if (!backgroundActor || !backgroundActor->GetMapper())
-    {
-        return;
-    }
-
-    if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(backgroundActor->GetMapper()->GetLookupTable()))
-    {
-        // Keep uniform light gray color - no need to update from cell data
-        lut->SetTableValue(0, 0.8, 0.8, 0.8, 1.0);  // Light gray, fully opaque
-        backgroundActor->GetMapper()->SetLookupTable(lut);
-        backgroundActor->GetMapper()->Update();
     }
 }

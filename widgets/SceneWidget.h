@@ -209,6 +209,25 @@ public:
     /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to disable
     void setActiveSubstateFor3D(const std::string& fieldName);
 
+    /// @brief Set the active substate field for 2D visualization.
+    /// 
+    /// When a substate is set as active for 2D, the visualization will use that field's values
+    /// to determine the color of each cell in 2D mode via outputValue(fieldName.c_str()).
+    /// 
+    /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to use default
+    void setActiveSubstateFor2D(const std::string& fieldName);
+
+    /// @brief Get the active substate field for 2D visualization.
+    /// 
+    /// @return The name of the active substate field, or empty string if using default
+    std::string getActiveSubstateFor2D() const { return activeSubstateFor2D; }
+
+    /// @brief Refresh the visualization for the current step.
+    /// 
+    /// This method immediately updates the visualization with the current active substate settings.
+    /// It's useful when you want to see changes immediately without waiting for step changes.
+    void refreshVisualization();
+
     /// @brief Initialize and draw 3D substate visualization for the current step.
     /// 
     /// This method should be called when activating 3D substate visualization to initialize
@@ -286,6 +305,12 @@ public slots:
      * have changed. It updates all visual elements in the widget to reflect the
      * current color settings from the ColorSettings singleton. */
     void onColorsReloadRequested();
+
+    /** @brief Refresh VTK visualization with optional 3D substate support (step updates).
+     * 
+     * This slot handles both 2D and 3D visualization based on activeSubstateFor3D.
+     * It's used when updating visualization for current step or when colors/settings change. */
+    void refreshVisualizationWithOptional3DSubstate();
 
 protected:
     /// @brief Renders the VTK scene. It needs to be called when reading from config file
@@ -456,12 +481,6 @@ protected:
      * It's used during initial scene setup in renderVtkScene(). */
     void drawVisualizationWithOptional3DSubstate();
 
-    /** @brief Refresh VTK visualization with optional 3D substate support (step updates).
-     * 
-     * This helper method handles both 2D and 3D visualization based on activeSubstateFor3D.
-     * It's used when updating visualization for current step in loadAndUpdateVisualizationForCurrentStep(). */
-    void refreshVisualizationWithOptional3DSubstate();
-
     /** @brief Handle mouse press events to update substate display.
      * 
      * When user clicks on a cell (without Shift), this method updates
@@ -495,6 +514,9 @@ protected:
 
     /// @brief Name of the substate field currently used for 3D visualization (empty if none)
     std::string activeSubstateFor3D;
+
+    /// @brief Name of the substate field currently used for 2D visualization (empty if using default)
+    std::string activeSubstateFor2D;
 
     /// @brief Current camera azimuth angle (cached to avoid recalculation)
     double cameraAzimuth{};

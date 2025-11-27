@@ -14,6 +14,11 @@ class QDoubleSpinBox;
 class QPushButton;
 class SettingParameter;
 
+namespace Ui
+{
+class SubstateDisplayWidget;
+}
+
 /** @class SubstateDisplayWidget
  * @brief Widget for displaying a single substate field with editable parameters.
  * 
@@ -34,6 +39,8 @@ public:
      * @param fieldName The name of the substate field (e.g., "h", "z")
      * @param parent Parent widget */
     explicit SubstateDisplayWidget(const std::string& fieldName, QWidget* parent = nullptr);
+
+    ~SubstateDisplayWidget();
 
     /** @brief Update the displayed cell value.
      * 
@@ -83,13 +90,30 @@ public:
     /** @brief Get the field name.
      * 
      * @return Field name */
-    std::string getFieldName() const { return m_fieldName; }
+    std::string fieldName() const;
+
+    /// @brief Set the min color for this substate
+    /// @param color Hex color string (e.g., "#FF0000"), or empty string to disable
+    void setMinColor(const std::string& color);
+
+    /// @brief Set the max color for this substate
+    /// @param color Hex color string (e.g., "#0000FF"), or empty string to disable
+    void setMaxColor(const std::string& color);
+
+    /// @brief Set widget as active (highlighted background).
+    /// @param active True to highlight, false to remove highlight
+    void setActive(bool active);
 
 signals:
     /** @brief Signal emitted when "Use as 3rd dimension" button is clicked.
      * 
      * @param fieldName The name of the field */
     void use3rdDimensionRequested(const std::string& fieldName);
+
+    /** @brief Signal emitted when "Use as 2D" button is clicked.
+     * 
+     * @param fieldName The name of the field */
+    void use2DRequested(const std::string& fieldName);
 
     /** @brief Signal emitted when min or max values change.
      * 
@@ -113,6 +137,18 @@ signals:
      * @param fieldName The name of the field */
     void calculateMaximumRequested(const std::string& fieldName);
 
+    /** @brief Signal emitted when min or max colors change.
+     * 
+     * @param fieldName The name of the field
+     * @param minColor The new minimum color (hex string or empty)
+     * @param maxColor The new maximum color (hex string or empty) */
+    void colorsChanged(const std::string& fieldName, const std::string& minColor, const std::string& maxColor);
+
+    /** @brief Signal emitted when visualization needs to be refreshed.
+     * 
+     * Emitted when colors, min/max values, or other visualization settings change. */
+    void visualizationRefreshRequested();
+
 private slots:
     /** @brief Calculate and set minimum value from all cells in current step.
      * 
@@ -132,6 +168,9 @@ private slots:
     /// @brief This is sum of onCalculateMinimumGreaterThanZero() and onCalculateMaximum()
     void onCalculateMinimumGreaterThanZeroAndMaximum();
 
+    /// @brief Handle "Use as 2D" button click
+    void onUse2DClicked();
+
 protected:
     /// @brief Override context menu event to add custom actions.
     void contextMenuEvent(QContextMenuEvent* event) override;
@@ -140,11 +179,20 @@ protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:
-    /// @brief Setup the UI layout.
-    void setupUI();
-
-    /// @brief Connect signals and slots.
+    /// @brief Connect signals to slots.
     void connectSignals();
+
+    /// @brief Handle min color button click
+    void onMinColorClicked();
+
+    /// @brief Handle max color button click
+    void onMaxColorClicked();
+
+    /// @brief Handle clear colors button click
+    void onClearColorsClicked();
+
+    /// @brief Update color button appearance based on current color
+    void updateColorButtonAppearance();
 
     /// @brief Update button enabled state based on min/max values.
     void updateButtonState();
@@ -152,12 +200,15 @@ private:
     /// @brief Install event filter on all child widgets to catch right-click.
     void installEventFiltersOnChildren();
 
-    std::string m_fieldName;
+    /// @brief Handle focus out on min spinbox to trigger refresh
+    void onMinSpinBoxFocusOut();
 
-    QLabel* m_nameLabel;
-    QLabel* m_valueLabel;
-    QDoubleSpinBox* m_minSpinBox;
-    QDoubleSpinBox* m_maxSpinBox;
-    QLineEdit* m_formatLineEdit;
-    QPushButton* m_use3dButton;
+    /// @brief Handle focus out on max spinbox to trigger refresh
+    void onMaxSpinBoxFocusOut();
+
+    Ui::SubstateDisplayWidget *ui;
+    
+    // Current colors (empty string = inactive)
+    std::string m_minColor;
+    std::string m_maxColor;
 };

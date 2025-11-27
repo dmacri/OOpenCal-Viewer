@@ -21,7 +21,7 @@ else()
     message(WARNING "[Tests] OOPENCAL_DIR not set! Includes like <OOpenCAL/...> may not work.")
 endif()
 
-# Add test executable
+# Add test executable for ModelReader
 add_executable(ModelReaderTests
     ModelReaderTests.cpp
     ${CMAKE_SOURCE_DIR}/utilities/ModelReader.cpp
@@ -45,5 +45,28 @@ if(OOPENCAL_DIR)
     target_compile_definitions(ModelReaderTests PRIVATE OOPENCAL_DIR="${OOPENCAL_DIR}")
 endif()
 
-# Register tests
+# Register ModelReaderTests
 add_test(NAME ModelReaderTests COMMAND ModelReaderTests)
+
+# ============================================
+# Add test executable for SettingParameter
+# ============================================
+add_executable(SettingParameterTests
+    SettingParameterTests.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/SettingParameter.cpp
+)
+
+# Link against GTest
+target_link_libraries(SettingParameterTests
+    GTest::gtest_main
+)
+
+# Include directories for the project
+target_include_directories(SettingParameterTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/visualiser
+    ${CMAKE_SOURCE_DIR}/utilities
+)
+
+# Register SettingParameterTests
+add_test(NAME SettingParameterTests COMMAND SettingParameterTests)

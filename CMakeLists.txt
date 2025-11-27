@@ -146,7 +146,7 @@ file(GLOB Styles
     CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/*.qss"
 )
-file(GLOB UIs
+file(GLOB_RECURSE UIs
     LIST_DIRECTORIES false
     CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/*.ui"
