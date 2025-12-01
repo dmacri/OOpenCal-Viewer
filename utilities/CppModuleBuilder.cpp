@@ -33,6 +33,59 @@ std::string detectCppStandard(const std::string& userStandard)
     return "c++14";
 }
 
+/** @brief Get clang toolchain path from various sources
+ * @return Path to clang++ in AppImage or system, or empty string if not found */
+std::string getClangToolchainPath()
+{
+    // 1. Check environment variable first (set by AppRun script)
+    if (const char* envPath = std::getenv("CLANG_TOOLCHAIN_PATH"))
+    {
+        std::string path = envPath;
+        if (! path.empty())
+        {
+            std::string clangPath = path + "/clang++";
+            if (fs::exists(clangPath))
+            {
+                return clangPath;
+            }
+        }
+    }
+
+    // 2. Check CMake-provided compile definition (for local builds)
+#ifdef CLANG_TOOLCHAIN_PATH
+    {
+        std::string path = CLANG_TOOLCHAIN_PATH;
+        if (! path.empty())
+        {
+            std::string clangPath = path + "/clang++";
+            if (fs::exists(clangPath))
+            {
+                return clangPath;
+            }
+        }
+    }
+#endif
+
+    // 3. Check common AppImage paths
+    const std::vector<std::string> appImagePaths = {
+        "../usr/bin/clang++",
+        "../../usr/bin/clang++",
+        "/usr/local/bin/clang++",
+        "/opt/clang/bin/clang++"
+    };
+    
+    for (const auto& path : appImagePaths)
+    {
+        if (fs::exists(path))
+        {
+            return path;
+        }
+    }
+
+    // 4. Return empty - will use system clang++ or fallback
+    return "";
+}
+
 /** @brief Check if a compiler is available in PATH
  * @param compiler Compiler name (e.g., "clang++", "g++")
  * @return true if compiler is available */
@@ -125,8 +178,37 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     if (progressCallback)
         progressCallback("Checking C++ compiler availability...");
 
-    // Find an available compiler (with fallback support)
-    std::string availableCompiler = findAvailableCompiler(compilerPath);
+    // Try to use clang from AppImage first
+    std::string clangFromAppImage = getClangToolchainPath();
+    std::string availableCompiler;
+    
+    if (! clangFromAppImage.empty())
+    {
+        // If clang from AppImage is found, use it directly without testing
+        // (testing may fail due to missing libraries in AppImage mount point)
+        std::cout << "Using clang from AppImage: " << clangFromAppImage << std::endl;
+        if (progressCallback)
+            progressCallback("Using clang from AppImage: " + clangFromAppImage);
+        
+        // Resolve relative path to absolute path
+        try
+        {
+            std::string absolutePath = fs::absolute(clangFromAppImage).string();
+            std::cout << "Resolved to absolute path: " << absolutePath << std::endl;
+            availableCompiler = absolutePath;
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "Warning: Could not resolve path to absolute: " << e.what() << std::endl;
+            availableCompiler = clangFromAppImage;
+        }
+    }
+    else
+    {
+        // No clang from AppImage, find an available compiler (with fallback support)
+        availableCompiler = findAvailableCompiler(compilerPath);
+    }
+    
     if (availableCompiler.empty())
     {
         lastResult->success = false;
@@ -136,15 +218,9 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
             progressCallback("ERROR: No C++ compiler found");
         return *lastResult;
     }
-
-    // Update compiler path if fallback was used
-    if (availableCompiler != compilerPath)
-    {
-        std::cout << "Using fallback compiler: " << availableCompiler << std::endl;
-        if (progressCallback)
-            progressCallback("Using fallback compiler: " + availableCompiler);
-        compilerPath = availableCompiler;
-    }
+    
+    // Update compiler path to the one we're actually using
+    compilerPath = availableCompiler;
 
     // Report progress: building command
     if (progressCallback)
@@ -204,10 +280,93 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
     std::string standard = detectCppStandard(cppStandard);
 
     std::ostringstream cmd;
+    
+    // If using clang from AppImage, we need to set LD_LIBRARY_PATH for it to find its libraries
+    // RPATH doesn't work for subprocess, so we need to set it explicitly
+    if (compilerPath.find(".mount_") != std::string::npos ||
+        compilerPath.find("/tmp/") != std::string::npos)
+    {
+        // Extract the base path (e.g., /tmp/.mount_OOpenCxxx)
+        std::string basePath = compilerPath.substr(0, compilerPath.find_last_of('/'));
+        std::string libPath = basePath + "/../lib/clang-libs:" + basePath + "/../lib";
+        
+        // Wrap command to set LD_LIBRARY_PATH
+        cmd << "LD_LIBRARY_PATH=\"" << libPath << ":$LD_LIBRARY_PATH\" ";
+    }
+    
     cmd << compilerPath
         << " -shared"
         << " -fPIC"
         << " -std=" << standard;
+
+    // If using clang from AppImage, disable system include paths and use only bundled headers
+    // This prevents clang from finding conflicting system headers
+    if (compilerPath.find(".mount_") != std::string::npos ||
+        compilerPath.find("/tmp/") != std::string::npos)
+    {
+        cmd << " -nostdinc"      // Disable standard C include paths
+             << " -nostdinc++";   // Disable standard C++ include paths
+    }
+
+    // If using clang from AppImage, add system include paths from AppImage
+    // Clang from AppImage needs to find headers bundled in the AppImage
+    if (compilerPath.find(".mount_") != std::string::npos ||
+        compilerPath.find("/tmp/") != std::string::npos)
+    {
+        // Extract the base path (e.g., /tmp/.mount_OOpenCxxx)
+        std::string basePath = compilerPath.substr(0, compilerPath.find_last_of('/'));
+        
+        // IMPORTANT: Resolve relative paths to absolute paths so clang finds them correctly
+        // Extract mount point from basePath (e.g., /tmp/.mount_OOpenCeboWkw from /tmp/.mount_OOpenCeboWkw/usr/bin)
+        try
+        {
+            // basePath is like: /tmp/.mount_OOpenCeboWkw/usr/bin
+            // We need to go up 2 levels to get: /tmp/.mount_OOpenCeboWkw
+            std::string mountPoint = basePath;
+            size_t lastSlash = mountPoint.find_last_of('/');  // Remove /bin
+            if (lastSlash != std::string::npos)
+                mountPoint = mountPoint.substr(0, lastSlash);
+            lastSlash = mountPoint.find_last_of('/');  // Remove /usr
+            if (lastSlash != std::string::npos)
+                mountPoint = mountPoint.substr(0, lastSlash);
+            
+            std::cout << "DEBUG: Mount point = " << mountPoint << std::endl;
+            
+            // Now construct absolute paths directly
+            std::string appIncludePath = mountPoint + "/usr/include";
+            std::string clangIncludePath = mountPoint + "/usr/lib/clang/21/include";
+            std::string gccIncludePath14 = mountPoint + "/usr/lib/gcc/x86_64-linux-gnu/14/include";
+            std::string gccIncludeFixedPath14 = mountPoint + "/usr/lib/gcc/x86_64-linux-gnu/14/include-fixed";
+            std::string gccIncludePath15 = mountPoint + "/usr/lib64/gcc/x86_64-pc-linux-gnu/15.2.1/include";
+            std::string gccIncludeFixedPath15 = mountPoint + "/usr/lib64/gcc/x86_64-pc-linux-gnu/15.2.1/include-fixed";
+            
+            std::cout << "DEBUG: Resolved AppImage include paths:" << std::endl;
+            std::cout << "  appIncludePath = " << appIncludePath << std::endl;
+            std::cout << "  clangIncludePath = " << clangIncludePath << std::endl;
+            
+            // Add AppImage bundled system include paths
+            // CRITICAL ORDER: musl C headers MUST come before libc++ headers so libc++ can find them
+            cmd << " -isystem \"" << appIncludePath << "\""  // musl C headers (stdio.h, stdlib.h, etc.)
+                << " -isystem \"" << appIncludePath << "/x86_64-linux-gnu\""
+                << " -isystem \"" << appIncludePath << "/c++/v1\""  // LLVM libc++ C++ headers (uses musl C headers above)
+                << " -isystem \"" << appIncludePath << "/c++\""
+                << " -isystem \"" << appIncludePath << "/x86_64-unknown-linux-gnu/c++/v1\"";  // Platform-specific C++ config (__config_site)
+            
+            // Add LLVM clang intrinsics headers (from LLVM, not system GCC)
+            cmd << " -isystem \"" << clangIncludePath << "\"";
+            
+            // Also add GCC include paths from AppImage as fallback (for intrinsics, etc.)
+            // These should be AFTER clang intrinsics to avoid conflicts
+            cmd << " -isystem \"" << gccIncludePath14 << "\""
+                << " -isystem \"" << gccIncludeFixedPath14 << "\""
+                << " -isystem \"" << gccIncludePath15 << "\""
+                << " -isystem \"" << gccIncludeFixedPath15 << "\"";
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "ERROR: Failed to resolve AppImage include paths: " << e.what() << std::endl;
+        }
+    }
 
     // Add OOpenCAL include path if available
     if (! oopencalDir.empty())
@@ -223,6 +382,92 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
         cmd << " -I\"" << projectRootPath << "\"";
         cmd << " -I\"" << projectRootPath << "/visualiserProxy\"";
         cmd << " -I\"" << projectRootPath << "/config\"";
+    }
+    else
+    {
+        // Try to get project root from environment variable (set by AppRun script)
+        if (const char* viewerRoot = std::getenv("OOPENCAL_VIEWER_ROOT"))
+        {
+            std::string viewerRootPath = viewerRoot;
+            if (! viewerRootPath.empty())
+            {
+                std::cout << "Project root path from OOPENCAL_VIEWER_ROOT: " << viewerRootPath << std::endl;
+                cmd << " -I\"" << viewerRootPath << "\"";
+                cmd << " -I\"" << viewerRootPath << "/visualiserProxy\"";
+                cmd << " -I\"" << viewerRootPath << "/config\"";
+                cmd << " -I\"" << viewerRootPath << "/utilities\"";
+                cmd << " -I\"" << viewerRootPath << "/visualiser\"";
+                cmd << " -I\"" << viewerRootPath << "/widgets\"";
+            }
+        }
+    }
+    
+    // Add VTK include path
+    // First check if we're in AppImage, then check system
+    if (compilerPath.find(".mount_") != std::string::npos ||
+        compilerPath.find("/tmp/") != std::string::npos)
+    {
+        // Try to find VTK in AppImage
+        std::string basePath = compilerPath.substr(0, compilerPath.find_last_of('/'));
+        std::string mountPoint = basePath;
+        size_t lastSlash = mountPoint.find_last_of('/');
+        if (lastSlash != std::string::npos)
+            mountPoint = mountPoint.substr(0, lastSlash);
+        lastSlash = mountPoint.find_last_of('/');
+        if (lastSlash != std::string::npos)
+            mountPoint = mountPoint.substr(0, lastSlash);
+        
+        // Look for VTK in AppImage include directory
+        std::string vtkIncludePath = mountPoint + "/usr/include";
+        // We'll add this as a regular -I flag since VTK headers are in AppImage
+        cmd << " -I\"" << vtkIncludePath << "/vtk-9.1\"";
+    }
+    else
+    {
+        // For system clang, add system VTK path
+        cmd << " -I/usr/include/vtk-9.1";
+    }
+    
+    // If using clang from AppImage, also add project headers bundled in AppImage
+    std::cout << "DEBUG: compilerPath = " << compilerPath << std::endl;
+    if (compilerPath.find(".mount_") != std::string::npos ||
+        compilerPath.find("/tmp/") != std::string::npos)
+    {
+        std::cout << "DEBUG: Detected AppImage clang, adding bundled headers" << std::endl;
+        // Extract the base path (e.g., /tmp/.mount_OOpenCxxx/usr/bin)
+        std::string binPath = compilerPath.substr(0, compilerPath.find_last_of('/'));
+        std::cout << "DEBUG: binPath = " << binPath << std::endl;
+        
+        // Extract mount point from binPath (e.g., /tmp/.mount_OOpenCeboWkw from /tmp/.mount_OOpenCeboWkw/usr/bin)
+        try
+        {
+            std::string mountPoint = binPath;
+            size_t lastSlash = mountPoint.find_last_of('/');  // Remove /bin
+            if (lastSlash != std::string::npos)
+                mountPoint = mountPoint.substr(0, lastSlash);
+            lastSlash = mountPoint.find_last_of('/');  // Remove /usr
+            if (lastSlash != std::string::npos)
+                mountPoint = mountPoint.substr(0, lastSlash);
+            
+            std::string appIncludePath = mountPoint + "/usr/include";
+            std::cout << "DEBUG: appIncludePath = " << appIncludePath << std::endl;
+            
+            // Add bundled project headers from AppImage
+            cmd << " -I\"" << appIncludePath << "\"";
+            cmd << " -I\"" << appIncludePath << "/visualiserProxy\"";
+            cmd << " -I\"" << appIncludePath << "/config\"";
+            cmd << " -I\"" << appIncludePath << "/utilities\"";
+            cmd << " -I\"" << appIncludePath << "/visualiser\"";
+            cmd << " -I\"" << appIncludePath << "/widgets\"";
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "DEBUG: Error resolving AppImage include path: " << e.what() << std::endl;
+        }
+    }
+    else
+    {
+        std::cout << "DEBUG: Not AppImage clang, skipping bundled headers" << std::endl;
     }
 
     cmd << " " << VTK_COMPILE_FLAGS; // this is set from CMake, temporary solution (#61)

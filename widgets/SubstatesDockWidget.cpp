@@ -1,6 +1,7 @@
 /** @file SubstatesDockWidget.cpp
  * @brief Implementation of SubstatesDockWidget. */
 
+#include <cmath> // std::isnan
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QFrame>

@@ -1,12 +1,9 @@
-#include "SceneWidgetVisualizerFactory.h"
+#include "visualiserProxy/SceneWidgetVisualizer.pch.h" // precompiled header ... hopefully
 
 #include <stdexcept> // std::invalid_argument
 
 #include <OOpenCAL/models/Ball/BallCell.h>
 #include <OOpenCAL/models/SciddicaT/SciddicaTCell.h>
-
-#include "ISceneWidgetVisualizer.h"
-#include "SceneWidgetVisualizerAdapter.h"
 
 
 std::map<std::string, SceneWidgetVisualizerFactory::ModelCreator>& SceneWidgetVisualizerFactory::getRegistry()

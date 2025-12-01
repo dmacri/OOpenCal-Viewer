@@ -11,6 +11,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build libraries statically" FORCE)
 
 # ============================================
+# Clang toolchain path (for AppImage builds)
+# ============================================
+# Set via: -DCLANG_TOOLCHAIN_PATH=/path/to/clang/bin
+# This is used by CppModuleBuilder to compile plugins
+set(CLANG_TOOLCHAIN_PATH "" CACHE STRING "Path to clang toolchain bin directory")
+if (NOT CLANG_TOOLCHAIN_PATH STREQUAL "")
+    message(STATUS "Clang toolchain path: ${CLANG_TOOLCHAIN_PATH}")
+    # Export as compile definition for use in C++ code
+    add_compile_definitions(CLANG_TOOLCHAIN_PATH="${CLANG_TOOLCHAIN_PATH}")
+endif()
+
+# ============================================
 # Compiler warnings (optional, full strict set)
 # ============================================
 # Enable full warning level by running CMake with:
