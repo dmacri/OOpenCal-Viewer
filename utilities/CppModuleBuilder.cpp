@@ -428,6 +428,25 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
         cmd << " -I/usr/include/vtk-9.1";
     }
     
+    // Add static-clang v17 intrinsics headers (if using AppImage clang)
+    if (compilerPath.find(".mount_") != std::string::npos ||
+        compilerPath.find("/tmp/") != std::string::npos)
+    {
+        // Extract mount point
+        std::string basePath = compilerPath.substr(0, compilerPath.find_last_of('/'));
+        std::string mountPoint = basePath;
+        size_t lastSlash = mountPoint.find_last_of('/');
+        if (lastSlash != std::string::npos)
+            mountPoint = mountPoint.substr(0, lastSlash);
+        lastSlash = mountPoint.find_last_of('/');
+        if (lastSlash != std::string::npos)
+            mountPoint = mountPoint.substr(0, lastSlash);
+        
+        // Add clang v17 intrinsics (static-clang uses v17)
+        std::string clangIntrinsicsPath = mountPoint + "/usr/lib/clang/17/include";
+        cmd << " -isystem \"" << clangIntrinsicsPath << "\"";
+    }
+    
     // If using clang from AppImage, also add project headers bundled in AppImage
     std::cout << "DEBUG: compilerPath = " << compilerPath << std::endl;
     if (compilerPath.find(".mount_") != std::string::npos ||

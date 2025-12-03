@@ -51,384 +51,76 @@ jobs:
             file \
             wget
 
-      - name: Download and extract clang mini toolchain
+      - name: Download and extract static-clang toolchain
         run: |
-          # Store headers and binaries in temporary locations (will copy to AppDir later)
-          mkdir -p /tmp/clang-headers
-          mkdir -p /tmp/clang-binaries
+          # Create temporary directories
           mkdir -p /tmp/appimage-headers
+          mkdir -p /tmp/clang-binaries
           
-          # Download clang mini toolchain (adjust version as needed)
-          # Using LLVM releases from GitHub
-          LLVM_VERSION="21.1.6"
-          LLVM_RELEASE_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}"
-          CLANG_ARCHIVE="LLVM-${LLVM_VERSION}-Linux-X64.tar.xz"
+          # Download static-clang v17.0.6 (pre-built with all dependencies)
+          echo "Downloading static-clang v17.0.6..."
+          CLANG_URL="https://github.com/dzbarsky/static-clang/releases/download/v17.0.6-10/linux_amd64.tar.zst"
           
-          echo "Downloading clang toolchain version ${LLVM_VERSION}..."
-          echo "URL: ${LLVM_RELEASE_URL}/${CLANG_ARCHIVE}"
-          wget -q "${LLVM_RELEASE_URL}/${CLANG_ARCHIVE}" -O /tmp/clang.tar.xz || {
-            echo "Failed to download LLVM ${LLVM_VERSION} from primary source"
-            echo "Trying alternative URL..."
-            # Try alternative format
-            CLANG_ARCHIVE_ALT="clang+llvm-${LLVM_VERSION}-x86_64-linux-gnu-ubuntu-22.04.tar.xz"
-            wget -q "${LLVM_RELEASE_URL}/${CLANG_ARCHIVE_ALT}" -O /tmp/clang.tar.xz || {
-              echo "Failed to download from alternative source, using system clang"
-              # Fallback: use system clang if available
-              which clang++ && cp $(which clang++) AppDir/usr/bin/clang++ || true
-              which clang && cp $(which clang) AppDir/usr/bin/clang || true
-              exit 0
-            }
-          }
-          
-          echo "Extracting clang toolchain..."
-          tar -xf /tmp/clang.tar.xz -C /tmp/ || {
-            echo "Failed to extract clang toolchain"
+          wget -q "$CLANG_URL" -O /tmp/clang.tar.zst || {
+            echo "Failed to download static-clang"
             exit 1
           }
           
-          # Find extracted directory
-          # LLVM 21 uses different naming: LLVM-21.1.6-Linux-X64
-          CLANG_DIR=$(find /tmp -maxdepth 1 -type d \( -name "clang+llvm*" -o -name "LLVM*" \) | head -1)
-          echo "Looking for clang directory..."
-          echo "Found directories in /tmp:"
-          ls -d /tmp/clang* /tmp/LLVM* 2>/dev/null || echo "No clang/LLVM directories found"
-          echo "CLANG_DIR set to: $CLANG_DIR"
-          
-          if [ -d "$CLANG_DIR" ]; then
-            echo "Found clang at: $CLANG_DIR"
-            
-            # Copy clang binaries to temporary location (will copy to AppDir later)
-            mkdir -p /tmp/clang-binaries/bin
-            cp "$CLANG_DIR/bin/clang++" /tmp/clang-binaries/bin/ || true
-            cp "$CLANG_DIR/bin/clang" /tmp/clang-binaries/bin/ || true
-            cp "$CLANG_DIR/bin/clang-cpp" /tmp/clang-binaries/bin/ || true
-            echo "✓ Clang binaries copied to temporary location"
-            
-            # Copy all clang libraries to temporary location (will copy to AppDir later)
-            mkdir -p /tmp/clang-binaries/lib
-            if [ -d "$CLANG_DIR/lib" ]; then
-              echo "Clang lib directory contents:"
-              ls -la "$CLANG_DIR/lib/" | head -30
-
-              # Copy all .so files recursively
-              echo ""
-              echo "Copying .so files to temporary location..."
-              find "$CLANG_DIR/lib" -name "*.so*" -type f | while read sofile; do
-                echo "  Copying: $sofile"
-                cp "$sofile" /tmp/clang-binaries/lib/ || echo "Failed to copy $sofile"
-              done
-              
-              # Also try copying the entire lib directory
-              echo "Copying entire lib directory..."
-              if [ -d "$CLANG_DIR/lib/x86_64-unknown-linux-gnu" ]; then
-                cp -rv "$CLANG_DIR/lib/x86_64-unknown-linux-gnu"/* /tmp/clang-binaries/lib/ 2>&1 | head -20
-              fi
-              
-              # Copy any .so files in main lib directory
-              if [ -f "$CLANG_DIR/lib/libclang.so"* ]; then
-                cp -v "$CLANG_DIR/lib"/libclang*.so* /tmp/clang-binaries/lib/ 2>&1 || true
-              fi
-              
-              echo ""
-              echo "=== Clang libraries in temporary location ==="
-              ls -lh /tmp/clang-binaries/lib/ 2>/dev/null | head -30 || echo "No files found!"
-            else
-              echo "ERROR: $CLANG_DIR/lib directory not found!"
-              echo "Contents of $CLANG_DIR:"
-              ls -la "$CLANG_DIR/" 2>/dev/null || echo "Directory not accessible"
-            fi
-            
-            # Make binaries executable
-            chmod +x /tmp/clang-binaries/bin/clang++ /tmp/clang-binaries/bin/clang 2>/dev/null || true
-            
-            echo "✓ Clang toolchain prepared in temporary location"
-          else
-            echo "Warning: Could not find extracted clang directory, using system clang"
-            # Fallback to system clang
-            SYSTEM_CLANG=$(which clang++)
-            if [ -n "$SYSTEM_CLANG" ]; then
-              echo "Found system clang at: $SYSTEM_CLANG"
-              cp "$SYSTEM_CLANG" AppDir/usr/bin/clang++ || true
-              cp "$(which clang)" AppDir/usr/bin/clang || true
-              
-              # Set CLANG_DIR to system clang directory for header copying later
-              CLANG_DIR=$(dirname "$SYSTEM_CLANG")/..
-              
-              # Try to find and copy system clang libraries
-              CLANG_LIB_DIR=$(dirname "$SYSTEM_CLANG")/../lib
-              if [ -d "$CLANG_LIB_DIR" ]; then
-                echo "Copying system clang libraries from: $CLANG_LIB_DIR"
-                find "$CLANG_LIB_DIR" -name "libclang*.so*" -type f -exec cp {} AppDir/usr/lib/clang-libs/ \; 2>/dev/null || true
-              fi
-              
-              echo "System clang libraries in AppDir:"
-              ls -lh AppDir/usr/lib/clang-libs/ 2>/dev/null | head -20 || echo "No files found!"
-            else
-              echo "ERROR: No clang compiler found!"
-            fi
-          fi
-          
-          rm -f /tmp/clang.tar.xz
-          
-          ################### Download and extract musl libc headers for clang ###################
-          echo "Downloading musl libc for C standard headers..."
-          MUSL_VERSION="1.2.5"
-          MUSL_INSTALL_DIR="/tmp/musl-install"
-          mkdir -p /tmp/musl-build
-          cd /tmp/musl-build
-          
-          # Download musl libc source
-          wget -q https://musl.libc.org/releases/musl-${MUSL_VERSION}.tar.gz -O musl.tar.gz || {
-            echo "Failed to download musl, trying alternative..."
-            wget -q https://github.com/musl-libc/musl/releases/download/v${MUSL_VERSION}/musl-${MUSL_VERSION}.tar.gz -O musl.tar.gz || {
-              echo "Failed to download musl, using system headers as fallback"
-              exit 0
-            }
+          echo "Extracting static-clang..."
+          cd /tmp
+          tar -xf clang.tar.zst || {
+            echo "Failed to extract clang archive"
+            exit 1
           }
           
-          tar -xzf musl.tar.gz
-          cd musl-${MUSL_VERSION}
+          CLANG_DIR="/tmp/linux_amd64"
           
-          # Configure and install musl headers only (no compilation needed)
-          echo "Configuring musl..."
-          ./configure --prefix=${MUSL_INSTALL_DIR} 2>&1 | tail -5
-          echo "Installing musl headers..."
-          make install-headers 2>&1 | tail -5
-          
-          # Verify musl headers were installed
-          echo "Verifying musl headers installation..."
-          if [ -f "${MUSL_INSTALL_DIR}/include/stddef.h" ]; then
-            echo "✓ Found stddef.h in musl install"
-            ls -lh ${MUSL_INSTALL_DIR}/include/std*.h | head -5
-          else
-            echo "✗ stddef.h NOT found in musl install!"
-            ls -la ${MUSL_INSTALL_DIR}/include/ 2>/dev/null | head -20
+          if [ ! -d "$CLANG_DIR" ]; then
+            echo "ERROR: Clang directory not found at $CLANG_DIR"
+            ls -la /tmp/ | grep -E "linux|clang|LLVM"
+            exit 1
           fi
           
-          # Copy musl headers to temporary location (will copy to AppDir later)
-          echo "Copying musl C headers to temporary location..."
-          mkdir -p /tmp/appimage-headers/include
-          if [ -d "${MUSL_INSTALL_DIR}/include" ]; then
-            echo "Source directory exists: ${MUSL_INSTALL_DIR}/include"
-            ls -la ${MUSL_INSTALL_DIR}/include/ | head -10
-            cp -rv ${MUSL_INSTALL_DIR}/include/* /tmp/appimage-headers/include/ 2>&1 | head -20
-            echo "Verifying copy..."
-            if [ -f "/tmp/appimage-headers/include/stddef.h" ]; then
-              echo "✓ stddef.h successfully copied to temporary location"
-            else
-              echo "✗ stddef.h NOT in temporary location after copy!"
-            fi
-          else
-            echo "✗ Source directory does not exist: ${MUSL_INSTALL_DIR}/include"
+          echo "✓ Found clang at: $CLANG_DIR"
+          
+          # Copy clang binaries
+          echo "Copying clang binaries..."
+          mkdir -p /tmp/clang-binaries/bin
+          cp "$CLANG_DIR/bin/clang++" /tmp/clang-binaries/bin/ || true
+          cp "$CLANG_DIR/bin/clang" /tmp/clang-binaries/bin/ || true
+          cp "$CLANG_DIR/bin/clang-cpp" /tmp/clang-binaries/bin/ || true
+          chmod +x /tmp/clang-binaries/bin/clang* 2>/dev/null || true
+          echo "✓ Clang binaries copied"
+          
+          # Copy all clang libraries
+          echo "Copying clang libraries..."
+          mkdir -p /tmp/clang-binaries/lib
+          if [ -d "$CLANG_DIR/lib" ]; then
+            cp -rv "$CLANG_DIR/lib"/* /tmp/clang-binaries/lib/ 2>&1 | head -20
+            echo "✓ Clang libraries copied"
           fi
           
-          # CRITICAL: Copy musl bits/ subdirectory (contains alltypes.h, types/mbstate_t.h, etc.)
-          # This is needed by libc++ to find mbstate_t definition
-          echo "Copying musl bits/ subdirectory..."
-          if [ -d "${MUSL_INSTALL_DIR}/include/bits" ]; then
-            echo "Found bits/ directory at ${MUSL_INSTALL_DIR}/include/bits"
-            cp -rv "${MUSL_INSTALL_DIR}/include/bits" /tmp/appimage-headers/include/ 2>&1 | head -20
-            if [ -f "/tmp/appimage-headers/include/bits/alltypes.h" ]; then
-              echo "✓ alltypes.h successfully copied"
-            else
-              echo "✗ alltypes.h NOT found after copy!"
-            fi
-          else
-            echo "⚠ bits/ directory not found in musl install"
-            ls -la "${MUSL_INSTALL_DIR}/include/" 2>/dev/null | head -20
-          fi
+          # Copy all headers (C++, C, intrinsics)
+          echo "Copying all headers to temporary location..."
           
-          # Copy C++ standard library headers from LLVM (NOT system!)
-          echo "Copying C++ standard library headers from LLVM to temporary location..."
-          
-          # LLVM 21 uses libc++ with headers in lib/c++/v1
-          if [ -d "$CLANG_DIR/lib/c++/v1" ]; then
-            echo "Found libc++ headers at $CLANG_DIR/lib/c++/v1"
-            mkdir -p /tmp/appimage-headers/include/c++
-            cp -rv "$CLANG_DIR/lib/c++/v1" /tmp/appimage-headers/include/c++/ 2>&1 | head -20
-            echo "✓ Copied LLVM libc++ headers from lib/c++/v1"
-          elif [ -d "$CLANG_DIR/include/c++" ]; then
-            echo "Found C++ headers at $CLANG_DIR/include/c++"
-            cp -rv "$CLANG_DIR/include/c++" /tmp/appimage-headers/include/ 2>&1 | head -20
-            echo "✓ Copied LLVM C++ headers"
-          else
-            echo "⚠ LLVM C++ headers not found in expected locations"
-            echo "  Falling back to system headers"
-            if [ -d "/usr/include/c++" ]; then
-              cp -r /usr/include/c++ /tmp/appimage-headers/include/ 2>/dev/null || true
-            fi
-          fi
-          
-          # CRITICAL: Copy platform-specific C++ config headers (__config_site)
-          # These are in include/x86_64-unknown-linux-gnu/c++/v1 in LLVM 21
-          echo "Copying platform-specific C++ config headers..."
-          if [ -d "$CLANG_DIR/include/x86_64-unknown-linux-gnu/c++/v1" ]; then
-            echo "Found platform-specific C++ headers at $CLANG_DIR/include/x86_64-unknown-linux-gnu/c++/v1"
-            mkdir -p /tmp/appimage-headers/include/x86_64-unknown-linux-gnu/c++
-            cp -rv "$CLANG_DIR/include/x86_64-unknown-linux-gnu/c++/v1" /tmp/appimage-headers/include/x86_64-unknown-linux-gnu/c++/ 2>&1 | head -20
-            echo "✓ Copied platform-specific C++ headers (__config_site, etc.)"
-            
-            # Verify __config_site was copied
-            if [ -f "/tmp/appimage-headers/include/x86_64-unknown-linux-gnu/c++/v1/__config_site" ]; then
-              echo "✓ Found __config_site in temporary location"
-            else
-              echo "✗ __config_site NOT found in temporary location!"
-            fi
-          else
-            echo "⚠ Platform-specific C++ headers not found at $CLANG_DIR/include/x86_64-unknown-linux-gnu/c++/v1"
-            echo "  Searching for __config_site in entire CLANG_DIR..."
-            CONFIG_SITE_PATH=$(find "$CLANG_DIR" -name "__config_site" 2>/dev/null | head -1)
-            if [ -n "$CONFIG_SITE_PATH" ]; then
-              echo "  Found __config_site at: $CONFIG_SITE_PATH"
-              CONFIG_SITE_DIR=$(dirname "$CONFIG_SITE_PATH")
-              echo "  Copying from: $CONFIG_SITE_DIR"
-              mkdir -p /tmp/appimage-headers/include/x86_64-unknown-linux-gnu/c++/v1
-              cp -v "$CONFIG_SITE_PATH" /tmp/appimage-headers/include/x86_64-unknown-linux-gnu/c++/v1/
-              echo "✓ Copied __config_site"
-            else
-              echo "✗ __config_site not found anywhere in CLANG_DIR!"
-            fi
-          fi
-          
-          # CRITICAL: Add _LIBCPP_HAS_MUSL_LIBC flag and C header wrapper defines to __config_site
-          # This tells libc++ to use musl's bits/alltypes.h for mbstate_t definition
-          # AND tells cstdio, cstdlib, etc. that their .h wrappers are available
-          echo "Adding _LIBCPP_HAS_MUSL_LIBC and C header wrapper defines to __config_site..."
-          CONFIG_SITE_FILE="/tmp/appimage-headers/include/x86_64-unknown-linux-gnu/c++/v1/__config_site"
-          if [ -f "$CONFIG_SITE_FILE" ]; then
-            echo "Modifying __config_site to enable musl libc support and C header wrappers..."
-            # Add the flags at the beginning of the file (after any header comments)
-            {
-              echo ""
-              echo "// Enable musl libc support for mbstate_t definition"
-              echo "#define _LIBCPP_HAS_MUSL_LIBC 1"
-              echo ""
-              echo "// Define C header wrapper macros so cstdio, cstdlib, etc. find their .h wrappers"
-              echo "#define _LIBCPP_STDIO_H"
-              echo "#define _LIBCPP_STDLIB_H"
-              echo "#define _LIBCPP_WCHAR_H"
-              echo "#define _LIBCPP_WCTYPE_H"
-              echo "#define _LIBCPP_CTYPE_H"
-              echo "#define _LIBCPP_MATH_H"
-              echo "#define _LIBCPP_ERRNO_H"
-              echo "#define _LIBCPP_STRING_H"
-              echo "#define _LIBCPP_STDDEF_H"
-              echo ""
-              echo "// Undefine problematic macros from musl math.h that conflict with C++ code"
-              echo "// These macros are defined in musl's math.h but break libc++ C++ code"
-              echo "#undef isinf"
-              echo "#undef isnan"
-              echo "#undef signbit"
-              echo "#undef isfinite"
-              echo "#undef isnormal"
-              echo "#undef isgreater"
-              echo "#undef isgreaterequal"
-              echo "#undef isless"
-              echo "#undef islessequal"
-              echo "#undef islessgreater"
-              echo "#undef isunordered"
-              cat "$CONFIG_SITE_FILE"
-            } > "$CONFIG_SITE_FILE.tmp"
-            mv "$CONFIG_SITE_FILE.tmp" "$CONFIG_SITE_FILE"
-            echo "✓ Added _LIBCPP_HAS_MUSL_LIBC and C header wrapper defines to __config_site"
-            
-            # Verify the flags were added
-            if grep -q "_LIBCPP_HAS_MUSL_LIBC" "$CONFIG_SITE_FILE" && grep -q "_LIBCPP_STDIO_H" "$CONFIG_SITE_FILE"; then
-              echo "✓ Verified all defines are in __config_site"
-              echo "First 15 lines of modified __config_site:"
-              head -15 "$CONFIG_SITE_FILE"
-            else
-              echo "✗ Failed to add defines to __config_site!"
-            fi
-          else
-            echo "✗ __config_site not found at: $CONFIG_SITE_FILE"
-            echo "Cannot add defines!"
-          fi
-          
-          # CRITICAL: Copy libc++ C headers wrappers (stdio.h, stdlib.h, wchar.h, etc.)
-          # These are in include/c++/v1 alongside the C++ headers
-          # IMPORTANT: Must copy BOTH c* files (cstdio, cstdlib, etc.) AND their corresponding .h files (stdio.h, stdlib.h, etc.)
-          echo "Copying libc++ C headers wrappers..."
+          # Copy C++ headers (libc++)
           if [ -d "$CLANG_DIR/include/c++/v1" ]; then
-            echo "Copying C header wrappers from $CLANG_DIR/include/c++/v1..."
-            
-            # Copy C++ wrapper files (c*)
-            cp -v "$CLANG_DIR/include/c++/v1/cstdio" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/cstdlib" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/cwchar" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/cwctype" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/cctype" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/cstddef" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/cmath" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/cerrno" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/cstring" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            
-            # Copy C header wrapper files (.h versions) - CRITICAL!
-            # These define _LIBCPP_STDIO_H, _LIBCPP_STDLIB_H, etc. that cstdio, cstdlib, etc. look for
-            cp -v "$CLANG_DIR/include/c++/v1/stdio.h" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/stdlib.h" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/wchar.h" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/wctype.h" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/ctype.h" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/math.h" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/errno.h" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            cp -v "$CLANG_DIR/include/c++/v1/string.h" /tmp/appimage-headers/include/c++/v1/ 2>/dev/null || true
-            
-            # Verify key headers were copied
-            if [ -f "/tmp/appimage-headers/include/c++/v1/stdio.h" ]; then
-              echo "✓ Copied libc++ C header wrappers (including stdio.h)"
-            else
-              echo "⚠ stdio.h wrapper not found in CLANG_DIR/include/c++/v1"
-              echo "  Available .h files in $CLANG_DIR/include/c++/v1:"
-              ls -1 "$CLANG_DIR/include/c++/v1"/*.h 2>/dev/null | head -20 || echo "  No .h files found"
-            fi
+            mkdir -p /tmp/appimage-headers/include/c++/v1
+            cp -rv "$CLANG_DIR/include/c++/v1"/* /tmp/appimage-headers/include/c++/v1/ 2>&1 | head -20
+            echo "✓ C++ headers copied"
           fi
           
-          # Copy GCC include directory from LLVM (for intrinsics, etc.)
-          echo "Copying GCC include directory from LLVM to temporary location..."
-          if [ -d "$CLANG_DIR/lib/clang/21/include" ]; then
-            mkdir -p /tmp/appimage-headers/lib/clang/21
-            cp -rv "$CLANG_DIR/lib/clang/21/include" /tmp/appimage-headers/lib/clang/21/ 2>&1 | head -20
-            echo "✓ Copied LLVM clang intrinsics headers"
-            # Verify key headers
-            if [ -f "/tmp/appimage-headers/lib/clang/21/include/stddef.h" ]; then
-              echo "✓ Found stddef.h in LLVM clang headers"
-            fi
-          else
-            echo "⚠ LLVM clang/21/include not found at: $CLANG_DIR/lib/clang/21/include"
-            # Try to find clang version
-            if [ -d "$CLANG_DIR/lib/clang" ]; then
-              echo "Available clang versions:"
-              ls -la "$CLANG_DIR/lib/clang/"
-            fi
+          # Copy clang intrinsics and C headers
+          if [ -d "$CLANG_DIR/lib/clang/17/include" ]; then
+            mkdir -p /tmp/appimage-headers/lib/clang/17/include
+            cp -rv "$CLANG_DIR/lib/clang/17/include"/* /tmp/appimage-headers/lib/clang/17/include/ 2>&1 | head -20
+            echo "✓ Clang intrinsics headers copied"
           fi
           
-          # Also copy system GCC headers as fallback
-          echo "Copying system GCC include directory as fallback to temporary location..."
-          GCC_VERSION=$(ls /usr/lib/gcc/x86_64-linux-gnu/ 2>/dev/null | head -1)
-          if [ -n "$GCC_VERSION" ]; then
-            mkdir -p "/tmp/appimage-headers/lib/gcc/x86_64-linux-gnu/$GCC_VERSION"
-            cp -r "/usr/lib/gcc/x86_64-linux-gnu/$GCC_VERSION/include" "/tmp/appimage-headers/lib/gcc/x86_64-linux-gnu/$GCC_VERSION/" 2>/dev/null || true
-            cp -r "/usr/lib/gcc/x86_64-linux-gnu/$GCC_VERSION/include-fixed" "/tmp/appimage-headers/lib/gcc/x86_64-linux-gnu/$GCC_VERSION/" 2>/dev/null || true
-          fi
+          echo "✓ Static-clang toolchain prepared"
+          rm -f /tmp/clang.tar.zst
           
-          # Final verification of all headers in temporary location
-          echo ""
-          echo "=== FINAL VERIFICATION: Headers in temporary location ==="
-          echo "Checking for stddef.h in multiple locations:"
-          find /tmp/appimage-headers/include -name "stddef.h" 2>/dev/null | head -10 || echo "✗ stddef.h NOT found in temporary location"
-          find /tmp/appimage-headers/lib/clang -name "stddef.h" 2>/dev/null | head -10 || echo "✗ stddef.h NOT found in clang headers"
-          
-          echo ""
-          echo "Checking for wchar.h:"
-          find /tmp/appimage-headers/include -name "wchar.h" 2>/dev/null | head -5 || echo "✗ wchar.h NOT found"
-          
-          echo ""
-          echo "Checking C++ headers:"
-          ls -la /tmp/appimage-headers/include/c++/ 2>/dev/null | head -10 || echo "✗ C++ headers NOT found"
-          
-          echo ""
-          echo "Musl headers and C++ headers copied to temporary location successfully"
+          echo "✓ Static-clang toolchain ready with all headers"
 
       ################### build application ###################
       - name: Configure CMake
