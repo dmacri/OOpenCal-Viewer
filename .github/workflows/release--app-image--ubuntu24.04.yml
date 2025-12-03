@@ -67,17 +67,19 @@ jobs:
           }
           
           echo "Extracting static-clang..."
-          cd /tmp
-          tar -xf clang.tar.zst || {
+          mkdir -p /tmp/linux_amd64
+          cd /tmp/linux_amd64
+          tar -xf /tmp/clang.tar.zst || {
             echo "Failed to extract clang archive"
             exit 1
           }
           
           CLANG_DIR="/tmp/linux_amd64"
           
-          if [ ! -d "$CLANG_DIR" ]; then
-            echo "ERROR: Clang directory not found at $CLANG_DIR"
-            ls -la /tmp/ | grep -E "linux|clang|LLVM"
+          if [ ! -d "$CLANG_DIR/bin" ]; then
+            echo "ERROR: Clang bin directory not found at $CLANG_DIR/bin"
+            echo "Contents of $CLANG_DIR:"
+            ls -la "$CLANG_DIR/"
             exit 1
           fi
           
@@ -102,12 +104,22 @@ jobs:
           
           # Copy all headers (C++, C, intrinsics)
           echo "Copying all headers to temporary location..."
+          echo "CLANG_DIR structure:"
+          ls -la "$CLANG_DIR/" | head -20
           
           # Copy C++ headers (libc++)
           if [ -d "$CLANG_DIR/include/c++/v1" ]; then
             mkdir -p /tmp/appimage-headers/include/c++/v1
             cp -rv "$CLANG_DIR/include/c++/v1"/* /tmp/appimage-headers/include/c++/v1/ 2>&1 | head -20
             echo "✓ C++ headers copied"
+          else
+            echo "⚠ C++ headers not found at $CLANG_DIR/include/c++/v1"
+            if [ -d "$CLANG_DIR/include/c++" ]; then
+              echo "  Found at $CLANG_DIR/include/c++, copying entire directory..."
+              mkdir -p /tmp/appimage-headers/include
+              cp -rv "$CLANG_DIR/include/c++" /tmp/appimage-headers/include/
+              echo "✓ C++ headers copied from alternate location"
+            fi
           fi
           
           # Copy clang intrinsics and C headers
@@ -115,6 +127,16 @@ jobs:
             mkdir -p /tmp/appimage-headers/lib/clang/17/include
             cp -rv "$CLANG_DIR/lib/clang/17/include"/* /tmp/appimage-headers/lib/clang/17/include/ 2>&1 | head -20
             echo "✓ Clang intrinsics headers copied"
+          else
+            echo "⚠ Clang v17 intrinsics not found at $CLANG_DIR/lib/clang/17/include"
+            # Try to find any clang version
+            CLANG_VERSION=$(ls "$CLANG_DIR/lib/clang/" 2>/dev/null | head -1)
+            if [ -n "$CLANG_VERSION" ]; then
+              echo "  Found clang version: $CLANG_VERSION"
+              mkdir -p "/tmp/appimage-headers/lib/clang/$CLANG_VERSION/include"
+              cp -rv "$CLANG_DIR/lib/clang/$CLANG_VERSION/include"/* "/tmp/appimage-headers/lib/clang/$CLANG_VERSION/include/" 2>&1 | head -20
+              echo "✓ Clang intrinsics headers copied from version $CLANG_VERSION"
+            fi
           fi
           
           echo "✓ Static-clang toolchain prepared"

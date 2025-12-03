@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <iostream>
 #include <sstream>
+#include <fstream>
+#include <dirent.h>
 
 #include "CppModuleBuilder.h"
 #include "process.hpp" // tiny process library
@@ -428,7 +430,7 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
         cmd << " -I/usr/include/vtk-9.1";
     }
     
-    // Add static-clang v17 intrinsics headers (if using AppImage clang)
+    // Add static-clang intrinsics headers (if using AppImage clang)
     if (compilerPath.find(".mount_") != std::string::npos ||
         compilerPath.find("/tmp/") != std::string::npos)
     {
@@ -442,8 +444,31 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
         if (lastSlash != std::string::npos)
             mountPoint = mountPoint.substr(0, lastSlash);
         
-        // Add clang v17 intrinsics (static-clang uses v17)
+        // Try to find clang intrinsics - try v17 first (static-clang), then any version
         std::string clangIntrinsicsPath = mountPoint + "/usr/lib/clang/17/include";
+        
+        // Check if v17 exists, otherwise try to find any version
+        std::ifstream checkV17(clangIntrinsicsPath + "/stddef.h");
+        if (!checkV17.good())
+        {
+            // Try to find any clang version in lib/clang/
+            std::string clangLibPath = mountPoint + "/usr/lib/clang";
+            DIR* dir = opendir(clangLibPath.c_str());
+            if (dir)
+            {
+                struct dirent* entry;
+                while ((entry = readdir(dir)) != nullptr)
+                {
+                    if (entry->d_type == DT_DIR && entry->d_name[0] != '.')
+                    {
+                        clangIntrinsicsPath = clangLibPath + "/" + entry->d_name + "/include";
+                        break;
+                    }
+                }
+                closedir(dir);
+            }
+        }
+        
         cmd << " -isystem \"" << clangIntrinsicsPath << "\"";
     }
     
