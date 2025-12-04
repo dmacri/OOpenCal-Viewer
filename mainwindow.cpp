@@ -1327,27 +1327,7 @@ void MainWindow::on3DModeRequested()
 {
     ui->sceneWidget->setViewMode3D();
 
-    // Reset rotation controls to default when entering 3D mode
-    QSignalBlocker rollBlocker(ui->rollSlider);
-    QSignalBlocker pitchBlocker(ui->pitchSlider);
-    QSignalBlocker yawBlocker(ui->yawSlider);
-    QSignalBlocker rollSpinBoxBlocker(ui->rollSpinBox);
-    QSignalBlocker pitchSpinBoxBlocker(ui->pitchSpinBox);
-    QSignalBlocker yawSpinBoxBlocker(ui->yawSpinBox);
-    
-    ui->rollSlider->setValue(0);
-    ui->rollSpinBox->setValue(0);
-    ui->pitchSlider->setValue(0);
-    ui->pitchSpinBox->setValue(0);
-    ui->yawSlider->setValue(0);
-    ui->yawSpinBox->setValue(0);
-
-    // Reset camera angles to default
-    ui->sceneWidget->setCameraAzimuth(0);
-    ui->sceneWidget->setCameraElevation(0);
-    ui->sceneWidget->setCameraRoll(0);
-    ui->sceneWidget->setCameraPitch(0);
-    ui->sceneWidget->setCameraYaw(0);
+    onResetCameraRequested();
 
     updateCameraControlsVisibility();
 
