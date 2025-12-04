@@ -2,6 +2,50 @@
 set -e
 
 # ================================================================
+#  OOpenCal Viewer - Build Script
+# ================================================================
+#
+#  NAME:
+#      build_viewer.sh
+#
+#  DESCRIPTION:
+#      This script builds the OOpenCal-Viewer project.
+#      It automatically:
+#         - Detects OS (Ubuntu/Debian or Other Linux)
+#         - Checks required system packages on Debian-based systems
+#         - Uses CMake + Make (not Ninja)
+#         - Supports Qt5 (default) or Qt6 via --qt6
+#         - Validates the OOpenCAL directory
+#         - Shows colored logs and build progress
+#
+#  USAGE:
+#      ./build_viewer.sh --oopencal <path> [--qt6]
+#
+#  OPTIONS:
+#      --oopencal <path>    Path to directory containing OOpenCAL/
+#      --qt6                Enable Qt6 mode (default: Qt5)
+#
+# ================================================================
+
+
+# ----------------------- COLORS ---------------------------------
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+MAGENTA="\e[35m"
+CYAN="\e[36m"
+BOLD="\e[1m"
+RESET="\e[0m"
+
+log_info()    { echo -e "${CYAN}[INFO]${RESET} $1"; }
+log_ok()      { echo -e "${GREEN}[OK]${RESET} $1"; }
+log_warn()    { echo -e "${YELLOW}[WARN]${RESET} $1"; }
+log_err()     { echo -e "${RED}[ERROR]${RESET} $1"; }
+log_step()    { echo -e "${MAGENTA}${BOLD}==>${RESET} ${BOLD}$1${RESET}"; }
+
+
+# ================================================================
 # Resolve script directory
 # ================================================================
 SOURCE="${BASH_SOURCE[0]}"
@@ -13,53 +57,55 @@ done
 SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 VIEWER_ROOT="$(realpath "$SCRIPT_DIR/..")"
 
-echo "============================================"
-echo "   OOpenCal-Viewer: Dependency & Build Tool  "
-echo "============================================"
+echo -e "${BOLD}============================================"
+echo -e "       OOpenCal-Viewer: Build Tool"
+echo -e "============================================${RESET}"
 echo "SCRIPT_DIR  = $SCRIPT_DIR"
 echo "VIEWER_ROOT = $VIEWER_ROOT"
 echo
 
+
 # ================================================================
 # Parse arguments
 # ================================================================
+QT_VERSION="qt5"
 OOPENCAL_DIR=""
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --oopencal)
             OOPENCAL_DIR="$(realpath "$2")"
             shift 2
             ;;
+        --qt6)
+            QT_VERSION="qt6"
+            shift
+            ;;
         *)
-            echo "Unknown argument: $1"
-            echo "Usage: $0 --oopencal <path>"
+            log_err "Unknown argument: $1"
             exit 1
             ;;
     esac
 done
 
 if [[ -z "$OOPENCAL_DIR" ]]; then
-    echo "ERROR: Missing required parameter --oopencal <path>"
+    log_err "Missing --oopencal <path>"
     exit 1
 fi
+
 
 # ================================================================
 # Validate OOpenCAL directory
 # ================================================================
-if [[ ! -d "$OOPENCAL_DIR" ]]; then
-    echo "ERROR: Provided OOpenCAL directory does not exist:"
-    echo "  $OOPENCAL_DIR"
-    exit 1
-fi
-
 if [[ ! -d "$OOPENCAL_DIR/OOpenCAL" ]]; then
-    echo "ERROR: Provided directory does not contain 'OOpenCAL' folder:"
+    log_err "Directory does not contain OOpenCAL/:"
     echo "  $OOPENCAL_DIR/OOpenCAL"
     exit 1
 fi
 
-echo "[INFO] OOpenCAL found at: $OOPENCAL_DIR"
+log_ok "OOpenCAL found at: $OOPENCAL_DIR"
 echo
+
 
 # ================================================================
 # Detect OS
@@ -70,32 +116,37 @@ if [[ -f /etc/os-release ]]; then
     OS="$ID"
 fi
 
-echo "[INFO] Detected OS: $OS"
+log_info "Detected OS: $OS"
+log_info "Using Qt mode: ${QT_VERSION^^}"
 echo
 
+
 # ================================================================
-# Debian/Ubuntu: check required packages
+# Debian/Ubuntu - package checks
 # ================================================================
 if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
-    echo "[INFO] Debian/Ubuntu detected → checking packages."
 
-    REQUIRED_PACKAGES=(
-        build-essential
-        cmake
-        qtbase5-dev
-        qttools5-dev
-        qttools5-dev-tools
-        libvtk9-dev
-        libvtk9-qt-dev
-        libfreetype-dev
-        libeigen3-dev
-        libtiff-dev
-        libpng-dev
-        libjpeg-dev
-        zlib1g-dev
-        libgl1-mesa-dev
-        libglu1-mesa-dev
-    )
+    log_step "Checking required system packages (APT mode)"
+
+    if [[ "$QT_VERSION" == "qt6" ]]; then
+        REQUIRED_PACKAGES=(
+            build-essential cmake
+            qt6-base-dev qt6-tools-dev qt6-tools-dev-tools
+            libvtk9-dev libvtk9-qt-dev
+            libgl1-mesa-dev libglu1-mesa-dev
+            libeigen3-dev libfreetype-dev
+            libpng-dev libjpeg-dev libtiff-dev zlib1g-dev
+        )
+    else
+        REQUIRED_PACKAGES=(
+            build-essential cmake
+            qtbase5-dev qttools5-dev qttools5-dev-tools
+            libvtk9-dev libvtk9-qt-dev
+            libgl1-mesa-dev libglu1-mesa-dev
+            libeigen3-dev libfreetype-dev
+            libpng-dev libjpeg-dev libtiff-dev zlib1g-dev
+        )
+    fi
 
     MISSING=()
     for pkg in "${REQUIRED_PACKAGES[@]}"; do
@@ -106,62 +157,61 @@ if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
 
     if [[ ${#MISSING[@]} -gt 0 ]]; then
         echo
-        echo "=============================================="
-        echo " MISSING SYSTEM PACKAGES"
-        echo " The following packages are required:"
+        log_err "Missing required packages:"
+        for p in "${MISSING[@]}"; do
+            echo "  - $p"
+        done
         echo
-        printf "  - %s\n" "${MISSING[@]}"
-        echo
-        echo "Install them using:"
+        echo -e "${YELLOW}Install them using:${RESET}"
         echo "  sudo apt update && sudo apt install -y ${MISSING[*]}"
-        echo "=============================================="
         echo
-        echo "ERROR: Missing dependencies → build cannot continue."
         exit 1
-    else
-        echo "[OK] All required APT packages installed."
     fi
+
+    log_ok "All required APT packages installed."
+
 else
     # Non-Debian systems
-    echo "=============================================================="
-    echo " NON-DEBIAN LINUX DETECTED"
-    echo " This script does NOT install packages automatically."
-    echo " You must ensure the following are installed on your system:"
-    echo
-    echo "  - Qt5 development packages (qmake, qtbase5-dev, qttools)"
-    echo "  - VTK (with Qt support enabled)"
-    echo "  - CMake"
-    echo "  - GCC / Clang toolchain"
-    echo
-    echo "If these are not installed, the build will fail."
-    echo "=============================================================="
-    echo
+    echo -e "${YELLOW}=============================================================="
+    echo -e " NON-DEBIAN LINUX DETECTED"
+    echo -e " Please ensure the following are installed:"
+    echo -e "    Qt${QT_VERSION: -1} development packages"
+    echo -e "    VTK with Qt support"
+    echo -e "    CMake, GCC/Clang"
+    echo -e "==============================================================${RESET}"
 fi
 
+
 # ================================================================
-# Build Viewer using CMake (Makefiles only)
+# Build using CMake + Make
 # ================================================================
 BUILD_DIR="${VIEWER_ROOT}/build"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-# Detect ninja but DO NOT use it (your request)
 if command -v ninja >/dev/null 2>&1; then
-    echo "[INFO] Ninja is installed, but will NOT be used (Makefile mode forced)."
+    log_warn "Ninja detected but NOT used (forced Makefiles)."
 fi
 
-echo "[BUILD] Configuring CMake (Makefiles)..."
+log_step "Configuring CMake..."
 cmake "$VIEWER_ROOT" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_VERBOSE_MAKEFILE=OFF \
+    -DUSE_QT6=$( [[ "$QT_VERSION" == "qt6" ]] && echo ON || echo OFF ) \
     -DOOPENCAL_DIR="$OOPENCAL_DIR"
 
-echo "[BUILD] Building using make..."
+log_step "Building (make)..."
 make -j"$(nproc)"
 
+
+# ================================================================
+# Print result
+# ================================================================
+EXECUTABLE="$(find "$BUILD_DIR" -type f -executable -name 'OOpenCal-Viewer' | head -n 1)"
+
 echo
-echo "=========================================="
-echo " Build completed successfully!"
-echo " Viewer binary is in:"
-echo "   $BUILD_DIR"
-echo "=========================================="
+echo -e "${GREEN}${BOLD}==========================================${RESET}"
+echo -e "${GREEN}${BOLD} Build completed successfully!${RESET}"
+echo -e "${GREEN}${BOLD} Build directory:${RESET} $BUILD_DIR"
+echo -e "${GREEN}${BOLD} Executable:${RESET} $EXECUTABLE"
+echo -e "${GREEN}${BOLD}==========================================${RESET}"
+echo
