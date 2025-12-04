@@ -439,6 +439,9 @@ protected:
 
     void applyCameraAnglesPreservingZoom();
 
+    /// @brief Update cached camera pivot using current visible bounds
+    void updateCameraPivotFromBounds();
+
     /** @brief Load and update visualization data for the current step.
      * 
      * This helper reads stage state from files for the current step and refreshes
@@ -562,6 +565,9 @@ protected:
 
     /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number in the scene.
     vtkNew<vtkTextMapper> singleLineTextStep;
+
+    /// @brief Pivot point used for GUI-controlled camera rotations in 3D mode
+    std::array<double, 3> cameraPivot{ 0.0, 0.0, 0.0 };
 
     /// @brief Axes actor for showing coordinate system orientation
     vtkNew<vtkAxesActor> axesActor;

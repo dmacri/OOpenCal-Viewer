@@ -193,15 +193,22 @@ void SceneWidget::applyCameraAnglesPreservingZoom()
     if (! camera)
         return;
 
-    double originalFocal[3];
     double originalPosition[3];
-    camera->GetFocalPoint(originalFocal);
     camera->GetPosition(originalPosition);
 
-    const double dx = originalPosition[0] - originalFocal[0];
-    const double dy = originalPosition[1] - originalFocal[1];
-    const double dz = originalPosition[2] - originalFocal[2];
-    double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+    const double pivot[3] = {
+        cameraPivot[0],
+        cameraPivot[1],
+        cameraPivot[2]
+    };
+
+    double vectorFromPivot[3] = {
+        originalPosition[0] - pivot[0],
+        originalPosition[1] - pivot[1],
+        originalPosition[2] - pivot[2]
+    };
+
+    double distance = vtkMath::Norm(vectorFromPivot);
     if (distance < 1e-3)
     {
         distance = 1.0;
@@ -227,22 +234,45 @@ void SceneWidget::applyCameraAnglesPreservingZoom()
     camera->GetFocalPoint(rotatedFocal);
 
     const double translation[3] = {
-        originalFocal[0] - rotatedFocal[0],
-        originalFocal[1] - rotatedFocal[1],
-        originalFocal[2] - rotatedFocal[2]
+        pivot[0] - rotatedFocal[0],
+        pivot[1] - rotatedFocal[1],
+        pivot[2] - rotatedFocal[2]
     };
 
     camera->SetPosition(rotatedPosition[0] + translation[0],
                         rotatedPosition[1] + translation[1],
                         rotatedPosition[2] + translation[2]);
-    camera->SetFocalPoint(rotatedFocal[0] + translation[0],
-                          rotatedFocal[1] + translation[1],
-                          rotatedFocal[2] + translation[2]);
+    camera->SetFocalPoint(pivot[0], pivot[1], pivot[2]);
 
     renderer->ResetCameraClippingRange();
     triggerRenderUpdate();
 
     vtkObject::SetGlobalWarningDisplay(oldWarningState);
+}
+
+void SceneWidget::updateCameraPivotFromBounds()
+{
+    if (! renderer)
+        return;
+
+    double bounds[6];
+    renderer->ComputeVisiblePropBounds(bounds);
+
+    const bool validX = std::isfinite(bounds[0]) && std::isfinite(bounds[1]) && bounds[0] < bounds[1];
+    const bool validY = std::isfinite(bounds[2]) && std::isfinite(bounds[3]) && bounds[2] < bounds[3];
+
+    if (! validX || ! validY)
+        return;
+
+    const double midZ = (std::isfinite(bounds[4]) && std::isfinite(bounds[5]))
+                        ? (bounds[4] + bounds[5]) * 0.5
+                        : 0.0;
+
+    cameraPivot = {
+        (bounds[0] + bounds[1]) * 0.5,
+        (bounds[2] + bounds[3]) * 0.5,
+        midZ
+    };
 }
 
 void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
@@ -316,6 +346,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                               substateInfo.minValue,
                                                               substateInfo.maxValue);
 
+            updateCameraPivotFromBounds();
             return;
         }
     }
@@ -327,6 +358,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         substateInfo2D = &settingParameter->substateInfo[activeSubstateFor2D];
     }
     sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, substateInfo2D);
+    updateCameraPivotFromBounds();
 }
 
 void SceneWidget::refreshVisualizationWithOptional3DSubstate()
@@ -351,6 +383,7 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
                                                                     substateInfo.maxValue);
+            updateCameraPivotFromBounds();
             return;
         }
     }
@@ -362,6 +395,7 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
         substateInfo2D = &settingParameter->substateInfo[activeSubstateFor2D];
     }
     sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor, substateInfo2D);
+    updateCameraPivotFromBounds();
 }
 
 void SceneWidget::addVisualizer(const std::string& filename, StepIndex stepNumber)
@@ -772,6 +806,7 @@ void SceneWidget::renderVtkScene()
                                                               singleLineTextStep,
                                                               renderer);
 
+    updateCameraPivotFromBounds();
     // Reset camera to fit the new scene properly
     applyCameraAngles();
 
