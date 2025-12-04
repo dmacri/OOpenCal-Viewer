@@ -104,6 +104,22 @@ public:
     /// @param active True to highlight, false to remove highlight
     void setActive(bool active);
 
+    /// @brief Get the noValue (value representing "no data").
+    /// @return noValue as double, or NaN if not set
+    double getNoValue() const;
+
+    /// @brief Set the noValue (value representing "no data").
+    /// @param value The noValue (use NaN for empty)
+    void setNoValue(double value);
+
+    /// @brief Check if noValue is enabled (checkbox is checked).
+    /// @return True if noValue checkbox is checked
+    bool isNoValueEnabled() const;
+
+    /// @brief Set noValue enabled state (checkbox).
+    /// @param enabled True to check the checkbox
+    void setNoValueEnabled(bool enabled);
+
 signals:
     /** @brief Signal emitted when "Use as 3rd dimension" button is clicked.
      * 
@@ -121,6 +137,13 @@ signals:
      * @param minValue The new minimum value (or NaN if not set)
      * @param maxValue The new maximum value (or NaN if not set) */
     void minMaxValuesChanged(const std::string& fieldName, double minValue, double maxValue);
+
+    /** @brief Signal emitted when noValue or its enabled state changes.
+     * 
+     * @param fieldName The name of the field
+     * @param noValue The noValue (or NaN if not set)
+     * @param isEnabled True if noValue checkbox is checked */
+    void noValueChanged(const std::string& fieldName, double noValue, bool isEnabled);
 
     /** @brief Signal emitted when user requests to calculate minimum value.
      * 
@@ -205,6 +228,12 @@ private:
 
     /// @brief Handle focus out on max spinbox to trigger refresh
     void onMaxSpinBoxFocusOut();
+
+    /// @brief Handle noValue spinbox value change
+    void onNoValueSpinBoxChanged();
+
+    /// @brief Handle noValue checkbox state change
+    void onNoValueCheckBoxChanged();
 
     Ui::SubstateDisplayWidget *ui;
     

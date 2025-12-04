@@ -275,12 +275,23 @@ bool ModelLoader::generateWrapper(const std::string& wrapperPath, const std::str
             return false;
         }
 
+        // Generate wrapper code with precompiled header support
+        // The wrapper tries to include precompiled header first, then falls back to individual headers
         const std::string code = std::format(R"(/** Auto-generated wrapper for {0} model */
-#include <iostream>
-#include <memory>
-#include <string>
-#include "visualiserProxy/SceneWidgetVisualizerAdapter.h"
-#include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+
+// Try to use precompiled header if available (from AppImage or local build)
+// This avoids needing to distribute all VTK and project headers
+#if __has_include("SceneWidgetVisualizer.pch.h")
+    #include "SceneWidgetVisualizer.pch.h"
+#else
+    // Fallback: include individual headers
+    #include <iostream>
+    #include <memory>
+    #include <string>
+    #include "visualiserProxy/SceneWidgetVisualizerAdapter.h"
+    #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+    #warning "Precompiled header 'SceneWidgetVisualizer.pch.h' not found, using individual headers"
+#endif
 
 // The actual model class is defined in the compiled model header
 #include "{1}.h"
