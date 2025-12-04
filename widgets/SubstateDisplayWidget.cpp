@@ -77,7 +77,11 @@ void SubstateDisplayWidget::connectSignals()
             this, &SubstateDisplayWidget::updateButtonState);
 
     // Connect noValue changes
-    connect(ui->noValueCheckBox, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onNoValueCheckBoxChanged);
+    #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+        connect(ui->noValueCheckBox, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onNoValueCheckBoxChanged);
+    #else
+        connect(ui->noValueCheckBox, &QCheckBox::stateChanged, this, &SubstateDisplayWidget::onNoValueCheckBoxChanged);
+    #endif
     connect(ui->noValueDoubleSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
             this, &SubstateDisplayWidget::onNoValueSpinBoxChanged);
 
