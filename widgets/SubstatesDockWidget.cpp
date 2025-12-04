@@ -89,6 +89,8 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
                 this, &SubstatesDockWidget::use3rdDimensionRequested);
         connect(widget, &SubstateDisplayWidget::use2DRequested,
                 this, &SubstatesDockWidget::use2DRequested);
+        connect(widget, &SubstateDisplayWidget::applyCustomColorsRequested,
+                this, &SubstatesDockWidget::applyCustomColorsRequested);
         connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged),
                 this, &SubstatesDockWidget::onMinMaxValuesChanged);
         connect(widget, &SubstateDisplayWidget::calculateMinimumRequested,
@@ -407,6 +409,19 @@ void SubstatesDockWidget::setActiveSubstate(const std::string& fieldName)
             it->second->setActive(true);
         }
     }
+}
+
+class SubstateDisplayWidget* SubstatesDockWidget::getActiveSubstateWidget() const
+{
+    // Find the active widget in the map
+    for (const auto& pair : m_substateWidgets)
+    {
+        if (pair.second && pair.second->isActive())
+        {
+            return pair.second;
+        }
+    }
+    return nullptr;
 }
 
 void SubstatesDockWidget::onNoValueChanged(const std::string& fieldName, double noValue, bool isEnabled)

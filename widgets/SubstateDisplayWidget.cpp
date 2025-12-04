@@ -65,6 +65,21 @@ void SubstateDisplayWidget::connectSignals()
 
     connect(ui->use2dButton, &QPushButton::clicked, this, &SubstateDisplayWidget::onUse2DClicked);
 
+    // Connect "Apply Custom Colors" button (clearColorsButton)
+    connect(ui->clearColorsButton, &QPushButton::clicked, this, [this]() {
+        // After clearing colors, emit signal to apply default colors
+        emit applyCustomColorsRequested(fieldName());
+    });
+
+    // Connect "Apply Custom Colors" button (applyCustomColorsPushButton) if it exists
+    if (ui->applyCustomColorsPushButton)
+    {
+        connect(ui->applyCustomColorsPushButton, &QPushButton::clicked, this, [this]() {
+            // Apply custom colors with current min/max color settings
+            emit applyCustomColorsRequested(fieldName());
+        });
+    }
+
     // Connect color buttons
     connect(ui->minColorButton, &QPushButton::clicked, this, &SubstateDisplayWidget::onMinColorClicked);
     connect(ui->maxColorButton, &QPushButton::clicked, this, &SubstateDisplayWidget::onMaxColorClicked);
@@ -245,6 +260,29 @@ void SubstateDisplayWidget::updateButtonState()
         ui->use2dButton->setToolTip("Set both Min and Max values to enable 2D visualization");
     }
 
+    // Update "Apply Custom Colors" button state - enabled only if both min/max AND colors are set
+    const bool hasMinColor = !getMinColor().empty();
+    const bool hasMaxColor = !getMaxColor().empty();
+    const bool hasColors = hasMinColor && hasMaxColor;
+    const bool applyColorsEnabled = isEnabled && hasColors;
+    
+    if (ui->applyCustomColorsPushButton)
+    {
+        ui->applyCustomColorsPushButton->setEnabled(applyColorsEnabled);
+        if (applyColorsEnabled)
+        {
+            ui->applyCustomColorsPushButton->setToolTip("Apply custom colors to visualization");
+        }
+        else if (!isEnabled)
+        {
+            ui->applyCustomColorsPushButton->setToolTip("Set both Min and Max values to enable");
+        }
+        else
+        {
+            ui->applyCustomColorsPushButton->setToolTip("Set both Min and Max colors to enable");
+        }
+    }
+
     // Emit signal with current min/max values so they can be stored in substateInfo
     emit minMaxValuesChanged(fieldName(), getMinValue(), getMaxValue());
 }
@@ -354,6 +392,7 @@ void SubstateDisplayWidget::setMinColor(const std::string& color)
 {
     m_minColor = color;
     updateColorButtonAppearance();
+    updateButtonState();  // Update button enabled state when colors change
     emit colorsChanged(fieldName(), m_minColor, m_maxColor);
     emit visualizationRefreshRequested();
 }
@@ -362,6 +401,7 @@ void SubstateDisplayWidget::setMaxColor(const std::string& color)
 {
     m_maxColor = color;
     updateColorButtonAppearance();
+    updateButtonState();  // Update button enabled state when colors change
     emit colorsChanged(fieldName(), m_minColor, m_maxColor);
     emit visualizationRefreshRequested();
 }
@@ -441,6 +481,12 @@ void SubstateDisplayWidget::setActive(bool active)
     }
 }
 
+bool SubstateDisplayWidget::isActive() const
+{
+    // Check if the widget has the active highlight style
+    return styleSheet().contains("E3F2FD");
+}
+
 double SubstateDisplayWidget::getNoValue() const
 {
     const double value = ui->noValueDoubleSpinBox->value();
@@ -467,6 +513,16 @@ void SubstateDisplayWidget::setNoValueEnabled(bool enabled)
 {
     ui->noValueCheckBox->setChecked(enabled);
     ui->noValueDoubleSpinBox->setEnabled(enabled);
+}
+
+std::string SubstateDisplayWidget::getMinColor() const
+{
+    return m_minColor;
+}
+
+std::string SubstateDisplayWidget::getMaxColor() const
+{
+    return m_maxColor;
 }
 
 void SubstateDisplayWidget::onNoValueSpinBoxChanged()

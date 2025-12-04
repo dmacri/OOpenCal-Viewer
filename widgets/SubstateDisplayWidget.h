@@ -92,9 +92,17 @@ public:
      * @return Field name */
     std::string fieldName() const;
 
+    /// @brief Get the min color for this substate
+    /// @return Hex color string (e.g., "#FF0000"), or empty string if not set
+    std::string getMinColor() const;
+
     /// @brief Set the min color for this substate
     /// @param color Hex color string (e.g., "#FF0000"), or empty string to disable
     void setMinColor(const std::string& color);
+
+    /// @brief Get the max color for this substate
+    /// @return Hex color string (e.g., "#0000FF"), or empty string if not set
+    std::string getMaxColor() const;
 
     /// @brief Set the max color for this substate
     /// @param color Hex color string (e.g., "#0000FF"), or empty string to disable
@@ -103,6 +111,10 @@ public:
     /// @brief Set widget as active (highlighted background).
     /// @param active True to highlight, false to remove highlight
     void setActive(bool active);
+
+    /// @brief Check if widget is active (highlighted).
+    /// @return True if widget is highlighted, false otherwise
+    bool isActive() const;
 
     /// @brief Get the noValue (value representing "no data").
     /// @return noValue as double, or NaN if not set
@@ -130,6 +142,14 @@ signals:
      * 
      * @param fieldName The name of the field */
     void use2DRequested(const std::string& fieldName);
+
+    /** @brief Signal emitted when "Apply Custom Colors" button is clicked.
+     * 
+     * Applies custom colors (min/max color gradient) to the current visualization.
+     * Works in both 2D and 3D modes.
+     * 
+     * @param fieldName The name of the field */
+    void applyCustomColorsRequested(const std::string& fieldName);
 
     /** @brief Signal emitted when min or max values change.
      * 

@@ -64,6 +64,11 @@ public:
      * @param fieldName The name of the field to highlight, or empty to clear all */
     void setActiveSubstate(const std::string& fieldName);
 
+    /** @brief Get the currently active substate widget.
+     * 
+     * @return Pointer to active SubstateDisplayWidget, or nullptr if none is active */
+    class SubstateDisplayWidget* getActiveSubstateWidget() const;
+
 signals:
     /** @brief Signal emitted when a field is requested to be used as 3rd dimension.
      * 
@@ -74,6 +79,13 @@ signals:
      * 
      * @param fieldName The name of the field */
     void use2DRequested(const std::string& fieldName);
+
+    /** @brief Signal emitted when custom colors should be applied to visualization.
+     * 
+     * Works in both 2D and 3D modes.
+     * 
+     * @param fieldName The name of the field */
+    void applyCustomColorsRequested(const std::string& fieldName);
 
     /** @brief Signal emitted when deactivation of substate is requested.
      * 

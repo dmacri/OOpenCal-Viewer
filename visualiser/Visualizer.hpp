@@ -283,8 +283,12 @@ Color Visualizer::calculateCellColor(int row, int column, const Matrix &p, const
     }
     else
     {
-        // Use default outputValue coloring
-        const char* fieldNamePtr = nullptr;
+        // Use outputValue coloring
+        // If substateInfo is provided but no custom colors, use the substate field name
+        // Otherwise use nullptr for default coloring
+        const char* fieldNamePtr = (substateInfo && !substateInfo->name.empty()) 
+                                    ? substateInfo->name.c_str() 
+                                    : nullptr;
         return p[row][column].outputValue(fieldNamePtr);
     }
 }

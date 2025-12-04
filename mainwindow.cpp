@@ -924,6 +924,8 @@ void MainWindow::updateSubstateDockeWidget()
                 this, &MainWindow::onUse3rdDimensionRequested);
         connect(ui->substatesDockWidget, &SubstatesDockWidget::use2DRequested,
                 this, &MainWindow::onUse2DRequested);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::applyCustomColorsRequested,
+                this, &MainWindow::onApplyCustomColorsRequested);
         connect(ui->substatesDockWidget, &SubstatesDockWidget::deactivateRequested,
                 this, &MainWindow::onDeactivateRequested);
         connect(ui->substatesDockWidget, &SubstatesDockWidget::visualizationRefreshRequested,
@@ -2244,13 +2246,33 @@ void MainWindow::onUse2DRequested(const std::string& fieldName)
     // Show wait cursor during visualization change
     WaitCursorGuard waitCursor("Switching to 2D substate visualization...");
 
-    // Set the active substate for 2D visualization in SceneWidget
+    // Switch to 2D mode first
+    on2DModeRequested();
+    
+    // Set the active substate for 2D visualization with custom colors (outputValue(substateName))
     ui->sceneWidget->setActiveSubstateFor2D(fieldName);
     
     // Highlight the active substate in the dock widget
     ui->substatesDockWidget->setActiveSubstate(fieldName);
     
     // Immediately refresh visualization to show the change
+    ui->sceneWidget->refreshVisualization();
+    
+    // Cursor restored automatically by WaitCursorGuard destructor
+}
+
+void MainWindow::onApplyCustomColorsRequested(const std::string& fieldName)
+{
+    // Show wait cursor during color application
+    WaitCursorGuard waitCursor("Applying custom colors...");
+
+    // Set the active substate for 2D visualization with custom colors in SceneWidget
+    ui->sceneWidget->setActiveSubstateFor2D(fieldName);
+    
+    // Highlight the active substate in the dock widget
+    ui->substatesDockWidget->setActiveSubstate(fieldName);
+    
+    // Immediately refresh visualization to show the change with custom colors
     ui->sceneWidget->refreshVisualization();
     
     // Cursor restored automatically by WaitCursorGuard destructor
