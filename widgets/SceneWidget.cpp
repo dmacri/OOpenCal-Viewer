@@ -21,6 +21,7 @@
 #include <vtkCaptionActor2D.h>
 #include <vtkTextProperty.h>
 #include <vtkCoordinate.h>
+#include <vtkMath.h>
 #include <vtkNew.h>
 #include <vtkObjectFactory.h>
 #include <vtkPolyData.h>
@@ -183,6 +184,64 @@ void SceneWidget::applyCameraAngles()
     triggerRenderUpdate();
 
     // Restore previous warning state
+    vtkObject::SetGlobalWarningDisplay(oldWarningState);
+}
+
+void SceneWidget::applyCameraAnglesPreservingZoom()
+{
+    auto camera = renderer->GetActiveCamera();
+    if (! camera)
+        return;
+
+    double originalFocal[3];
+    double originalPosition[3];
+    camera->GetFocalPoint(originalFocal);
+    camera->GetPosition(originalPosition);
+
+    const double dx = originalPosition[0] - originalFocal[0];
+    const double dy = originalPosition[1] - originalFocal[1];
+    const double dz = originalPosition[2] - originalFocal[2];
+    double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (distance < 1e-3)
+    {
+        distance = 1.0;
+    }
+
+    bool oldWarningState = vtkObject::GetGlobalWarningDisplay();
+    vtkObject::GlobalWarningDisplayOff();
+
+    camera->SetPosition(0.0, 0.0, distance);
+    camera->SetFocalPoint(0.0, 0.0, 0.0);
+    camera->SetViewUp(0.0, 1.0, 0.0);
+
+    camera->Azimuth(cameraAzimuth);
+    const double clampedElevation = std::clamp(cameraElevation, -89.9, 89.9);
+    camera->Elevation(clampedElevation);
+    camera->Roll(cameraRoll);
+    camera->Pitch(cameraPitch);
+    camera->Yaw(cameraYaw);
+
+    double rotatedPosition[3];
+    double rotatedFocal[3];
+    camera->GetPosition(rotatedPosition);
+    camera->GetFocalPoint(rotatedFocal);
+
+    const double translation[3] = {
+        originalFocal[0] - rotatedFocal[0],
+        originalFocal[1] - rotatedFocal[1],
+        originalFocal[2] - rotatedFocal[2]
+    };
+
+    camera->SetPosition(rotatedPosition[0] + translation[0],
+                        rotatedPosition[1] + translation[1],
+                        rotatedPosition[2] + translation[2]);
+    camera->SetFocalPoint(rotatedFocal[0] + translation[0],
+                          rotatedFocal[1] + translation[1],
+                          rotatedFocal[2] + translation[2]);
+
+    renderer->ResetCameraClippingRange();
+    triggerRenderUpdate();
+
     vtkObject::SetGlobalWarningDisplay(oldWarningState);
 }
 
@@ -1265,7 +1324,10 @@ void SceneWidget::setCameraAzimuth(double angle)
     cameraAzimuth = angle;
 
     // Apply camera angles using helper method
-    applyCameraAngles();
+    if (currentViewMode == ViewMode::Mode3D)
+        applyCameraAnglesPreservingZoom();
+    else
+        applyCameraAngles();
 }
 
 void SceneWidget::setCameraElevation(double angle)
@@ -1274,7 +1336,10 @@ void SceneWidget::setCameraElevation(double angle)
     cameraElevation = angle;
 
     // Apply camera angles using helper method
-    applyCameraAngles();
+    if (currentViewMode == ViewMode::Mode3D)
+        applyCameraAnglesPreservingZoom();
+    else
+        applyCameraAngles();
 }
 
 void SceneWidget::setCameraRoll(double angle)
@@ -1283,7 +1348,10 @@ void SceneWidget::setCameraRoll(double angle)
     cameraRoll = angle;
 
     // Apply camera angles using helper method
-    applyCameraAngles();
+    if (currentViewMode == ViewMode::Mode3D)
+        applyCameraAnglesPreservingZoom();
+    else
+        applyCameraAngles();
 }
 
 void SceneWidget::setCameraPitch(double angle)
@@ -1292,7 +1360,10 @@ void SceneWidget::setCameraPitch(double angle)
     cameraPitch = angle;
 
     // Apply camera angles using helper method
-    applyCameraAngles();
+    if (currentViewMode == ViewMode::Mode3D)
+        applyCameraAnglesPreservingZoom();
+    else
+        applyCameraAngles();
 }
 
 void SceneWidget::setCameraYaw(double angle)
@@ -1301,7 +1372,10 @@ void SceneWidget::setCameraYaw(double angle)
     cameraYaw = angle;
 
     // Apply camera angles using helper method
-    applyCameraAngles();
+    if (currentViewMode == ViewMode::Mode3D)
+        applyCameraAnglesPreservingZoom();
+    else
+        applyCameraAngles();
 }
 
 void SceneWidget::resetCameraZoom()

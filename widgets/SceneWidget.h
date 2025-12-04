@@ -437,6 +437,8 @@ protected:
      * consistent camera positioning when angles are modified. */
     void applyCameraAngles();
 
+    void applyCameraAnglesPreservingZoom();
+
     /** @brief Load and update visualization data for the current step.
      * 
      * This helper reads stage state from files for the current step and refreshes
