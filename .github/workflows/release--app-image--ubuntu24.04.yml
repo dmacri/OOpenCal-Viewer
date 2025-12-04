@@ -9,31 +9,44 @@ on:
 
 env:
   PROJECT_NAME: OOpenCal-Viewer
+  APPDIR: AppDir
 
 jobs:
   build:
     runs-on: ubuntu-24.04
 
     steps:
-      ################### checkout & dependencies ###################
+      ################### Checkout repositories ###################
       - name: Checkout main repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Checkout OOpenCAL dependency
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: alessioderango/OOpenCAL
           path: deps/OOpenCAL
           token: ${{ secrets.VisualizerOpenCal }}
 
-      ################### environment & build tools ###################
-      - name: Install build prerequisites
+      ################### Step 1: Install only essential build tools and glibc headers ###################
+      - name: Install minimal build prerequisites
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends \
             build-essential \
             cmake \
             ninja-build \
+            clang \
+            lld \
+            libc++-dev \
+            libc++abi-dev \
+            wget \
+            patchelf \
+            file
+
+      ################### Step 2: Install VTK and Qt headers (before downloading clang) ###################
+      - name: Install VTK and Qt development headers
+        run: |
+          sudo apt install -y --no-install-recommends \
             qtbase5-dev \
             qttools5-dev \
             qttools5-dev-tools \
@@ -46,348 +59,233 @@ jobs:
             libjpeg-dev \
             zlib1g-dev \
             libgl1-mesa-dev \
-            libglu1-mesa-dev \
-            patchelf \
-            file \
-            wget
+            libglu1-mesa-dev
 
-      - name: Download and extract static-clang toolchain
+      ################### Step 3: Download portable clang toolchain ###################
+      - name: Download portable clang toolchain
         run: |
-          # Create temporary directories
-          mkdir -p /tmp/appimage-headers
-          mkdir -p /tmp/clang-binaries
+          mkdir -p toolchain
+          cd toolchain
           
-          # Download static-clang v17.0.6 (pre-built with all dependencies)
-          echo "Downloading static-clang v17.0.6..."
-          CLANG_URL="https://github.com/dzbarsky/static-clang/releases/download/v17.0.6-10/linux_amd64.tar.zst"
+          echo "Downloading LLVM 17.0.6 portable toolchain..."
+          LLVM_VERSION="17.0.6"
+          LLVM_ARCHIVE="clang+llvm-${LLVM_VERSION}-x86_64-linux-gnu-ubuntu-22.04.tar.xz"
+          LLVM_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/${LLVM_ARCHIVE}"
           
-          wget -q "$CLANG_URL" -O /tmp/clang.tar.zst || {
-            echo "Failed to download static-clang"
+          wget -q "$LLVM_URL" -O llvm.tar.xz || {
+            echo "Failed to download LLVM ${LLVM_VERSION}"
             exit 1
           }
           
-          echo "Extracting static-clang..."
-          mkdir -p /tmp/linux_amd64
-          cd /tmp/linux_amd64
-          tar -xf /tmp/clang.tar.zst || {
-            echo "Failed to extract clang archive"
-            exit 1
-          }
+          echo "Extracting LLVM toolchain..."
+          tar -xf llvm.tar.xz
+          mv clang+llvm-${LLVM_VERSION}-x86_64-linux-gnu-ubuntu-22.04 clangroot
           
-          CLANG_DIR="/tmp/linux_amd64"
+          echo "✓ LLVM toolchain ready at: $(pwd)/clangroot"
+          echo "Toolchain structure:"
+          ls -la clangroot/bin/ | head -10
+          ls -la clangroot/lib/ | head -20
           
-          if [ ! -d "$CLANG_DIR/bin" ]; then
-            echo "ERROR: Clang bin directory not found at $CLANG_DIR/bin"
-            echo "Contents of $CLANG_DIR:"
-            ls -la "$CLANG_DIR/"
-            exit 1
+          # Check for libc++ libraries in different locations
+          echo ""
+          echo "Checking for libc++ libraries..."
+          if [ -d "clangroot/lib/x86_64-unknown-linux-gnu" ]; then
+            echo "Found lib/x86_64-unknown-linux-gnu:"
+            ls -la clangroot/lib/x86_64-unknown-linux-gnu/ | head -20
           fi
-          
-          echo "✓ Found clang at: $CLANG_DIR"
-          
-          # Copy clang binaries
-          echo "Copying clang binaries..."
-          mkdir -p /tmp/clang-binaries/bin
-          cp "$CLANG_DIR/bin/clang++" /tmp/clang-binaries/bin/ || true
-          cp "$CLANG_DIR/bin/clang" /tmp/clang-binaries/bin/ || true
-          cp "$CLANG_DIR/bin/clang-cpp" /tmp/clang-binaries/bin/ || true
-          chmod +x /tmp/clang-binaries/bin/clang* 2>/dev/null || true
-          echo "✓ Clang binaries copied"
-          
-          # Copy all clang libraries
-          echo "Copying clang libraries..."
-          mkdir -p /tmp/clang-binaries/lib
-          if [ -d "$CLANG_DIR/lib" ]; then
-            cp -rv "$CLANG_DIR/lib"/* /tmp/clang-binaries/lib/ 2>&1 | head -20
-            echo "✓ Clang libraries copied"
-          fi
-          
-          # Copy all headers (C++, C, intrinsics)
-          echo "Copying all headers to temporary location..."
-          echo "CLANG_DIR structure:"
-          ls -la "$CLANG_DIR/" | head -20
-          
-          # Copy C++ headers (libc++)
-          if [ -d "$CLANG_DIR/include/c++/v1" ]; then
-            mkdir -p /tmp/appimage-headers/include/c++/v1
-            cp -rv "$CLANG_DIR/include/c++/v1"/* /tmp/appimage-headers/include/c++/v1/ 2>&1 | head -20
-            echo "✓ C++ headers copied"
-          else
-            echo "⚠ C++ headers not found at $CLANG_DIR/include/c++/v1"
-            if [ -d "$CLANG_DIR/include/c++" ]; then
-              echo "  Found at $CLANG_DIR/include/c++, copying entire directory..."
-              mkdir -p /tmp/appimage-headers/include
-              cp -rv "$CLANG_DIR/include/c++" /tmp/appimage-headers/include/
-              echo "✓ C++ headers copied from alternate location"
-            fi
-          fi
-          
-          # Copy clang intrinsics and C headers
-          if [ -d "$CLANG_DIR/lib/clang/17/include" ]; then
-            mkdir -p /tmp/appimage-headers/lib/clang/17/include
-            cp -rv "$CLANG_DIR/lib/clang/17/include"/* /tmp/appimage-headers/lib/clang/17/include/ 2>&1 | head -20
-            echo "✓ Clang intrinsics headers copied"
-          else
-            echo "⚠ Clang v17 intrinsics not found at $CLANG_DIR/lib/clang/17/include"
-            # Try to find any clang version
-            CLANG_VERSION=$(ls "$CLANG_DIR/lib/clang/" 2>/dev/null | head -1)
-            if [ -n "$CLANG_VERSION" ]; then
-              echo "  Found clang version: $CLANG_VERSION"
-              mkdir -p "/tmp/appimage-headers/lib/clang/$CLANG_VERSION/include"
-              cp -rv "$CLANG_DIR/lib/clang/$CLANG_VERSION/include"/* "/tmp/appimage-headers/lib/clang/$CLANG_VERSION/include/" 2>&1 | head -20
-              echo "✓ Clang intrinsics headers copied from version $CLANG_VERSION"
-            fi
-          fi
-          
-          echo "✓ Static-clang toolchain prepared"
-          rm -f /tmp/clang.tar.zst
-          
-          echo "✓ Static-clang toolchain ready with all headers"
 
-      ################### build application ###################
-      - name: Configure CMake
+      ################### Step 4: Build application with system clang ###################
+      - name: Configure CMake for application build
         run: |
           mkdir -p build
           cd build
           
-          # Set CLANG_TOOLCHAIN_PATH for plugin compilation (runtime)
-          # but use system compiler for building the application
-          CLANG_TOOLCHAIN_PATH="${GITHUB_WORKSPACE}/AppDir/usr/bin"
-          
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
             -DOOPENCAL_DIR=${{ github.workspace }}/deps \
-            -DCMAKE_INSTALL_PREFIX=/usr \
-            -DCLANG_TOOLCHAIN_PATH="$CLANG_TOOLCHAIN_PATH"
+            -DCLANG_TOOLCHAIN_PATH="${{ github.workspace }}/toolchain/clangroot/bin"
 
       - name: Build application
         run: |
           cd build
           cmake --build . --parallel $(nproc)
 
-      - name: Install to temporary directory
+      ################### Step 5: Prepare AppDir structure ###################
+      - name: Create AppDir layout
         run: |
-          cd build
-          DESTDIR=${{ github.workspace }}/AppDir cmake --install .
+          rm -rf ${APPDIR}
+          mkdir -p ${APPDIR}/usr/bin
+          mkdir -p ${APPDIR}/usr/lib
+          mkdir -p ${APPDIR}/usr/include
+          mkdir -p ${APPDIR}/usr/lib/clang
 
-      ################### prepare AppDir structure ###################
-      - name: Create AppDir structure
+      ################### Step 6: Copy application binary ###################
+      - name: Copy application binary to AppDir
         run: |
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/lib
-          mkdir -p AppDir/usr/share/applications
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-          mkdir -p AppDir/usr/include
+          cp build/${PROJECT_NAME} ${APPDIR}/usr/bin/
+          chmod +x ${APPDIR}/usr/bin/${PROJECT_NAME}
 
-          # Copy main executable
-          cp build/${PROJECT_NAME} AppDir/usr/bin/ || \
-          cp AppDir/usr/bin/${PROJECT_NAME} AppDir/usr/bin/ || true
-
-      - name: Copy VTK headers to temporary location
+      ################### Step 7: Copy minimal clang toolchain ###################
+      - name: Copy minimal clang toolchain to AppDir
         run: |
-          echo "Copying VTK headers to temporary location..."
+          TC=toolchain/clangroot
           
-          # Find VTK headers
-          VTK_INCLUDE_DIR=$(find /usr/include -maxdepth 1 -name "vtk*" -type d 2>/dev/null | head -1)
-          if [ -n "$VTK_INCLUDE_DIR" ]; then
-            echo "Found VTK headers at: $VTK_INCLUDE_DIR"
-            mkdir -p /tmp/appimage-headers/include
-            cp -rv "$VTK_INCLUDE_DIR" /tmp/appimage-headers/include/ 2>&1 | head -20
-            echo "✓ VTK headers copied to temporary location"
-            
-            # Verify key VTK headers
-            VTK_DIR_NAME=$(basename "$VTK_INCLUDE_DIR")
-            if [ -f "/tmp/appimage-headers/include/$VTK_DIR_NAME/vtkRenderer.h" ]; then
-              echo "✓ vtkRenderer.h found in temporary location"
-            fi
+          # Copy compiler binaries
+          echo "Copying clang binaries..."
+          cp ${TC}/bin/clang ${APPDIR}/usr/bin/
+          cp ${TC}/bin/clang++ ${APPDIR}/usr/bin/
+          cp ${TC}/bin/ld.lld ${APPDIR}/usr/bin/ || true
+          chmod +x ${APPDIR}/usr/bin/clang ${APPDIR}/usr/bin/clang++
+          
+          # Copy libc++ libraries
+          echo "Copying libc++ libraries..."
+          
+          if ls ${TC}/lib/libc++.so* 1> /dev/null 2>&1; then
+            cp ${TC}/lib/libc++.so* ${APPDIR}/usr/lib/ || true
+            cp ${TC}/lib/libc++abi.so* ${APPDIR}/usr/lib/ || true
+            cp ${TC}/lib/libunwind.so* ${APPDIR}/usr/lib/ || true
+          fi
+          
+          if [ -d "${TC}/lib/x86_64-unknown-linux-gnu" ]; then
+            cp ${TC}/lib/x86_64-unknown-linux-gnu/libc++.so* ${APPDIR}/usr/lib/ || true
+            cp ${TC}/lib/x86_64-unknown-linux-gnu/libc++abi.so* ${APPDIR}/usr/lib/ || true
+            cp ${TC}/lib/x86_64-unknown-linux-gnu/libunwind.so* ${APPDIR}/usr/lib/ || true
+          fi
+          
+          # Copy clang builtin headers
+          mkdir -p ${APPDIR}/usr/lib/clang
+          
+          if [ -d "${TC}/lib/clang/17" ]; then
+            cp -r ${TC}/lib/clang/17 ${APPDIR}/usr/lib/clang/
           else
-            echo "⚠ VTK headers not found in /usr/include"
-            echo "Available include directories:"
-            ls -d /usr/include/vtk* 2>/dev/null || echo "No vtk* directories found"
+            CLANG_VERSION=$(ls -d ${TC}/lib/clang/* | head -1 | xargs basename)
+            cp -r ${TC}/lib/clang/${CLANG_VERSION} ${APPDIR}/usr/lib/clang/
+          fi
+          
+          # Copy libc++ include headers
+          echo "Copying libc++ include headers..."
+          mkdir -p ${APPDIR}/usr/include/c++/v1
+          if [ -d "${TC}/include/c++/v1" ]; then
+            cp -r ${TC}/include/c++/v1/* ${APPDIR}/usr/include/c++/v1/
           fi
 
-      - name: Copy bundled headers from temporary location
+          ###############################
+          # FIX: create __config_site
+          ###############################
+          echo "Creating missing __config_site header..."
+          cat > ${APPDIR}/usr/include/c++/v1/__config_site << 'EOF'
+          #pragma once
+          // Minimal stub for libc++ __config_site
+          // Prebuilt LLVM toolchains do not ship this file.
+          // Viewer AppImage provides a generic placeholder.
+          EOF
+          ###############################
+
+          echo "✓ Clang toolchain copied to AppDir"
+
+      ################### Step 8: Copy project headers and PCH ###################
+      - name: Copy project headers and precompiled header
         run: |
-          echo "Copying bundled headers from temporary location to AppDir..."
+          # Create include subdirectories
+          mkdir -p ${APPDIR}/usr/include/utilities
+          mkdir -p ${APPDIR}/usr/include/visualiser
+          mkdir -p ${APPDIR}/usr/include/visualiserProxy
+          mkdir -p ${APPDIR}/usr/include/config
+          mkdir -p ${APPDIR}/usr/include/widgets
           
-          # Copy musl and system headers
-          if [ -d "/tmp/appimage-headers/include" ]; then
-            echo "Copying include headers..."
-            cp -rv /tmp/appimage-headers/include/* AppDir/usr/include/ 2>&1 | head -20
-            if [ -f "AppDir/usr/include/stddef.h" ]; then
-              echo "✓ stddef.h successfully copied to AppDir"
-            else
-              echo "✗ stddef.h NOT in AppDir after copy!"
-            fi
-            
-            # CRITICAL: Verify bits/alltypes.h was copied
-            if [ -f "AppDir/usr/include/bits/alltypes.h" ]; then
-              echo "✓ bits/alltypes.h successfully copied to AppDir"
-            else
-              echo "✗ bits/alltypes.h NOT in AppDir after copy!"
-              echo "Checking if bits/ directory exists in /tmp/appimage-headers/include:"
-              ls -la /tmp/appimage-headers/include/bits/ 2>/dev/null | head -10 || echo "bits/ directory not found in /tmp/appimage-headers/include"
-              echo "Checking if bits/ directory exists in AppDir/usr/include:"
-              ls -la AppDir/usr/include/bits/ 2>/dev/null | head -10 || echo "bits/ directory not found in AppDir/usr/include"
-            fi
-          fi
-          
-          # Copy clang intrinsics headers
-          if [ -d "/tmp/appimage-headers/lib/clang" ]; then
-            echo "Copying clang intrinsics headers..."
-            mkdir -p AppDir/usr/lib/clang
-            cp -rv /tmp/appimage-headers/lib/clang/* AppDir/usr/lib/clang/ 2>&1 | head -20
-            if [ -f "AppDir/usr/lib/clang/21/include/stddef.h" ]; then
-              echo "✓ stddef.h in clang headers successfully copied"
-            fi
-          fi
-          
-          # Copy GCC headers
-          if [ -d "/tmp/appimage-headers/lib/gcc" ]; then
-            echo "Copying GCC headers..."
-            mkdir -p AppDir/usr/lib/gcc
-            cp -rv /tmp/appimage-headers/lib/gcc/* AppDir/usr/lib/gcc/ 2>&1 | head -20
-          fi
-          
-          echo "Bundled headers copied successfully"
-
-      - name: Copy clang binaries and libraries from temporary location
-        run: |
-          echo "Copying clang binaries and libraries from temporary location..."
-          
-          # Copy clang binaries
-          if [ -d "/tmp/clang-binaries/bin" ]; then
-            echo "Copying clang binaries..."
-            mkdir -p AppDir/usr/bin
-            cp -v /tmp/clang-binaries/bin/clang++ AppDir/usr/bin/ || true
-            cp -v /tmp/clang-binaries/bin/clang AppDir/usr/bin/ || true
-            cp -v /tmp/clang-binaries/bin/clang-cpp AppDir/usr/bin/ || true
-            chmod +x AppDir/usr/bin/clang++ AppDir/usr/bin/clang 2>/dev/null || true
-            echo "✓ Clang binaries copied"
-          fi
-          
-          # Copy clang libraries
-          if [ -d "/tmp/clang-binaries/lib" ]; then
-            echo "Copying clang libraries..."
-            mkdir -p AppDir/usr/lib/clang-libs
-            cp -rv /tmp/clang-binaries/lib/* AppDir/usr/lib/clang-libs/ 2>&1 | head -20
-            echo "✓ Clang libraries copied"
-          fi
-          
-          # Verify clang is in AppDir
-          if [ -f "AppDir/usr/bin/clang++" ]; then
-            echo "✓ clang++ found in AppDir"
-            ls -lh AppDir/usr/bin/clang++
-          else
-            echo "✗ clang++ NOT found in AppDir!"
-          fi
-
-      - name: Copy precompiled header and project headers
-        run: |
-          # Create all necessary include directories
-          mkdir -p AppDir/usr/include/utilities
-          mkdir -p AppDir/usr/include/visualiser
-          mkdir -p AppDir/usr/include/visualiserProxy
-          mkdir -p AppDir/usr/include/config
-          mkdir -p AppDir/usr/include/widgets
-
-          # Copy precompiled header if it exists
-          if [ -f "build/include/SceneWidgetVisualizer.pch.gch" ]; then
-            cp build/include/SceneWidgetVisualizer.pch.gch AppDir/usr/include/ || true
-            echo "Precompiled header copied successfully"
-          else
-            echo "Warning: Precompiled header not found at build/include/SceneWidgetVisualizer.pch.gch"
-          fi
-
           # Copy precompiled header source
-          if [ -f "visualiserProxy/SceneWidgetVisualizer.pch.h" ]; then
-            cp visualiserProxy/SceneWidgetVisualizer.pch.h AppDir/usr/include/ || true
-          fi
+          echo "Copying precompiled header..."
+          cp visualiserProxy/SceneWidgetVisualizer.pch.h ${APPDIR}/usr/include/ || true
+          
+          # Copy project headers
+          echo "Copying project headers..."
+          cp -r utilities/*.h ${APPDIR}/usr/include/utilities/ 2>/dev/null || true
+          cp -r utilities/*.hpp ${APPDIR}/usr/include/utilities/ 2>/dev/null || true
+          
+          cp -r visualiser/*.h ${APPDIR}/usr/include/visualiser/ 2>/dev/null || true
+          cp -r visualiser/*.hpp ${APPDIR}/usr/include/visualiser/ 2>/dev/null || true
+          
+          cp -r visualiserProxy/*.h ${APPDIR}/usr/include/visualiserProxy/ 2>/dev/null || true
+          cp -r visualiserProxy/*.hpp ${APPDIR}/usr/include/visualiserProxy/ 2>/dev/null || true
+          
+          cp -r config/*.h ${APPDIR}/usr/include/config/ 2>/dev/null || true
+          cp -r config/*.hpp ${APPDIR}/usr/include/config/ 2>/dev/null || true
+          
+          cp -r widgets/*.h ${APPDIR}/usr/include/widgets/ 2>/dev/null || true
+          cp -r widgets/*.hpp ${APPDIR}/usr/include/widgets/ 2>/dev/null || true
+          
+          echo "✓ Project headers copied"
 
-          # Copy all headers from utilities/
-          if [ -d "utilities" ]; then
-            cp -r utilities/*.h AppDir/usr/include/utilities/ 2>/dev/null || true
-            cp -r utilities/*.hpp AppDir/usr/include/utilities/ 2>/dev/null || true
-          fi
-
-          # Copy all headers from visualiser/
-          if [ -d "visualiser" ]; then
-            cp -r visualiser/*.h AppDir/usr/include/visualiser/ 2>/dev/null || true
-            cp -r visualiser/*.hpp AppDir/usr/include/visualiser/ 2>/dev/null || true
-          fi
-
-          # Copy all headers from visualiserProxy/
-          if [ -d "visualiserProxy" ]; then
-            cp -r visualiserProxy/*.h AppDir/usr/include/visualiserProxy/ 2>/dev/null || true
-            cp -r visualiserProxy/*.hpp AppDir/usr/include/visualiserProxy/ 2>/dev/null || true
-          fi
-
-          # Copy all headers from config/
-          if [ -d "config" ]; then
-            cp -r config/*.h AppDir/usr/include/config/ 2>/dev/null || true
-            cp -r config/*.hpp AppDir/usr/include/config/ 2>/dev/null || true
-          fi
-
-          # Copy all headers from widgets/
-          if [ -d "widgets" ]; then
-            cp -r widgets/*.h AppDir/usr/include/widgets/ 2>/dev/null || true
-            cp -r widgets/*.hpp AppDir/usr/include/widgets/ 2>/dev/null || true
-          fi
-
-          echo "Project headers copied successfully"
-
-      - name: Copy VTK headers
+      # step 8B: Copy additional glibc headers for clang
+      - name: Copy required glibc system headers for clang
         run: |
-          # Copy VTK headers
-          if [ -d "/usr/include/vtk-9.1" ]; then
-            mkdir -p AppDir/usr/include/vtk
-            cp -r /usr/include/vtk-9.1/* AppDir/usr/include/vtk/ || true
-          elif [ -d "/usr/include/vtk" ]; then
-            cp -r /usr/include/vtk AppDir/usr/include/ || true
-          fi
+          echo "Copying minimal glibc headers..."
 
-      - name: Copy Qt libraries
-        run: |
-          # Find Qt library path
-          QT_LIB_PATH=$(qmake -query QT_INSTALL_LIBS)
+          SRC=/usr/include
+          DST=${APPDIR}/usr/include/glibc
 
-          # Copy essential Qt libraries
-          for lib in Core Gui Widgets OpenGL DBus XcbQpa; do
-            cp -P ${QT_LIB_PATH}/libQt5${lib}.so* AppDir/usr/lib/ || true
+          mkdir -p "$DST"
+
+          # Copy the single most important header
+          cp $SRC/features.h $DST/ || true
+
+          # Copy directories required by libc++ and clang
+          for d in gnu bits sys asm linux x86_64-linux-gnu; do
+            if [ -d "$SRC/$d" ]; then
+              cp -r "$SRC/$d" "$DST/" || true
+            fi
           done
 
+          echo "✓ glibc minimal headers copied"
+
+      ################### Step 9: Copy system libraries (Qt, VTK, dependencies) ###################
+      - name: Copy Qt libraries
+        run: |
+          echo "Copying Qt libraries..."
+          QT_LIB_PATH=$(qmake -query QT_INSTALL_LIBS)
+          
+          # Copy essential Qt libraries
+          for lib in Core Gui Widgets OpenGL DBus XcbQpa; do
+            cp -P ${QT_LIB_PATH}/libQt5${lib}.so* ${APPDIR}/usr/lib/ 2>/dev/null || true
+          done
+          
           # Copy Qt plugins
           QT_PLUGINS=$(qmake -query QT_INSTALL_PLUGINS)
-          mkdir -p AppDir/usr/plugins
-          cp -r ${QT_PLUGINS}/platforms AppDir/usr/plugins/ || true
-          cp -r ${QT_PLUGINS}/xcbglintegrations AppDir/usr/plugins/ || true
-          cp -r ${QT_PLUGINS}/imageformats AppDir/usr/plugins/ || true
+          mkdir -p ${APPDIR}/usr/plugins
+          cp -r ${QT_PLUGINS}/platforms ${APPDIR}/usr/plugins/ 2>/dev/null || true
+          cp -r ${QT_PLUGINS}/xcbglintegrations ${APPDIR}/usr/plugins/ 2>/dev/null || true
+          cp -r ${QT_PLUGINS}/imageformats ${APPDIR}/usr/plugins/ 2>/dev/null || true
+          
+          echo "✓ Qt libraries copied"
 
       - name: Copy VTK libraries
         run: |
+          echo "Copying VTK libraries..."
+          
           # Find and copy VTK libraries
-          VTK_LIBS=$(find /usr/lib/x86_64-linux-gnu -name "libvtk*.so*" -type f)
+          VTK_LIBS=$(find /usr/lib/x86_64-linux-gnu -name "libvtk*.so*" -type f 2>/dev/null)
           for lib in $VTK_LIBS; do
-            cp -P $lib AppDir/usr/lib/ || true
-            # Also copy symlinks
-            if [ -L $lib ]; then
-              cp -d $lib AppDir/usr/lib/ || true
-            fi
+            cp -P "$lib" ${APPDIR}/usr/lib/ 2>/dev/null || true
           done
-
-          # Copy VTK dependencies
-          for lib in /usr/lib/x86_64-linux-gnu/libvtk*.so*; do
-            [ -e "$lib" ] && cp -P "$lib" AppDir/usr/lib/ || true
-          done
+          
+          echo "✓ VTK libraries copied"
 
       - name: Copy system dependencies
         run: |
+          echo "Copying system library dependencies..."
+          
           # Function to copy library and its dependencies
-          copy_deps() {
+          copy_lib_deps() {
             local binary=$1
+            if [ ! -f "$binary" ]; then
+              return
+            fi
+            
             ldd "$binary" 2>/dev/null | grep "=> /" | awk '{print $3}' | while read lib; do
               if [ -f "$lib" ]; then
-                # Skip system libraries that should be on every system
+                # Skip core system libraries
                 case "$lib" in
                   /lib/x86_64-linux-gnu/libc.so*|\
                   /lib/x86_64-linux-gnu/libm.so*|\
@@ -398,105 +296,112 @@ jobs:
                     continue
                     ;;
                 esac
-                cp -n "$lib" AppDir/usr/lib/ 2>/dev/null || true
+                cp -n "$lib" ${APPDIR}/usr/lib/ 2>/dev/null || true
               fi
             done
           }
-
+          
           # Copy dependencies for main executable
-          copy_deps "AppDir/usr/bin/${PROJECT_NAME}"
-
-          # Copy dependencies for Qt and VTK libraries
-          for lib in AppDir/usr/lib/*.so*; do
-            [ -f "$lib" ] && copy_deps "$lib"
+          copy_lib_deps "${APPDIR}/usr/bin/${PROJECT_NAME}"
+          
+          # Copy dependencies for all libraries
+          for lib in ${APPDIR}/usr/lib/*.so*; do
+            [ -f "$lib" ] && copy_lib_deps "$lib"
           done
+          
+          echo "✓ System dependencies copied"
 
-      ################### icons and desktop entry ###################
-      - name: Prepare application icon
-        run: |
-          if [ -f icons/application.png ]; then
-            cp icons/application.png AppDir/usr/share/icons/hicolor/256x256/apps/${PROJECT_NAME}.png
-            cp icons/application.png AppDir/${PROJECT_NAME}.png
-          else
-            # Create a dummy icon if none exists
-            convert -size 256x256 xc:blue AppDir/${PROJECT_NAME}.png
-            cp AppDir/${PROJECT_NAME}.png AppDir/usr/share/icons/hicolor/256x256/apps/${PROJECT_NAME}.png
-          fi
-
-      - name: Create .desktop file
-        run: |
-          cat > AppDir/${PROJECT_NAME}.desktop << EOF
-          [Desktop Entry]
-          Name=${PROJECT_NAME}
-          Exec=${PROJECT_NAME}
-          Icon=${PROJECT_NAME}
-          Type=Application
-          Categories=Utility;Science;
-          EOF
-
-          cp AppDir/${PROJECT_NAME}.desktop AppDir/usr/share/applications/
-
+      ################### Step 10: Create AppRun script ###################
       - name: Create AppRun script
         run: |
-          cat > AppDir/AppRun << EOF
+          cat > ${APPDIR}/AppRun << APPRUN_EOF
           #!/bin/bash
+          # AppRun script for OOpenCal Viewer
+          # Sets up environment for running the application and compiling plugins
+
           SELF=\$(readlink -f "\$0")
           HERE=\${SELF%/*}
 
-          # Set up library path for Qt and other libraries
-          # (clang++ will use RPATH to find its own libraries)
+          # Set up library paths for Qt, VTK, and clang
           export LD_LIBRARY_PATH="\${HERE}/usr/lib:\${LD_LIBRARY_PATH}"
 
           # Set up Qt plugin path
           export QT_PLUGIN_PATH="\${HERE}/usr/plugins"
           export QT_QPA_PLATFORM_PLUGIN_PATH="\${HERE}/usr/plugins/platforms"
 
-          # Set OOPENCAL_VIEWER_ROOT to point to AppImage include directory
-          export OOPENCAL_VIEWER_ROOT="\${HERE}/usr/include"
-
-          # Set PRECOMPILED_HEADER_PATH for plugin compilation
+          # Environment variables for plugin compilation
+          export OOPENCAL_VIEWER_ROOT="\${HERE}/usr"
           export PRECOMPILED_HEADER_PATH="\${HERE}/usr/include"
-
-          # Set clang toolchain path for plugin compilation
           export CLANG_TOOLCHAIN_PATH="\${HERE}/usr/bin"
 
-          # Disable Qt's automatic high DPI scaling (user can set QT_AUTO_SCREEN_SCALE_FACTOR=1 if needed)
+          # Disable Qt's automatic high DPI scaling
           export QT_AUTO_SCREEN_SCALE_FACTOR=0
 
           # Execute the application
           exec "\${HERE}/usr/bin/${PROJECT_NAME}" "\$@"
-          EOF
+          APPRUN_EOF
+          
+          chmod +x ${APPDIR}/AppRun
+          echo "✓ AppRun script created"
 
-          chmod +x AppDir/AppRun
-
-      - name: Fix RPATH for all binaries and libraries
+      ################### Step 11: Create desktop entry and icon ###################
+      - name: Create desktop entry
         run: |
-          # Fix RPATH for main executable
-          patchelf --set-rpath '$ORIGIN/../lib' AppDir/usr/bin/${PROJECT_NAME} || true
+          cat > ${APPDIR}/${PROJECT_NAME}.desktop << 'DESKTOP_EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=OOpenCal-Viewer
+          Exec=AppRun
+          Icon=OOpenCal-Viewer
+          Terminal=false
+          Categories=Utility;Science;
+          DESKTOP_EOF
 
-          # Fix RPATH for clang++ to find its libraries
-          if [ -f "AppDir/usr/bin/clang++" ]; then
-            patchelf --set-rpath '$ORIGIN/../lib/clang-libs:$ORIGIN/../lib' AppDir/usr/bin/clang++ || true
+          # Create a simple icon if not present
+          if [ -f "icons/application.png" ]; then
+            cp icons/application.png ${APPDIR}/${PROJECT_NAME}.png
+          else
+            # Create a minimal placeholder icon
+            convert -size 256x256 xc:blue ${APPDIR}/${PROJECT_NAME}.png 2>/dev/null || \
+            touch ${APPDIR}/${PROJECT_NAME}.png
           fi
+          
+          echo "✓ Desktop entry created"
 
+      ################### Step 12: Fix RPATH for binaries ###################
+      - name: Fix RPATH for binaries and libraries
+        run: |
+          echo "Fixing RPATH..."
+          
+          # Fix RPATH for main executable
+          patchelf --set-rpath '$ORIGIN/../lib' ${APPDIR}/usr/bin/${PROJECT_NAME} 2>/dev/null || true
+          
+          # Fix RPATH for clang to find its libraries
+          patchelf --set-rpath '$ORIGIN/../lib' ${APPDIR}/usr/bin/clang++ 2>/dev/null || true
+          patchelf --set-rpath '$ORIGIN/../lib' ${APPDIR}/usr/bin/clang 2>/dev/null || true
+          
           # Fix RPATH for all libraries
-          find AppDir/usr/lib -name "*.so*" -type f -exec \
+          find ${APPDIR}/usr/lib -name "*.so*" -type f -exec \
             patchelf --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
+          
+          echo "✓ RPATH fixed"
 
-      ################### create AppImage ###################
+      ################### Step 13: Create AppImage ###################
       - name: Download appimagetool
         run: |
           wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
+          echo "✓ appimagetool downloaded"
 
       - name: Create AppImage
         run: |
-          # Use --appimage-extract-and-run to work without FUSE in CI environment
-          # Set ARCH explicitly to avoid architecture detection issues
-          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir ${PROJECT_NAME}-x86_64.AppImage
+          echo "Creating AppImage..."
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run ${APPDIR} ${PROJECT_NAME}-x86_64.AppImage
           chmod +x ${PROJECT_NAME}-x86_64.AppImage
+          ls -lh ${PROJECT_NAME}-x86_64.AppImage
+          echo "✓ AppImage created successfully"
 
-      ################### artifacts ###################
+      ################### Upload artifacts ###################
       - name: Upload AppImage artifact
         if: ${{ !env.ACT }}
         uses: actions/upload-artifact@v4
@@ -516,3 +421,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ env.PROJECT_NAME }}-x86_64.AppImage
+          body: |
+            AppImage build for OOpenCal Viewer
+            - Includes Qt5, VTK9, and portable clang/LLVM 17 toolchain
+            - Self-contained with all dependencies
+            - Supports runtime plugin compilation
+            - Ready to run on any Linux system
+            - No system dependencies required
