@@ -1304,6 +1304,19 @@ void SceneWidget::setCameraYaw(double angle)
     applyCameraAngles();
 }
 
+void SceneWidget::resetCameraZoom()
+{
+    auto camera = renderer->GetActiveCamera();
+    if (! camera)
+        return;
+
+    // Reset camera to default position while preserving rotation angles
+    // This is done by calling ResetCamera which fits all objects in view
+    renderer->ResetCamera();
+
+    triggerRenderUpdate();
+}
+
 void SceneWidget::setSubstatesDockWidget(SubstatesDockWidget* dockWidget)
 {
     m_substatesDockWidget = dockWidget;

@@ -196,6 +196,12 @@ public:
         return cameraYaw;
     }
 
+    /// @brief Reset camera zoom to default level (fit all objects in view).
+    /// 
+    /// This method resets the camera distance to its default position, fitting all
+    /// scene objects in the viewport. The camera orientation (rotation angles) is preserved.
+    void resetCameraZoom();
+
     /// @brief Set the substate dock widget for displaying cell information.
     /// 
     /// @param dockWidget Pointer to the SubstatesDockWidget

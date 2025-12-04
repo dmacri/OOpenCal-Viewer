@@ -1448,6 +1448,9 @@ void MainWindow::onResetCameraRequested()
     ui->sceneWidget->setCameraPitch(0);
     ui->sceneWidget->setCameraYaw(0);
     
+    // Reset zoom to default level
+    ui->sceneWidget->resetCameraZoom();
+    
     // Reset all sliders to 0
     QSignalBlocker rollBlocker(ui->rollSlider);
     QSignalBlocker pitchBlocker(ui->pitchSlider);
