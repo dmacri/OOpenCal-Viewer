@@ -344,7 +344,8 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                               gridActor,
                                                               activeSubstateFor3D,
                                                               substateInfo.minValue,
-                                                              substateInfo.maxValue);
+                                                              substateInfo.maxValue,
+                                                              &substateInfo);
 
             updateCameraPivotFromBounds();
             return;
@@ -382,7 +383,8 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                     gridActor,
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
-                                                                    substateInfo.maxValue);
+                                                                    substateInfo.maxValue,
+                                                                    &substateInfo);
             updateCameraPivotFromBounds();
             return;
         }

@@ -74,10 +74,10 @@ public:
 
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
-    void drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue);
+    void drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const SubstateInfo* substateInfo = nullptr);
     /// @brief Refresh 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
-    void refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue);
+    void refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const SubstateInfo* substateInfo = nullptr);
 
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor);
@@ -109,11 +109,13 @@ private:
      * @param substateFieldName Name of the substate field to extract
      * @param minValue Minimum value for normalization
      * @param maxValue Maximum value for normalization
+     * @param substateInfo Substate info for custom coloring (optional)
      * @return vtkSmartPointer<vtkPolyData> with quad mesh and colors */
     template<class Matrix>
     vtkSmartPointer<vtkPolyData> build3DSubstateSurfaceQuadMesh(const Matrix& p, int nRows, int nCols,
                                                                 const std::string& substateFieldName,
-                                                                double minValue, double maxValue);
+                                                                double minValue, double maxValue,
+                                                                const SubstateInfo* substateInfo = nullptr);
 
     /** @brief Creates a vtkPolyData representing a set of 2D lines.
       * @param lines Vector of Line objects (each defines a line segment)
@@ -298,7 +300,8 @@ Color Visualizer::calculateCellColor(int row, int column, const Matrix &p, const
 template<class Matrix>
 vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Matrix& p, int nRows, int nCols,
                                                                         const std::string& substateFieldName,
-                                                                        double minValue, double maxValue)
+                                                                        double minValue, double maxValue,
+                                                                        const SubstateInfo* substateInfo)
 {
     // Validate min/max values
     if (std::isnan(minValue) || std::isnan(maxValue) || minValue >= maxValue)
@@ -324,11 +327,11 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Ma
         }
     };
 
-    // Helper lambda to get cell color
+    // Helper lambda to get cell color using calculateCellColor for proper custom color handling
     auto getCellColor = [&](int row, int col) -> Color {
         if (row < 0 || row >= nRows || col < 0 || col >= nCols)
             return Color(0, 0, 0);
-        return p[row][col].outputValue(nullptr);
+        return calculateCellColor(row, col, p, substateInfo);
     };
 
     // Helper lambda to check if value is valid (not no-data)
@@ -464,7 +467,8 @@ void Visualizer::drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols,
                                        vtkSmartPointer<vtkRenderer> renderer,
                                        vtkSmartPointer<vtkActor> gridActor,
                                        const std::string& substateFieldName,
-                                       double minValue, double maxValue)
+                                       double minValue, double maxValue,
+                                       const SubstateInfo* substateInfo)
 {
     // Validate min/max values
     if (std::isnan(minValue) || std::isnan(maxValue) || minValue >= maxValue)
@@ -481,7 +485,7 @@ void Visualizer::drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols,
     }
 
     // Build quad mesh surface
-    vtkSmartPointer<vtkPolyData> surfacePolyData = build3DSubstateSurfaceQuadMesh(p, nRows, nCols, substateFieldName, minValue, maxValue);
+    vtkSmartPointer<vtkPolyData> surfacePolyData = build3DSubstateSurfaceQuadMesh(p, nRows, nCols, substateFieldName, minValue, maxValue, substateInfo);
 
     // Create mapper
     vtkNew<vtkPolyDataMapper> mapper;
@@ -507,7 +511,8 @@ template<class Matrix>
 void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols,
                                              vtkSmartPointer<vtkActor> gridActor,
                                              const std::string& substateFieldName,
-                                             double minValue, double maxValue)
+                                             double minValue, double maxValue,
+                                             const SubstateInfo* substateInfo)
 {
     // Validate min/max values
     if (std::isnan(minValue) || std::isnan(maxValue) || minValue >= maxValue)
@@ -516,7 +521,7 @@ void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCo
     if (auto mapper = vtkPolyDataMapper::SafeDownCast(gridActor->GetMapper()))
     {
         // Build new quad mesh surface
-        vtkSmartPointer<vtkPolyData> surfacePolyData = build3DSubstateSurfaceQuadMesh(p, nRows, nCols, substateFieldName, minValue, maxValue);
+        vtkSmartPointer<vtkPolyData> surfacePolyData = build3DSubstateSurfaceQuadMesh(p, nRows, nCols, substateFieldName, minValue, maxValue, substateInfo);
 
         // Update mapper with new data
         mapper->SetInputData(surfacePolyData);
