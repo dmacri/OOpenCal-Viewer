@@ -14,16 +14,16 @@ set -e
 #         - Detects OS (Ubuntu/Debian or Other Linux)
 #         - Checks required system packages on Debian-based systems
 #         - Uses CMake + Make (not Ninja)
-#         - Supports Qt5 (default) or Qt6 via --qt6
+#         - Supports Qt6 (default) or Qt5 via --qt5
 #         - Validates the OOpenCAL directory
 #         - Shows colored logs and build progress
 #
 #  USAGE:
-#      ./build_viewer.sh --oopencal <path> [--qt6]
+#      ./build_viewer.sh --oopencal <path> [--qt5]
 #
 #  OPTIONS:
 #      --oopencal <path>    Path to directory containing OOpenCAL/
-#      --qt6                Enable Qt6 mode (default: Qt5)
+#      --qt5                Enable Qt5 mode (default: Qt6)
 #
 # ================================================================
 
@@ -68,7 +68,7 @@ echo
 # ================================================================
 # Parse arguments
 # ================================================================
-QT_VERSION="qt5"
+QT_VERSION="qt6"
 OOPENCAL_DIR=""
 
 while [[ $# -gt 0 ]]; do
@@ -77,8 +77,8 @@ while [[ $# -gt 0 ]]; do
             OOPENCAL_DIR="$(realpath "$2")"
             shift 2
             ;;
-        --qt6)
-            QT_VERSION="qt6"
+        --qt5)
+            QT_VERSION="qt5"
             shift
             ;;
         *)
@@ -137,6 +137,13 @@ if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
             libeigen3-dev libfreetype-dev
             libpng-dev libjpeg-dev libtiff-dev zlib1g-dev
         )
+        
+        # WARNING: libvtk9-qt-dev on Ubuntu 24.04 is compiled with Qt5, not Qt6
+        # This may cause linking issues. Consider using Qt5 mode if you encounter
+        # VTK-related linker errors.
+        log_warn "libvtk9-qt-dev on Ubuntu 24.04 is compiled with Qt5"
+        log_warn "If you encounter VTK linking errors, try: ./build_viewer.sh --oopencal <path> --qt5"
+        
     else
         REQUIRED_PACKAGES=(
             build-essential cmake
