@@ -76,6 +76,12 @@ public:
      * @return true if the model is registered, false otherwise */
     static bool isModelRegistered(const std::string& modelName);
 
+    static bool unregisterModel(const std::string& modelName)
+    {
+        auto& registry = getRegistry();
+        return registry.erase(modelName) > 0;
+    }
+
 private:
     /// Registry of model creation functions
     static std::map<std::string, ModelCreator>& getRegistry();

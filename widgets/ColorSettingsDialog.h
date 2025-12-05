@@ -45,6 +45,7 @@ private slots:
     void onTextColorClicked();
     void onGridColorClicked();
     void onHighlightColorClicked();
+    void onFlatSceneBackgroundColorClicked();
     void onResetColors();
     void onAccepted();
     void onRejected();
@@ -63,4 +64,5 @@ private:
     QColor m_textColor;
     QColor m_gridColor;
     QColor m_highlightColor;
+    QColor m_flatSceneBackgroundColor;
 };

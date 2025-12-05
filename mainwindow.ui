@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>814</width>
+    <width>871</width>
     <height>600</height>
    </rect>
   </property>
@@ -40,6 +40,177 @@
     <property name="spacing">
      <number>0</number>
     </property>
+    <item row="16" column="2" colspan="2">
+     <widget class="QWidget" name="camera3DControlsWidget" native="true">
+      <property name="visible">
+       <bool>false</bool>
+      </property>
+      <layout class="QHBoxLayout" name="camera3DControlsLayout">
+       <property name="leftMargin">
+        <number>5</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>5</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="rollLabel">
+         <property name="text">
+          <string>Roll (X):</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSlider" name="rollSlider">
+         <property name="toolTip">
+          <string>Camera rotation around X axis</string>
+         </property>
+         <property name="minimum">
+          <number>-180</number>
+         </property>
+         <property name="maximum">
+          <number>180</number>
+         </property>
+         <property name="value">
+          <number>0</number>
+         </property>
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="rollSpinBox">
+         <property name="suffix">
+          <string>°</string>
+         </property>
+         <property name="minimum">
+          <number>-180</number>
+         </property>
+         <property name="maximum">
+          <number>180</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="pitchLabel">
+         <property name="text">
+          <string>Pitch (Y):</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSlider" name="pitchSlider">
+         <property name="toolTip">
+          <string>Camera rotation around Y axis</string>
+         </property>
+         <property name="minimum">
+          <number>-180</number>
+         </property>
+         <property name="maximum">
+          <number>180</number>
+         </property>
+         <property name="value">
+          <number>0</number>
+         </property>
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="pitchSpinBox">
+         <property name="suffix">
+          <string>°</string>
+         </property>
+         <property name="minimum">
+          <number>-180</number>
+         </property>
+         <property name="maximum">
+          <number>180</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="yawLabel">
+         <property name="text">
+          <string>Yaw (Z):</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSlider" name="yawSlider">
+         <property name="toolTip">
+          <string>Camera rotation around Z axis</string>
+         </property>
+         <property name="minimum">
+          <number>-180</number>
+         </property>
+         <property name="maximum">
+          <number>180</number>
+         </property>
+         <property name="value">
+          <number>0</number>
+         </property>
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="yawSpinBox">
+         <property name="suffix">
+          <string>°</string>
+         </property>
+         <property name="minimum">
+          <number>-180</number>
+         </property>
+         <property name="maximum">
+          <number>180</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="resetCameraButton">
+         <property name="toolTip">
+          <string>Reset camera to initial position and orientation</string>
+         </property>
+         <property name="text">
+          <string>Reset Camera</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="camera3DHorizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item row="14" column="2">
+     <widget class="QLabel" name="openConfigurationFileLabel">
+      <property name="text">
+       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:26pt; color:#333333;&quot;&gt;Welcome!&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; color:#333333;&quot;&gt;&lt;br/&gt;To get started, please select&lt;br/&gt;&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; font-weight:700; color:#333333;&quot;&gt;File → Open Configuration&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; color:#333333;&quot;&gt;&lt;br/&gt;&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:10pt; color:#333333;&quot;&gt;from the menu to load your configuration. &lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      </property>
+      <property name="textFormat">
+       <enum>Qt::TextFormat::RichText</enum>
+      </property>
+     </widget>
+    </item>
     <item row="15" column="2">
      <layout class="QVBoxLayout" name="verticalLayout">
       <property name="leftMargin">
@@ -78,144 +249,7 @@
       </item>
      </layout>
     </item>
-    <item row="18" column="0" colspan="16">
-     <widget class="ClickableLabel" name="inputFilePathLabel">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>15</height>
-       </size>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">margin: 0px; padding: 0px; cursor: pointer;</string>
-      </property>
-      <property name="frameShape">
-       <enum>QFrame::Shape::NoFrame</enum>
-      </property>
-      <property name="text">
-       <string>Input file: </string>
-      </property>
-     </widget>
-    </item>
-    <item row="16" column="2" colspan="4">
-     <widget class="QWidget" name="camera3DControlsWidget" native="true">
-      <property name="visible">
-       <bool>false</bool>
-      </property>
-      <layout class="QHBoxLayout" name="camera3DControlsLayout">
-       <property name="leftMargin">
-        <number>5</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>5</number>
-       </property>
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QLabel" name="azimuthLabel">
-         <property name="text">
-          <string>Azimuth:</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QSlider" name="azimuthSlider">
-         <property name="minimum">
-          <number>-180</number>
-         </property>
-         <property name="maximum">
-          <number>180</number>
-         </property>
-         <property name="value">
-          <number>0</number>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Orientation::Horizontal</enum>
-         </property>
-         <property name="toolTip">
-          <string>Camera rotation around Z axis</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QSpinBox" name="azimuthSpinBox">
-         <property name="suffix">
-          <string>°</string>
-         </property>
-         <property name="minimum">
-          <number>-180</number>
-         </property>
-         <property name="maximum">
-          <number>180</number>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLabel" name="elevationLabel">
-         <property name="text">
-          <string>Elevation:</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QSlider" name="elevationSlider">
-         <property name="minimum">
-          <number>-90</number>
-         </property>
-         <property name="maximum">
-          <number>90</number>
-         </property>
-         <property name="value">
-          <number>0</number>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Orientation::Horizontal</enum>
-         </property>
-         <property name="toolTip">
-          <string>Camera elevation angle</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QSpinBox" name="elevationSpinBox">
-         <property name="suffix">
-          <string>°</string>
-         </property>
-         <property name="minimum">
-          <number>-90</number>
-         </property>
-         <property name="maximum">
-          <number>90</number>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <spacer name="camera3DHorizontalSpacer">
-         <property name="orientation">
-          <enum>Qt::Orientation::Horizontal</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>40</width>
-           <height>20</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-      </layout>
-     </widget>
-    </item>
-    <item row="17" column="2" colspan="4">
+    <item row="17" column="2" colspan="2">
      <layout class="QHBoxLayout" name="buttonBoxLayout">
       <property name="spacing">
        <number>8</number>
@@ -417,7 +451,7 @@
       </item>
      </layout>
     </item>
-    <item row="4" column="0" rowspan="10" colspan="16">
+    <item row="4" column="0" rowspan="10" colspan="5">
      <widget class="SceneWidget" name="sceneWidget">
       <property name="enabled">
        <bool>true</bool>
@@ -436,17 +470,142 @@
       </property>
      </widget>
     </item>
-    <item row="14" column="2">
-     <widget class="QLabel" name="openConfigurationFileLabel">
-      <property name="text">
-       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:26pt; color:#333333;&quot;&gt;Welcome!&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; color:#333333;&quot;&gt;&lt;br/&gt;To get started, please select&lt;br/&gt;&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; font-weight:700; color:#333333;&quot;&gt;File → Open Configuration&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; color:#333333;&quot;&gt;&lt;br/&gt;&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:10pt; color:#333333;&quot;&gt;from the menu to load your configuration. &lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    <item row="18" column="1" colspan="2">
+     <widget class="QFrame" name="frame">
+      <property name="frameShape">
+       <enum>QFrame::Shape::StyledPanel</enum>
       </property>
-      <property name="textFormat">
-       <enum>Qt::TextFormat::RichText</enum>
+      <property name="frameShadow">
+       <enum>QFrame::Shadow::Raised</enum>
       </property>
+      <layout class="QHBoxLayout" name="horizontalLayout">
+       <item>
+        <widget class="ClickableLabel" name="inputFilePathLabel">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>15</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">margin: 0px; padding: 0px; cursor: pointer;</string>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::Shape::NoFrame</enum>
+         </property>
+         <property name="text">
+          <string>Input file: </string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="ReductionDisplayWidget" name="reductionWidget" native="true">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </item>
    </layout>
+  </widget>
+  <widget class="SubstatesDockWidget" name="substatesDockWidget">
+   <attribute name="dockWidgetArea">
+    <number>2</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents">
+    <layout class="QVBoxLayout" name="verticalLayout_2">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>0</number>
+     </property>
+     <item>
+      <widget class="QScrollArea" name="scrollArea">
+       <property name="widgetResizable">
+        <bool>true</bool>
+       </property>
+       <widget class="QWidget" name="scrollAreaWidgetContents">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>100</width>
+          <height>526</height>
+         </rect>
+        </property>
+        <layout class="QVBoxLayout" name="containerLayout">
+         <property name="spacing">
+          <number>8</number>
+         </property>
+         <property name="leftMargin">
+          <number>5</number>
+         </property>
+         <property name="topMargin">
+          <number>5</number>
+         </property>
+         <property name="rightMargin">
+          <number>5</number>
+         </property>
+         <property name="bottomMargin">
+          <number>5</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="cellHeaderLabel">
+           <property name="styleSheet">
+            <string notr="true">QLabel { font-weight: bold; padding: 2px; }</string>
+           </property>
+           <property name="text">
+            <string>Cell: (x=-, y=-)</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QFrame" name="separator">
+           <property name="frameShape">
+            <enum>QFrame::Shape::HLine</enum>
+           </property>
+           <property name="frameShadow">
+            <enum>QFrame::Shadow::Sunken</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="verticalSpacer">
+           <property name="orientation">
+            <enum>Qt::Orientation::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+     </item>
+    </layout>
+   </widget>
   </widget>
   <widget class="QStatusBar" name="statusbar">
    <property name="maximumSize">
@@ -478,7 +637,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>814</width>
+     <width>871</width>
      <height>22</height>
     </rect>
    </property>
@@ -486,23 +645,33 @@
     <property name="title">
      <string>File</string>
     </property>
-    <addaction name="actionOpenConfiguration"/>
-    <addaction name="separator"/>
     <widget class="QMenu" name="menuRecentFiles">
-     <property name="title">
-      <string>Recent Files</string>
-     </property>
      <property name="toolTip">
       <string>Recent model configuration files</string>
      </property>
+     <property name="title">
+      <string>Recent Files</string>
+     </property>
     </widget>
+    <widget class="QMenu" name="menuRecentDirectories">
+     <property name="toolTip">
+      <string>Recent model directories</string>
+     </property>
+     <property name="title">
+      <string>Recent Directories</string>
+     </property>
+    </widget>
+    <addaction name="actionOpenConfiguration"/>
+    <addaction name="separator"/>
     <addaction name="menuRecentFiles"/>
+    <addaction name="menuRecentDirectories"/>
+    <addaction name="separator"/>
+    <addaction name="actionLoadModelFromDirectory"/>
     <addaction name="separator"/>
     <addaction name="actionShow_config_details"/>
+    <addaction name="actionShow_reduction"/>
     <addaction name="separator"/>
     <addaction name="actionExport_Video"/>
-    <addaction name="separator"/>
-    <addaction name="actionColor_settings"/>
     <addaction name="separator"/>
     <addaction name="actionQuit"/>
    </widget>
@@ -523,10 +692,22 @@
     </property>
     <addaction name="action2DMode"/>
     <addaction name="action3DMode"/>
+    <addaction name="separator"/>
+    <addaction name="actionGridLines"/>
+    <addaction name="actionFlatSceneBackground"/>
+   </widget>
+   <widget class="QMenu" name="menuSettings">
+    <property name="title">
+     <string>Settings</string>
+    </property>
+    <addaction name="actionSilentMode"/>
+    <addaction name="separator"/>
+    <addaction name="actionColor_settings"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuModel"/>
    <addaction name="menuView"/>
+   <addaction name="menuSettings"/>
    <addaction name="menuHelp"/>
   </widget>
   <action name="actionOpenConfiguration">
@@ -621,6 +802,20 @@
     <string>Ctrl+P</string>
    </property>
   </action>
+  <action name="actionLoadModelFromDirectory">
+   <property name="icon">
+    <iconset theme="QIcon::ThemeIcon::FolderOpen"/>
+   </property>
+   <property name="text">
+    <string>Load Model from Directory...</string>
+   </property>
+   <property name="toolTip">
+    <string>Load a model from a directory (auto-compile if needed)</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+D</string>
+   </property>
+  </action>
   <action name="actionColor_settings">
    <property name="icon">
     <iconset theme="QIcon::ThemeIcon::PrinterPrinting"/>
@@ -654,6 +849,56 @@
     <string>Switch to 3D perspective view with rotation controls</string>
    </property>
   </action>
+  <action name="actionShow_reduction">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="QIcon::ThemeIcon::FormatTextDirectionLtr"/>
+   </property>
+   <property name="text">
+    <string>Show reduction</string>
+   </property>
+  </action>
+  <action name="actionGridLines">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Grid Lines</string>
+   </property>
+   <property name="toolTip">
+    <string>Show/hide grid lines between nodes</string>
+   </property>
+  </action>
+  <action name="actionFlatSceneBackground">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Flat Scene Background</string>
+   </property>
+   <property name="toolTip">
+    <string>Show/hide flat background plane in 3D mode (disabled in 2D mode)</string>
+   </property>
+  </action>
+  <action name="actionSilentMode">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Silent Mode</string>
+   </property>
+   <property name="toolTip">
+    <string>Suppress confirmation dialogs during automation</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>
@@ -670,6 +915,18 @@
    <class>ClickableLabel</class>
    <extends>QLabel</extends>
    <header location="global">widgets/ClickableLabel.h</header>
+  </customwidget>
+  <customwidget>
+   <class>ReductionDisplayWidget</class>
+   <extends>QWidget</extends>
+   <header location="global">widgets/ReductionDisplayWidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>SubstatesDockWidget</class>
+   <extends>QDockWidget</extends>
+   <header location="global">widgets/SubstatesDockWidget.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources>

@@ -53,12 +53,17 @@ public:
     {
         return highlightColor_;
     }
+    QColor flatSceneBackgroundColor() const
+    {
+        return flatSceneBackgroundColor_;
+    }
 
     // Setters
     void setBackgroundColor(const QColor& color);
     void setTextColor(const QColor& color);
     void setGridColor(const QColor& color);
     void setHighlightColor(const QColor& color);
+    void setFlatSceneBackgroundColor(const QColor& color);
 
     // Save/load settings
     void saveSettings();
@@ -69,6 +74,7 @@ public:
     static inline const QColor DEFAULT_TEXT{ Qt::black };
     static inline const QColor DEFAULT_GRID{ Qt::red };
     static inline const QColor DEFAULT_HIGHLIGHT{ Qt::yellow };
+    static inline const QColor DEFAULT_FLAT_SCENE_BACKGROUND{ 204, 204, 204 };  // Light gray (0.8, 0.8, 0.8)
 
 signals:
     void colorsChanged();
@@ -85,4 +91,5 @@ private:
     QColor textColor_;
     QColor gridColor_;
     QColor highlightColor_;
+    QColor flatSceneBackgroundColor_;
 };

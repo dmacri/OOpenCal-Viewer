@@ -1,4 +1,5 @@
 #include <iostream>
+#include <filesystem>
 #include <argparse/argparse.hpp>
 #include <QApplication>
 #include "CommandLineParser.h"
@@ -58,12 +59,24 @@ bool CommandLineParser::parse(int argc, char* argv[])
             return false;
         }
 
-        // Parse positional config file argument
+        // Parse positional argument - can be either config file or model directory
         if (auto cfg = program.present<std::vector<std::string>>(ARG_CONFIG))
         {
             if (! cfg->empty())
             {
-                configFile = cfg->at(0);
+                const std::string path = cfg->at(0);
+                configFile = path;
+                
+                // Check if it's a directory (model directory) or file (config file)
+                namespace fs = std::filesystem;
+                if (fs::exists(path) && fs::is_directory(path))
+                {
+                    isDirectory = true;
+                }
+                else
+                {
+                    isDirectory = false;
+                }
             }
         }
 
@@ -99,9 +112,11 @@ void CommandLineParser::printHelp() const
 {
     constexpr int WIDTH = 24; // variable min width
     const auto appName = QApplication::applicationName().toStdString();
-    std::cout << std::format("Usage: {} [CONFIG_FILE] [OPTIONS]\n\n", appName)
+    std::cout << std::format("Usage: {} [CONFIG_FILE|MODEL_DIR] [OPTIONS]\n\n", appName)
               << "Positional Arguments:\n"
-              << std::format("  {: <{}} Path to configuration file (optional)\n\n", "CONFIG_FILE", WIDTH)
+              << std::format("  {: <{}} Path to configuration file or model directory (optional)\n", "CONFIG_FILE|MODEL_DIR", WIDTH)
+              << std::format("  {: <{}} If directory: loads model from dir (Header.txt, .h file, data files)\n", "", WIDTH)
+              << std::format("  {: <{}} If file: loads configuration from file\n\n", "", WIDTH)
               << "Optional Arguments:\n"
               << std::format("  {: <{}} Load custom model plugin (can be repeated)\n", ARG_LOAD_MODEL, WIDTH)
               << std::format("  {: <{}} Start with specific model\n", ARG_STARTING_MODEL, WIDTH)
@@ -113,6 +128,7 @@ void CommandLineParser::printHelp() const
               << std::format("  {: <{}} Show this help message\n\n", "-h, --help", WIDTH)
               << "Examples:\n"
               << std::format("  {} config.txt\n", appName)
+              << std::format("  {} /path/to/model/directory\n", appName)
               << std::format("  {} config.txt {}=MyModel\n", appName, ARG_STARTING_MODEL)
               << std::format("  {} {}=/tmp/movie {}\n", appName, ARG_GENERATE_MOVIE, ARG_EXIT_AFTER_LAST);
 }

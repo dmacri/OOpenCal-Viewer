@@ -67,6 +67,14 @@ public:
     {
         return configFile;
     }
+    
+    /// @brief Check if the positional argument is a directory (for model loading) or config file.
+    /// @return true if it's a directory, false if it's a config file
+    bool isModelDirectory() const
+    {
+        return isDirectory;
+    }
+    
     bool shouldExitAfterLastStep() const
     {
         return exitAfterLastStep;
@@ -86,6 +94,7 @@ private:
     std::optional<std::string> generateImagePath;
     std::optional<int> step;
     std::optional<std::string> configFile;
+    bool isDirectory = false;  ///< true if configFile is actually a model directory
     bool exitAfterLastStep = false;
     bool silentMode = false;
 };

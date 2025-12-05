@@ -61,10 +61,22 @@ public:
     virtual void readStageStateFromFilesForStep(SettingParameter* sp, Line* lines) = 0;
 
     /// @brief Draw the visualization using VTK.
-    virtual void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor) = 0;
+    virtual void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const struct SubstateInfo* substateInfo = nullptr) = 0;
 
     /// @brief Refresh the VTK windows.
-    virtual void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor) = 0;
+    virtual void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const struct SubstateInfo* substateInfo = nullptr) = 0;
+
+    /// @brief Draw the visualization using VTK with 3D substate as quad mesh surface.
+    virtual void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) = 0;
+
+    /// @brief Refresh the VTK windows with 3D substate quad mesh surface.
+    virtual void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) = 0;
+
+    /// @brief Draw flat background plane at Z=0 for 3D visualization.
+    virtual void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor) = 0;
+
+    /// @brief Refresh flat background plane colors.
+    virtual void refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor) = 0;
 
     /// @brief Get the visualizer instance.
     virtual Visualizer& getVisualizer() = 0;
@@ -76,4 +88,16 @@ public:
 
     /// @brief Returns available steps from index file.
     virtual std::vector<StepIndex> availableSteps() const = 0;
+
+    /** @brief Get the string encoding of a cell at given grid coordinates.
+     * 
+     * This method retrieves the string representation of a cell at the specified
+     * grid position. The coordinates are in grid indices (row, col), not world coordinates.
+     * 
+     * @param row The row index of the cell (0-based, from top)
+     * @param col The column index of the cell (0-based, from left)
+     * @param details Optional field name to retrieve specific cell property (e.g., "h", "z").
+     *                If nullptr or empty, returns the default encoding.
+     * @return String representation of the cell via stringEncoding(), or empty string if out of bounds */
+    virtual std::string getCellStringEncoding(int row, int col, const char* details = nullptr) const = 0;
 };

@@ -11,20 +11,19 @@
 #include <INIReader.h>
 
 #include "Config.h"
+#include "ConfigConstants.h"
 
 
 namespace
 {
-/**
- * @brief Removes all whitespace characters from a std::string.
+/** @brief Removes all whitespace characters from a std::string.
  *
  * This function erases all characters for which std::isspace() returns true,
  * such as spaces, tabs, newlines, and other locale-defined whitespace.
  * It works in-place and automatically selects a ranges-based implementation
  * if supported by the compiler, otherwise falls back to classic erase–remove idiom.
  *
- * @param s Reference to the std::string to be modified in place.
- */
+ * @param s Reference to the std::string to be modified in place. */
 void remove_spaces(std::string& s)
 {
     auto removingRange = std::ranges::remove_if(s, [](unsigned char ch) {
@@ -35,8 +34,8 @@ void remove_spaces(std::string& s)
 } // namespace
 
 
-Config::Config(const std::string& configuration_path)
-    : configuration_path{configuration_path}
+Config::Config(const std::string& configuration_path, bool printWarnings)
+    : configuration_path{configuration_path}, printWarnings{printWarnings}
 {
     setUpConfigCategories();
 
@@ -45,30 +44,33 @@ Config::Config(const std::string& configuration_path)
 
 void Config::setUpConfigCategories()
 {
+    using namespace ConfigConstants;
+
     configCategories.push_back(ConfigCategory{
-        "GENERAL",
+        CATEGORY_GENERAL,
         {
-            {"number_of_columns", "610",  ConfigParameter::int_par},
-            {"number_of_rows",    "496",  ConfigParameter::int_par},
-            {"number_steps",      "4000", ConfigParameter::int_par},
-            {"output_file_name",  "sciddicaTout", ConfigParameter::string_par}
-        }
-    });
-    configCategories.push_back(ConfigCategory{
-        "DISTRIBUTED",
-        {
-            {"border_size_x", "1", ConfigParameter::int_par},
-            {"border_size_y", "1", ConfigParameter::int_par},
-            {"number_node_x", "4", ConfigParameter::int_par},
-            {"number_node_y", "4", ConfigParameter::int_par}
+            {PARAM_NUMBER_OF_COLUMNS, "610",  ConfigParameter::int_par},
+            {PARAM_NUMBER_OF_ROWS,    "496",  ConfigParameter::int_par},
+            {PARAM_NUMBER_STEPS,      "4000", ConfigParameter::int_par},
+            {PARAM_OUTPUT_FILE_NAME,  "sciddicaTout", ConfigParameter::string_par}
         }
     });
 
     configCategories.push_back(ConfigCategory{
-        "LOAD_BALANCING",
+        CATEGORY_DISTRIBUTED,
         {
-            {"firstLB", "100", ConfigParameter::int_par},
-            {"stepLB",  "100", ConfigParameter::int_par}
+            {PARAM_BORDER_SIZE_X, "1", ConfigParameter::int_par},
+            {PARAM_BORDER_SIZE_Y, "1", ConfigParameter::int_par},
+            {PARAM_NUMBER_NODE_X, "4", ConfigParameter::int_par},
+            {PARAM_NUMBER_NODE_Y, "4", ConfigParameter::int_par}
+        }
+    });
+
+    configCategories.push_back(ConfigCategory{
+        CATEGORY_LOAD_BALANCING,
+        {
+            {PARAM_FIRST_LB, "100", ConfigParameter::int_par},
+            {PARAM_STEP_LB,  "100", ConfigParameter::int_par}
         }
     });
 
@@ -91,9 +93,9 @@ void Config::setUpConfigCategories()
 
 
     configCategories.push_back(ConfigCategory{
-        "MULTICUDA",
+        CATEGORY_MULTICUDA,
         {
-            {"number_of_gpus_per_node", "2", ConfigParameter::int_par}
+            {PARAM_NUMBER_OF_GPUS_PER_NODE, "2", ConfigParameter::int_par}
         }
     });
 
@@ -103,18 +105,18 @@ void Config::setUpConfigCategories()
     // });
 
     configCategories.push_back(ConfigCategory{
-        "SHARED",
+        CATEGORY_SHARED,
         {
-            {"chunk_size", "1", ConfigParameter::int_par}
+            {PARAM_CHUNK_SIZE, "1", ConfigParameter::int_par}
         }
     });
 
     configCategories.push_back(ConfigCategory{
-        "VISUALIZATION",
+        CATEGORY_VISUALIZATION,
         {
-            {"substates", "h", ConfigParameter::string_par},
-            {"mode", "text", ConfigParameter::string_par},
-            {"reduction", "sum,min,max", ConfigParameter::string_par}
+            {PARAM_SUBSTATES, "", ConfigParameter::string_par},
+            {PARAM_MODE,      "", ConfigParameter::string_par},
+            {PARAM_REDUCTION, "", ConfigParameter::string_par}
         }
     });
 }
@@ -189,7 +191,8 @@ void Config::readConfigFile()
         throw std::runtime_error("The path to configuration file is empty!");
     }
 
-    std::cout << std::format("READING '{}'...\n", configuration_path);
+    if (printWarnings)
+        std::cout << std::format("READING '{}'...", configuration_path) << std::endl;
     std::filesystem::path configurationFile(configuration_path);
     if (".txt" == configurationFile.extension())
     {
@@ -221,7 +224,8 @@ void Config::readConfigFileInOOpenCalFormat()
 
         if (line.back() != ':')
         {
-            std::cerr << "WARNING: Category name must end with ':' character, skipping line: " << line << std::endl;
+            if (printWarnings)
+                std::cerr << "WARNING: Category name must end with ':' character, skipping line: " << line << std::endl;
             continue;
         }
 
@@ -254,15 +258,15 @@ void Config::readConfigFileInOOpenCalFormat()
         {
             if (! std::getline(file, line))
             {
-                std::cerr << "WARNING: Unexpected end of file while reading parameters for category '" 
-                          << configCategory->getName() << "'" << std::endl;
+                if (printWarnings)
+                    std::cerr << "WARNING: Unexpected end of file while reading parameters for category '"  << configCategory->getName() << "'" << std::endl;
                 break;
             }
 
             if (line.empty())
             {
-                std::cerr << "WARNING: Empty parameter line in category '" 
-                          << configCategory->getName() << "'" << std::endl;
+                if (printWarnings)
+                    std::cerr << "WARNING: Empty parameter line in category '" << configCategory->getName() << "'" << std::endl;
                 i--; // Don't count this as a parameter
                 continue;
             }
@@ -270,7 +274,8 @@ void Config::readConfigFileInOOpenCalFormat()
             auto pos = line.find('=');
             if (pos == std::string::npos)
             {
-                std::cerr << "WARNING: Invalid parameter line (no '=' found): '" << line << "'" << std::endl;
+                if (printWarnings)
+                    std::cerr << "WARNING: Invalid parameter line (no '=' found): '" << line << "'" << std::endl;
                 i--; // Don't count this as a parameter
                 continue;
             }
@@ -287,8 +292,9 @@ void Config::readConfigFileInOOpenCalFormat()
             }
             catch (const std::exception& e)
             {
-                std::cerr << "WARNING: Failed to set parameter '" << parName << "' in category '" 
-                          << configCategory->getName() << "': " << e.what() << std::endl;
+                if (printWarnings)
+                    std::cerr << "WARNING: Failed to set parameter '" << parName << "' in category '"
+                              << configCategory->getName() << "': " << e.what() << std::endl;
             }
         }
     }

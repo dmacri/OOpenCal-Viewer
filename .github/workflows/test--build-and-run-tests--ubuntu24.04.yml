@@ -1,0 +1,84 @@
+name: Build and Run Tests [on push and pull requests]
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+env:
+  PROJECT_NAME: OOpenCal-Viewer
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+
+    steps:
+      ################### Checkout & Dependencies
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Checkout OOpenCAL dependency
+        uses: actions/checkout@v3
+        with:
+          repository: alessioderango/OOpenCAL
+          path: deps/OOpenCAL
+          token: ${{ secrets.VisualizerOpenCal }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            qtbase5-dev \
+            qttools5-dev \
+            qttools5-dev-tools \
+            libvtk9-dev \
+            libvtk9-qt-dev \
+            libfreetype-dev \
+            libeigen3-dev \
+            libtiff-dev \
+            libpng-dev \
+            libjpeg-dev \
+            zlib1g-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libgtest-dev
+
+      ################### Build Application & Tests
+      - name: Create build directory
+        run: mkdir -p build
+
+      - name: Configure CMake
+        run: |
+          cd build
+          cmake .. \
+            -DOOPENCAL_DIR=${{ github.workspace }}/deps \
+            -DBUILD_TESTS=ON \
+            -G Ninja
+
+      - name: Build application and tests
+        run: |
+          cd build
+          cmake --build . --parallel
+
+      ################### Run Tests
+      - name: Run unit tests
+        run: |
+          cd build
+          ctest --output-on-failure --verbose
+
+      ################### Build Status
+      - name: Report build status
+        if: success()
+        run: echo "✅ Build and tests completed successfully!"
+
+      - name: Report build failure
+        if: failure()
+        run: |
+          echo "❌ Build or tests failed!"
+          exit 1

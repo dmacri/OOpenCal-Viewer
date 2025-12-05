@@ -1,0 +1,476 @@
+name: Build Qt-VTK-viewer (.deb bundled with all deps) [on push and release]
+
+on:
+  push:
+    branches:
+      - '**'
+  release:
+    types: [created]
+
+env:
+  PROJECT_NAME: OOpenCal-Viewer
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      ################### checkout & dependencies
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Checkout OOpenCAL dependency
+        uses: actions/checkout@v3
+        with:
+          repository: alessioderango/OOpenCAL
+          path: deps/OOpenCAL
+          token: ${{ secrets.VisualizerOpenCal }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            qtbase5-dev \
+            qttools5-dev \
+            qttools5-dev-tools \
+            libvtk9-dev \
+            libvtk9-qt-dev \
+            libfreetype-dev \
+            libeigen3-dev \
+            libtiff-dev \
+            libpng-dev \
+            libjpeg-dev \
+            zlib1g-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            pax-utils \
+            chrpath \
+            patchelf \
+            rsync \
+            dpkg-dev
+
+      ################### building application
+      - name: Prepare application icon
+        run: |
+          mkdir -p resources/icons
+          cp icons/application.png resources/icons/${PROJECT_NAME}.png || true
+
+      - name: Create .desktop file
+        run: |
+          echo "[Desktop Entry]
+          Name=${PROJECT_NAME}
+          Exec=${PROJECT_NAME}
+          Icon=${PROJECT_NAME}
+          Type=Application
+          Categories=Utility;Science;" > ${PROJECT_NAME}.desktop
+
+      - name: Build application with CMake
+        run: |
+          mkdir -p build
+          cd build
+          # Build with RPATH support for bundled libraries
+          cmake .. \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_SKIP_RPATH=OFF \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN/../lib/'"${PROJECT_NAME}" \
+            -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON \
+            -DOOPENCAL_DIR=${{ github.workspace }}/deps
+          cmake --build . --parallel
+
+      ################### build bundled .deb (with all dependencies)
+      - name: Prepare Debian directory structure
+        run: |
+          set -euo pipefail
+          
+          # Define directory paths
+          PKG_DIR="debian/${PROJECT_NAME}"
+          LIB_DIR="${PKG_DIR}/usr/lib/${PROJECT_NAME}"
+          BIN_DIR="${PKG_DIR}/usr/bin"
+          ICON_DIR="${PKG_DIR}/usr/share/icons/hicolor/256x256/apps"
+          DESKTOP_DIR="${PKG_DIR}/usr/share/applications"
+          
+          # Create directory structure
+          mkdir -p "${BIN_DIR}" "${LIB_DIR}" "${PKG_DIR}/DEBIAN" "${ICON_DIR}" "${DESKTOP_DIR}"
+          
+          # Copy binary
+          if [[ -f "build/${PROJECT_NAME}" ]]; then
+            cp "build/${PROJECT_NAME}" "${BIN_DIR}/"
+          else
+            echo "❌ Could not find built binary in build/"
+            exit 1
+          fi
+          
+          # Copy desktop & icon
+          cp ${PROJECT_NAME}.desktop "${DESKTOP_DIR}/" || true
+          cp resources/icons/${PROJECT_NAME}.png "${ICON_DIR}/${PROJECT_NAME}.png" || true
+
+      - name: Collect runtime dependencies
+        run: |
+          set -euo pipefail
+          
+          PKG_DIR="debian/${PROJECT_NAME}"
+          LIB_DIR="${PKG_DIR}/usr/lib/${PROJECT_NAME}"
+          BIN_DIR="${PKG_DIR}/usr/bin"
+          
+          # Temporary files for collecting dependencies
+          TMP_ALL=$(mktemp)
+          TMP_UNIQ="${TMP_ALL}.uniq"
+          TMP_FINAL="${TMP_ALL}.final"
+          
+          # Function to collect library dependencies via ldd
+          collect_ldd() {
+            local f="$1"
+            [[ -e "$f" ]] || return
+            ldd "$f" 2>/dev/null \
+              | awk '/=>/ { if ($3 ~ /^\//) print $3 } /^\/|^\t\// { if ($1 ~ /^\//) print $1 }' \
+              >> "$TMP_ALL" || true
+          }
+          
+          # Collect dependencies from main executable
+          echo "=== 🔍 Collecting dependencies from executable ==="
+          for exe in "${BIN_DIR}"/*; do
+            [[ -f "$exe" ]] && collect_ldd "$exe"
+          done
+          
+          # Add Qt5 core libraries
+          echo "=== 🔍 Adding Qt5 core libraries ==="
+          ldconfig -p | awk '/libQt5(Core|Gui|Widgets)/ {print $4}' | sort -u >> "$TMP_ALL" || true
+          
+          # Add VTK 9.1 libraries
+          echo "=== 🔍 Adding VTK libraries ==="
+          ldconfig -p | awk '/libvtk.*9[.]1/ {print $4}' | sort -u >> "$TMP_ALL" || true
+          
+          # Collect dependencies from Qt platform plugins
+          echo "=== 🔍 Collecting Qt platform plugin dependencies ==="
+          QT_PLUGIN_SRC="/usr/lib/x86_64-linux-gnu/qt5/plugins"
+          if [[ -d "$QT_PLUGIN_SRC" ]]; then
+            find "$QT_PLUGIN_SRC" -type f -name '*.so' -print0 | \
+              xargs -0 -r -n1 bash -c 'ldd "$0" 2>/dev/null | awk "/=>/ { if (\$3 ~ /^\\//) print \$3 }"' {} \; \
+              >> "$TMP_ALL" || true
+          fi
+          
+          # Add Qt/XCB extra dependencies explicitly
+          echo "=== 🔍 Adding Qt/XCB dependencies ==="
+          ldconfig -p | awk '/libQt5XcbQpa\.so/ {print $4}' >> "$TMP_ALL" || true
+          ldconfig -p | awk '/libxcb-(icccm|image|keysyms|render-util|shm|xinerama|xinput|xfixes|sync|cursor)\.so/ {print $4}' >> "$TMP_ALL" || true
+          ldconfig -p | awk '/libxkbcommon(-x11)?\.so/ {print $4}' >> "$TMP_ALL" || true
+          ldconfig -p | awk '/libX11\.so/ {print $4}' >> "$TMP_ALL" || true
+          
+          # Remove duplicates
+          sort -u "$TMP_ALL" > "$TMP_UNIQ"
+          
+          # Filter out system/core libraries that should NOT be bundled
+          echo "=== 🔍 Filtering out system libraries ==="
+          grep -vE '/lib64/ld-linux|/lib/x86_64-linux-gnu/(libc\.so|libm\.so|libpthread\.so|libdl\.so|librt\.so|libnss|libresolv|libcrypt|libutil|libaudit|libsystemd)' "$TMP_UNIQ" \
+            | grep -vE '(/usr/lib/llvm|/usr/lib/gcc|/usr/lib/x86_64-linux-gnu/mesa)' \
+            > "$TMP_FINAL"
+          
+          # Save paths for next step
+          echo "$TMP_ALL" > /tmp/deps_tmp_all.txt
+          echo "$TMP_UNIQ" > /tmp/deps_tmp_uniq.txt
+          echo "$TMP_FINAL" > /tmp/deps_tmp_final.txt
+
+      - name: Copy collected libraries to package
+        run: |
+          set -euo pipefail
+          
+          PKG_DIR="debian/${PROJECT_NAME}"
+          LIB_DIR="${PKG_DIR}/usr/lib/${PROJECT_NAME}"
+          
+          TMP_FINAL=$(cat /tmp/deps_tmp_final.txt)
+          
+          echo "=== 📦 Copying libraries to ${LIB_DIR} ==="
+          COUNT=0
+          
+          # Copy each library (handling symlinks properly)
+          while IFS= read -r libpath; do
+            [[ -z "$libpath" || ! -e "$libpath" ]] && continue
+            
+            COUNT=$((COUNT + 1))
+            base=$(basename "$libpath")
+            
+            # Handle symlinks - copy both symlink and real file
+            if [[ -L "$libpath" ]]; then
+              cp -a "$libpath" "${LIB_DIR}/" 2>/dev/null || true
+              real=$(readlink -f "$libpath" || true)
+              if [[ -n "$real" && -e "$real" ]]; then
+                rbase=$(basename "$real")
+                [[ ! -f "${LIB_DIR}/${rbase}" ]] && cp -a "$real" "${LIB_DIR}/" 2>/dev/null || true
+              fi
+            else
+              cp -a "$libpath" "${LIB_DIR}/" 2>/dev/null || true
+            fi
+          done < "$TMP_FINAL"
+          
+          echo "✅ Copied $COUNT libraries to ${LIB_DIR}"
+
+      - name: Bundle Qt platform plugins
+        run: |
+          set -euo pipefail
+          
+          PKG_DIR="debian/${PROJECT_NAME}"
+          LIB_DIR="${PKG_DIR}/usr/lib/${PROJECT_NAME}"
+          QT_PLUGIN_SRC="/usr/lib/x86_64-linux-gnu/qt5/plugins"
+          QT_PLUGIN_DST="${LIB_DIR}/plugins"
+          
+          echo "=== 🧩 Bundling Qt platform plugins ==="
+          if [[ -d "$QT_PLUGIN_SRC" ]]; then
+            mkdir -p "$QT_PLUGIN_DST"
+            rsync -a --prune-empty-dirs --include '*/' \
+              --include 'platforms/*.so' \
+              --include 'imageformats/*.so' \
+              --include 'iconengines/*.so' \
+              --exclude '*' \
+              "$QT_PLUGIN_SRC/" "$QT_PLUGIN_DST/" || true
+            echo "✅ Qt plugins bundled"
+          else
+            echo "⚠️  Qt plugin source not found: $QT_PLUGIN_SRC"
+          fi
+
+      - name: Ensure Qt XCB plugin dependencies
+        run: |
+          set -euo pipefail
+          
+          PKG_DIR="debian/${PROJECT_NAME}"
+          LIB_DIR="${PKG_DIR}/usr/lib/${PROJECT_NAME}"
+          XCB_PLUGIN="${LIB_DIR}/plugins/platforms/libqxcb.so"
+          
+          echo "=== 🧩 Ensuring Qt XCB plugin dependencies ==="
+          
+          if [[ -f "$XCB_PLUGIN" ]]; then
+            echo "  → Inspecting dependencies of $(basename "$XCB_PLUGIN")"
+            TMP_XCB_DEPS=$(mktemp)
+            
+            # Collect direct dependencies from ldd
+            ldd "$XCB_PLUGIN" 2>/dev/null | awk '/=>/ {if ($3 ~ /^\//) print $3}' > "$TMP_XCB_DEPS" || true
+            
+            # Add known required libraries for XCB
+            for lib in \
+              libQt5DBus.so.5 libxcb-icccm.so.4 libxcb-image.so.0 libxcb-keysyms.so.1 \
+              libxcb-render-util.so.0 libxcb-xinerama.so.0 libxcb-xinput.so.0 \
+              libxcb-xfixes.so.0 libxcb-cursor.so.0 libxkbcommon-x11.so.0 \
+              libxkbcommon.so.0 libxcb-util.so.1 libX11-xcb.so.1 libX11.so.6 \
+              libxcb-render.so.0 libxcb-shm.so.0 libxcb-sync.so.1 libxcb.so.1; do
+              found=$(ldconfig -p | grep "$lib" | awk '{print $4}' | head -n1 || true)
+              if [[ -n "$found" ]]; then
+                echo "$found" >> "$TMP_XCB_DEPS"
+              fi
+            done
+            
+            # Copy all collected dependencies
+            COPIED=0
+            while IFS= read -r dep; do
+              [[ -z "$dep" || ! -e "$dep" ]] && continue
+              base=$(basename "$dep")
+              
+              # Skip if already copied
+              if [[ -e "${LIB_DIR}/${base}" ]]; then
+                continue
+              fi
+              
+              # Handle symlinks properly
+              if [[ -L "$dep" ]]; then
+                cp -a "$dep" "${LIB_DIR}/" 2>/dev/null || true
+                real=$(readlink -f "$dep" || true)
+                if [[ -n "$real" && -e "$real" ]]; then
+                  rbase=$(basename "$real")
+                  if [[ ! -f "${LIB_DIR}/${rbase}" ]]; then
+                    cp -a "$real" "${LIB_DIR}/" 2>/dev/null || true
+                    COPIED=$((COPIED + 1))
+                  fi
+                fi
+              else
+                cp -a "$dep" "${LIB_DIR}/" 2>/dev/null || true
+              fi
+              
+              COPIED=$((COPIED + 1))
+            done < <(sort -u "$TMP_XCB_DEPS")
+            
+            echo "  ✅ Added $COPIED XCB-related libraries"
+            rm -f "$TMP_XCB_DEPS"
+          else
+            echo "  ⚠️  No xcb plugin found at $XCB_PLUGIN"
+          fi
+
+      - name: Recursively collect transitive dependencies
+        run: |
+          set -euo pipefail
+          
+          PKG_DIR="debian/${PROJECT_NAME}"
+          LIB_DIR="${PKG_DIR}/usr/lib/${PROJECT_NAME}"
+          
+          echo "=== 🔍 Recursively collecting transitive dependencies ==="
+          MAX_ITERATIONS=5
+          ITERATION=0
+          
+          while [[ $ITERATION -lt $MAX_ITERATIONS ]]; do
+            ITERATION=$((ITERATION + 1))
+            echo "  → Iteration $ITERATION..."
+            
+            TMP_NEW_DEPS=$(mktemp)
+            FOUND_NEW=0
+            
+            # Check all .so files in LIB_DIR for missing dependencies
+            find "${LIB_DIR}" -type f -name '*.so*' 2>/dev/null | while read -r lib; do
+              ldd "$lib" 2>/dev/null | awk '/=>/ {if ($3 ~ /^\//) print $3}' || true
+            done | sort -u > "$TMP_NEW_DEPS"
+            
+            # Copy any new dependencies found
+            while IFS= read -r dep; do
+              [[ -z "$dep" || ! -e "$dep" ]] && continue
+              
+              # Skip system libraries
+              if echo "$dep" | grep -qE '/lib64/ld-linux|/lib/x86_64-linux-gnu/(libc\.so|libm\.so|libpthread\.so|libdl\.so|librt\.so|libnss|libresolv|libcrypt|libutil|libaudit|libsystemd)'; then
+                continue
+              fi
+              
+              base=$(basename "$dep")
+              
+              # Check if already exists
+              if [[ ! -e "${LIB_DIR}/${base}" ]]; then
+                FOUND_NEW=$((FOUND_NEW + 1))
+                
+                if [[ -L "$dep" ]]; then
+                  cp -a "$dep" "${LIB_DIR}/" 2>/dev/null || true
+                  real=$(readlink -f "$dep" || true)
+                  if [[ -n "$real" && -e "$real" ]]; then
+                    rbase=$(basename "$real")
+                    [[ ! -f "${LIB_DIR}/${rbase}" ]] && cp -a "$real" "${LIB_DIR}/" 2>/dev/null || true
+                  fi
+                else
+                  cp -a "$dep" "${LIB_DIR}/" 2>/dev/null || true
+                fi
+              fi
+            done < "$TMP_NEW_DEPS"
+            
+            rm -f "$TMP_NEW_DEPS"
+            
+            if [[ $FOUND_NEW -eq 0 ]]; then
+              echo "  ✅ No new dependencies found - all resolved!"
+              break
+            else
+              echo "  → Found and copied $FOUND_NEW new dependencies"
+            fi
+          done
+
+      - name: Normalize symlinks in bundled libraries
+        run: |
+          set -euo pipefail
+          
+          PKG_DIR="debian/${PROJECT_NAME}"
+          LIB_DIR="${PKG_DIR}/usr/lib/${PROJECT_NAME}"
+          
+          echo "=== 🔧 Normalizing symlinks inside ${LIB_DIR} ==="
+          cd "${LIB_DIR}"
+          for ln in ./*; do
+            [[ -L "$ln" ]] || continue
+            dest=$(readlink "$ln")
+            dest_base=$(basename "$dest")
+            if [[ "$dest" != "$dest_base" ]]; then
+              rm -f "$ln"
+              ln -s "$dest_base" "$ln"
+            fi
+          done
+          cd - >/dev/null
+          echo "✅ Symlinks normalized"
+
+      - name: Patch RPATH/RUNPATH in bundled libraries
+        run: |
+          set -euo pipefail
+          
+          PKG_DIR="debian/${PROJECT_NAME}"
+          LIB_DIR="${PKG_DIR}/usr/lib/${PROJECT_NAME}"
+          BIN_DIR="${PKG_DIR}/usr/bin"
+          
+          echo "=== 🧭 Auditing and patching RPATH/RUNPATH in bundled libs ==="
+          
+          # Patch shared libraries
+          find "${LIB_DIR}" -type f -name '*.so*' 2>/dev/null | while read -r so; do
+            if readelf -d "$so" 2>/dev/null | grep -Eq 'RUNPATH|RPATH'; then
+              echo "  ⚙️  Found RPATH in $(basename "$so")"
+              echo "     → Replacing with: \$ORIGIN:/usr/lib/${PROJECT_NAME}"
+              patchelf --force-rpath --set-rpath '$ORIGIN:/usr/lib/'"${PROJECT_NAME}" "$so" 2>/dev/null || true
+            fi
+          done
+          
+          # Patch Qt plugins
+          echo "=== 🧭 Patching RPATH for Qt plugins ==="
+          find "${LIB_DIR}/plugins" -type f -name '*.so' 2>/dev/null | while read -r plugin; do
+            patchelf --force-rpath --set-rpath '$ORIGIN/../..:/usr/lib/'"${PROJECT_NAME}" "$plugin" 2>/dev/null || true
+          done
+          
+          # Patch executables
+          echo "=== 🧭 Setting RPATH on executables ==="
+          for exe in "${BIN_DIR}"/*; do
+            [[ -f "$exe" ]] && file "$exe" | grep -q ELF && \
+            patchelf --force-rpath --set-rpath '$ORIGIN/../lib/'"${PROJECT_NAME}" "$exe" 2>/dev/null || true
+          done
+          
+          echo "✅ RPATH/RUNPATH patching complete"
+
+      - name: Create DEBIAN/control file
+        run: |
+          set -euo pipefail
+          
+          PKG_DIR="debian/${PROJECT_NAME}"
+          
+          # Determine version
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            VERSION="$(echo "${GITHUB_REF_NAME}" | sed 's/^v//')"
+          else
+            VERSION="0.0.1+git.$(date +%s)"
+          fi
+          
+          echo "=== 🗒 Creating DEBIAN/control ==="
+          cat > "${PKG_DIR}/DEBIAN/control" <<EOF
+          Package: ${PROJECT_NAME}
+          Version: ${VERSION}
+          Section: science
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Your Name <you@example.com>
+          Description: ${PROJECT_NAME} - Qt + VTK scientific viewer (self-contained with bundled dependencies)
+          EOF
+          
+          chmod 0755 "${PKG_DIR}/DEBIAN"
+          chmod -R 0755 "${PKG_DIR}/usr/bin" || true
+          
+          echo "✅ Control file created"
+
+      - name: Build Debian package
+        run: |
+          set -euo pipefail
+          
+          PKG_DIR="debian/${PROJECT_NAME}"
+          DEB_FILE="${PROJECT_NAME}-bundled.deb"
+          
+          echo "=== 📦 Building Debian package ==="
+          dpkg-deb --build "${PKG_DIR}" "${DEB_FILE}"
+          
+          # Get human-readable file size
+          FILE_SIZE=$(du -h "${DEB_FILE}" | awk '{print $1}')
+          echo
+          echo "=== ✅ Done! Created: ${DEB_FILE} (${FILE_SIZE}) ==="
+          echo "To install:   sudo apt install ./$(basename "${DEB_FILE}")"
+          echo "To uninstall: sudo dpkg -r ${PROJECT_NAME}"
+          echo "To inspect:   dpkg-deb -c ${DEB_FILE}"
+          echo
+
+      ################### artifacts
+      - name: Upload bundled .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-deb-bundled
+          path: ${{ env.PROJECT_NAME }}-bundled.deb
+
+      ################### release upload
+      - name: Upload bundled .deb to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.PROJECT_NAME }}-bundled.deb

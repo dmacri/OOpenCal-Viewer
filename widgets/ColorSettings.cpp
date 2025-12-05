@@ -15,6 +15,7 @@ ColorSettings::ColorSettings(QObject* parent)
     , textColor_(DEFAULT_TEXT)
     , gridColor_(DEFAULT_GRID)
     , highlightColor_(DEFAULT_HIGHLIGHT)
+    , flatSceneBackgroundColor_(DEFAULT_FLAT_SCENE_BACKGROUND)
 {
     loadSettings();
 }
@@ -55,6 +56,15 @@ void ColorSettings::setHighlightColor(const QColor& color)
     }
 }
 
+void ColorSettings::setFlatSceneBackgroundColor(const QColor& color)
+{
+    if (flatSceneBackgroundColor_ != color)
+    {
+        flatSceneBackgroundColor_ = color;
+        emit colorsChanged();
+    }
+}
+
 void ColorSettings::saveSettings()
 {
     QSettings settings;
@@ -63,6 +73,7 @@ void ColorSettings::saveSettings()
     settings.setValue("text", textColor_);
     settings.setValue("grid", gridColor_);
     settings.setValue("highlight", highlightColor_);
+    settings.setValue("flatSceneBackground", flatSceneBackgroundColor_);
     settings.endGroup();
 }
 
@@ -75,6 +86,7 @@ void ColorSettings::loadSettings()
     textColor_ = settings.value("text", DEFAULT_TEXT).value<QColor>();
     gridColor_ = settings.value("grid", DEFAULT_GRID).value<QColor>();
     highlightColor_ = settings.value("highlight", DEFAULT_HIGHLIGHT).value<QColor>();
+    flatSceneBackgroundColor_ = settings.value("flatSceneBackground", DEFAULT_FLAT_SCENE_BACKGROUND).value<QColor>();
 
     settings.endGroup();
 

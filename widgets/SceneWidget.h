@@ -22,9 +22,13 @@
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
 
+// Forward declarations
+class SubstatesDockWidget;
+class SettingParameter;
+
 /** @enum ViewMode
  * @brief Defines the camera view mode for the scene.
- * 
+ *
  * This enum is used to switch between 2D (top-down orthographic) and 3D (perspective with rotation) views. */
 enum class ViewMode
 {
@@ -32,7 +36,6 @@ enum class ViewMode
     Mode3D  ///< 3D perspective view with full camera control
 };
 
-class SettingParameter;
 
 /** @class SceneWidget
  * @brief A widget for 3D visualization using VTK in Qt app.
@@ -110,10 +113,30 @@ public:
     /// @brief Show or hide the orientation axes widget. If true, shows the axes widget; if false, hides it
     void setAxesWidgetVisible(bool visible);
 
+    /// @brief Show or hide grid lines between nodes
+    /// @param visible If true, shows grid lines; if false, hides them
+    void setGridLinesVisible(bool visible);
+
+    /// @brief Show or hide flat scene background in 3D mode
+    /// @param visible If true, shows flat background; if false, hides it
+    void setFlatSceneBackgroundVisible(bool visible);
+
+    /// @brief Get the current flat scene background visibility state
+    bool getFlatSceneBackgroundVisible() const
+    {
+        return flatSceneBackgroundVisible;
+    }
+
     /// @brief Get the current ViewMode (2D or 3D)
     ViewMode getViewMode() const
     {
         return currentViewMode;
+    }
+
+    /// @brief Get the current grid lines visibility state
+    bool getGridLinesVisible() const
+    {
+        return gridLinesVisible;
     }
 
     /// @brief Set camera azimuth (rotation around Z axis) in degrees
@@ -139,6 +162,85 @@ public:
     {
         return cameraElevation;
     }
+
+    /// @brief Set camera roll (rotation around Y axis) in degrees
+    void setCameraRoll(double angle);
+
+    /** @brief Get current camera roll.
+     * 
+     * @return Current roll angle in degrees */
+    double getCameraRoll() const
+    {
+        return cameraRoll;
+    }
+
+    /// @brief Set camera pitch (rotation around Z axis) in degrees
+    void setCameraPitch(double angle);
+
+    /** @brief Get current camera pitch.
+     * 
+     * @return Current pitch angle in degrees */
+    double getCameraPitch() const
+    {
+        return cameraPitch;
+    }
+
+    /// @brief Set camera yaw (rotation around X axis) in degrees
+    void setCameraYaw(double angle);
+
+    /** @brief Get current camera yaw.
+     * 
+     * @return Current yaw angle in degrees */
+    double getCameraYaw() const
+    {
+        return cameraYaw;
+    }
+
+    /// @brief Reset camera zoom to default level (fit all objects in view).
+    /// 
+    /// This method resets the camera distance to its default position, fitting all
+    /// scene objects in the viewport. The camera orientation (rotation angles) is preserved.
+    void resetCameraZoom();
+
+    /// @brief Set the substate dock widget for displaying cell information.
+    /// 
+    /// @param dockWidget Pointer to the SubstatesDockWidget
+    void setSubstatesDockWidget(SubstatesDockWidget* dockWidget);
+
+    /// @brief Set the active substate field for 3D visualization.
+    /// 
+    /// When a substate is set as active for 3D, the visualization will use that field's values
+    /// to determine the height of each cell in 3D mode.
+    /// 
+    /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to disable
+    void setActiveSubstateFor3D(const std::string& fieldName);
+
+    /// @brief Set the active substate field for 2D visualization.
+    /// 
+    /// When a substate is set as active for 2D, the visualization will use that field's values
+    /// to determine the color of each cell in 2D mode via outputValue(fieldName.c_str()).
+    /// 
+    /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to use default
+    void setActiveSubstateFor2D(const std::string& fieldName);
+
+    /// @brief Get the active substate field for 2D visualization.
+    /// 
+    /// @return The name of the active substate field, or empty string if using default
+    std::string getActiveSubstateFor2D() const { return activeSubstateFor2D; }
+
+    /// @brief Refresh the visualization for the current step.
+    /// 
+    /// This method immediately updates the visualization with the current active substate settings.
+    /// It's useful when you want to see changes immediately without waiting for step changes.
+    void refreshVisualization();
+
+    /// @brief Initialize and draw 3D substate visualization for the current step.
+    /// 
+    /// This method should be called when activating 3D substate visualization to initialize
+    /// the scene with the quad mesh surface. Subsequent step updates will use refresh instead.
+    /// 
+    /// @note Call this after setActiveSubstateFor3D() to actually render the visualization
+    void initializeAndDraw3DSubstateVisualization();
 
     /** @brief Callback function for VTK keypress events.
      *  It handles arrow_up and arrow_down keys pressed and changes view of the widget.
@@ -196,8 +298,11 @@ signals:
      * 
      * This allows UI elements (like sliders) to update when the user rotates the camera.
      * @param azimuth Current camera azimuth in degrees
-     * @param elevation Current camera elevation in degrees */
-    void cameraOrientationChanged(double azimuth, double elevation);
+     * @param elevation Current camera elevation in degrees
+     * @param roll Current camera roll in degrees (rotation around Y axis)
+     * @param pitch Current camera pitch in degrees (rotation around Z axis)
+     * @param yaw Current camera yaw in degrees (rotation around X axis) */
+    void cameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw);
 
 public slots:
     /** @brief Slot called when color settings need to be reloaded (at least one of them was changed)
@@ -206,6 +311,12 @@ public slots:
      * have changed. It updates all visual elements in the widget to reflect the
      * current color settings from the ColorSettings singleton. */
     void onColorsReloadRequested();
+
+    /** @brief Refresh VTK visualization with optional 3D substate support (step updates).
+     * 
+     * This slot handles both 2D and 3D visualization based on activeSubstateFor3D.
+     * It's used when updating visualization for current step or when colors/settings change. */
+    void refreshVisualizationWithOptional3DSubstate();
 
 protected:
     /// @brief Renders the VTK scene. It needs to be called when reading from config file
@@ -281,6 +392,13 @@ protected:
      * whenever the grid color setting changes. */
     void refreshGridColorFromSettings();
 
+    /** @brief Apply grid lines visibility and semi-transparency settings.
+     *
+     * This helper method sets the grid lines visibility state and applies
+     * semi-transparency (50% opacity) to the grid lines actor.
+     * Should be called after buildLoadBalanceLine() to ensure proper appearance. */
+    void applyGridLinesSettings();
+
     /** @brief Connects the VTK keyboard callback to the interactor.
      *
      * This method registers a key press observer on the VTK interactor associated
@@ -319,6 +437,11 @@ protected:
      * consistent camera positioning when angles are modified. */
     void applyCameraAngles();
 
+    void applyCameraAnglesPreservingZoom();
+
+    /// @brief Update cached camera pivot using current visible bounds
+    void updateCameraPivotFromBounds();
+
     /** @brief Load and update visualization data for the current step.
      * 
      * This helper reads stage state from files for the current step and refreshes
@@ -332,8 +455,51 @@ protected:
      * settings from settingParameter. It's called during initialization and when
      * reloading data. */
     void prepareStageWithCurrentNodeConfiguration();
+    
+    /// @brief Returns part of ToolTip for specific position (it contains cell value with substates)
+    QString cellValueAtThisPositionAsText() const;
 
-private:
+    /** @brief Convert world coordinates to grid indices.
+     * 
+     * Converts VTK world coordinates to grid row and column indices.
+     * Takes into account the difference in coordinate systems (VTK Y increases upward,
+     * grid rows increase downward).
+     * 
+     * @param worldPos VTK world coordinates
+     * @param outRow Output parameter for row index
+     * @param outCol Output parameter for column index
+     * @return True if coordinates are within valid grid bounds, false otherwise */
+    bool convertWorldToGridCoordinates(const double worldPos[3], int& outRow, int& outCol) const;
+
+    /** @brief Check if world coordinates are within the grid bounds.
+     * 
+     * Determines whether the given world coordinates fall within the visible grid area.
+     * 
+     * @param worldPos VTK world coordinates
+     * @return True if coordinates are within grid bounds, false if outside (background) */
+    bool isWorldPositionInGrid(const double worldPos[3]) const;
+
+protected:
+    /** @brief Setup CustomInteractorStyle with wait cursor callbacks.
+     * 
+     * This helper method creates a CustomInteractorStyle and configures it to show
+     * a wait cursor during zoom/pan operations. Used in both 2D and 3D view modes. */
+    void setupInteractorStyleWithWaitCursor();
+
+    /** @brief Draw VTK visualization with optional 3D substate support (initial rendering).
+     * 
+     * This helper method handles both 2D and 3D visualization based on activeSubstateFor3D.
+     * It's used during initial scene setup in renderVtkScene(). */
+    void drawVisualizationWithOptional3DSubstate();
+
+    /** @brief Handle mouse press events to update substate display.
+     * 
+     * When user clicks on a cell (without Shift), this method updates
+     * the SubstatesDockWidget with values for that cell.
+     * 
+     * @param event The mouse event */
+    void mousePressEvent(QMouseEvent* event) override;
+
     /** @brief Proxy for the scene widget visualizer
      *  This proxy provides access to the visualizer implementation
      *  and is responsible for updating the visualization when settings change. */
@@ -345,14 +511,38 @@ private:
     /// @brief Currently active model name
     std::string currentModelName;
 
+    /// @brief Pointer to the substate dock widget (not owned by this widget)
+    SubstatesDockWidget* m_substatesDockWidget = nullptr;
+
     /// @brief Current view mode (2D or 3D)
     ViewMode currentViewMode = ViewMode::Mode2D;
+
+    /// @brief Current grid lines visibility state
+    bool gridLinesVisible = true;
+
+    /// @brief Flat scene background visibility state (shown in 3D mode)
+    bool flatSceneBackgroundVisible = true;
+
+    /// @brief Name of the substate field currently used for 3D visualization (empty if none)
+    std::string activeSubstateFor3D;
+
+    /// @brief Name of the substate field currently used for 2D visualization (empty if using default)
+    std::string activeSubstateFor2D;
 
     /// @brief Current camera azimuth angle (cached to avoid recalculation)
     double cameraAzimuth{};
 
     /// @brief Current camera elevation angle (cached to avoid recalculation)
     double cameraElevation{};
+
+    /// @brief Current camera roll angle (cached to avoid recalculation)
+    double cameraRoll{};
+
+    /// @brief Current camera pitch angle (cached to avoid recalculation)
+    double cameraPitch{};
+
+    /// @brief Current camera yaw angle (cached to avoid recalculation)
+    double cameraYaw{};
 
     /** @brief Last recorded position in VTK world coordinates. */
     std::array<double, 3> m_lastWorldPos;
@@ -365,12 +555,19 @@ private:
      *  @note: The type is vtkSmartPointer instead of auto-maintained vtkNew because we need to be able to reset the object */
     vtkSmartPointer<vtkActor> gridActor;
 
+    /** @brief Actor for flat background scene in 3D mode: Renders a flat colored plane at Z=0
+     *  @note: The type is vtkSmartPointer instead of auto-maintained vtkNew because we need to be able to reset the object */
+    vtkSmartPointer<vtkActor> backgroundActor;
+
     /** @brief Actor for load balancing lines: This actor is responsible for rendering the load balancing lines.
      *  @note: The type is vtkSmartPointer instead of auto-maintained vtkNew because we need to be able to reset the object */
     vtkSmartPointer<vtkActor2D> actorBuildLine;
 
     /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number in the scene.
     vtkNew<vtkTextMapper> singleLineTextStep;
+
+    /// @brief Pivot point used for GUI-controlled camera rotations in 3D mode
+    std::array<double, 3> cameraPivot{ 0.0, 0.0, 0.0 };
 
     /// @brief Axes actor for showing coordinate system orientation
     vtkNew<vtkAxesActor> axesActor;

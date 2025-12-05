@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(QtVtkViewer)
+project(OOpenCal-Viewer)
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build libraries statically" FORCE)
 
 # ============================================
 # Compiler warnings (optional, full strict set)
@@ -120,9 +122,19 @@ list(APPEND Sources
     widgets/ColorSettingsDialog.cpp
     widgets/ColorSettings.cpp
     widgets/AboutDialog.cpp
+    widgets/CompilationLogWidget.cpp
+    widgets/ReductionDialog.cpp
+    widgets/ReductionDisplayWidget.cpp
+    widgets/SubstateDisplayWidget.cpp
+    widgets/SubstatesDockWidget.cpp
+    widgets/CustomInteractorStyle.cpp
     utilities/PluginLoader.cpp
+    utilities/ReductionManager.cpp
     utilities/ModelReader.cpp
     utilities/CommandLineParser.cpp
+    utilities/ModelLoader.cpp
+    utilities/CppModuleBuilder.cpp
+    utilities/WaitCursorGuard.cpp
 )
 file(GLOB Resources
     LIST_DIRECTORIES false
@@ -134,7 +146,7 @@ file(GLOB Styles
     CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/*.qss"
 )
-file(GLOB UIs
+file(GLOB_RECURSE UIs
     LIST_DIRECTORIES false
     CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/*.ui"
@@ -144,20 +156,24 @@ file(GLOB_RECURSE Docs
     CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/*.md"
 )
-set(OTHER_FILES LICENSE .github/workflows/release--deb-package--ubuntu24.04.yml .githooks/pre-commit .clang-format)
-
-
-# ============================================
-# Qt setup
-# ============================================
-set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOMOC "YES")
-set(CMAKE_AUTOUIC "YES")
-
+set(OTHER_FILES
+    LICENSE
+    .github/workflows/release--deb-package--ubuntu24.04.yml
+    .github/workflows/release--deb-package-bundled--ubuntu24.04.yml
+    .github/workflows/release--app-image--ubuntu24.04.yml
+    .githooks/pre-commit
+    .clang-format
+)
 
 # ============================================
 # VTK dependencies
 # ============================================
+# NOTE:
+# VTK must be found *before* Qt to avoid a known issue in Qt6 (6.8–6.9)
+# where re-importing Qt targets (e.g., Qt6::Platform*) causes
+# "Some (but not all) targets in this export set were already defined" errors.
+# The 'GUISupportQt' module internally calls find_package(Qt6),
+# so finding VTK first prevents duplicate Qt target definitions.
 find_package(VTK COMPONENTS
     CommonColor
     CommonCore
@@ -173,10 +189,34 @@ find_package(VTK COMPONENTS
     RenderingOpenGL2
     IOXML
     IOOggTheora
-    REQUIRED
-        GUISupportQt
-        IOLegacy
+    GUISupportQt
+    IOLegacy
 )
+
+if(NOT VTK_FOUND)
+    message(FATAL_ERROR
+        "VTK not found! VTK is too large for automatic download and compilation.\n"
+        "Please install VTK using one of these methods:\n"
+        "  - vcpkg: vcpkg install vtk[qt,opengl]\n"
+        "  - Ubuntu/Debian: sudo apt install libvtk9-dev libvtk9-qt-dev\n"
+        "  - Arch: sudo pacman -S vtk\n"
+        "  - Fedora: sudo dnf install vtk-devel\n"
+        "  - macOS: brew install vtk\n"
+        "  - Or download from: https://vtk.org/download/\n"
+        "After installation, specify VTK_DIR if needed:\n"
+        "  cmake -DVTK_DIR=/path/to/vtk/lib/cmake/vtk-9.x .."
+    )
+endif()
+
+# ============================================
+# Qt setup + dependencies
+# ============================================
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOMOC "YES")
+set(CMAKE_AUTOUIC "YES")
+
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL)
+message(STATUS "Using Qt${QT_VERSION_MAJOR} (${Qt${QT_VERSION_MAJOR}_VERSION})")
 
 # ============================================
 # Executable target
@@ -194,16 +234,60 @@ if (ENABLE_SANITIZERS)
 endif()
 
 # ============================================
+# Project root definition for the viewer
+# Adds compile definition OOPENCAL_VIEWER_ROOT
+# Default = current project source directory
+# Can be overridden by: -DOOPENCAL_VIEWER_ROOT=/custom/path
+# ============================================
+set(OOPENCAL_VIEWER_ROOT "${CMAKE_SOURCE_DIR}" CACHE PATH
+    "Path to the OOpenCAL-Viewer project root directory")
+
+# Resolve to absolute path
+get_filename_component(OOPENCAL_VIEWER_ROOT_ABS "${OOPENCAL_VIEWER_ROOT}" ABSOLUTE)
+
+message(STATUS "Using OOPENCAL_VIEWER_ROOT: ${OOPENCAL_VIEWER_ROOT_ABS}")
+
+# Export define to C++ code
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    OOPENCAL_VIEWER_ROOT="${OOPENCAL_VIEWER_ROOT_ABS}"
+)
+
+# ============================================
 # OOpenCAL include directory (optional)
 # ============================================
-set(OOPENCAL_DIR "/home/dmacri80/Progetto-Visualizer/" CACHE PATH "Path to the base directory of OOpenCAL sources")
+# Default path assumes OOpenCAL is located in a sibling directory
+# Directory structure:
+#   parent/
+#   ├── OOpenCAL/
+#   └── OOpenCAL-Visualiser/
+# OOPENCAL_DIR should point to the parent directory containing OOpenCAL/
+set(OOPENCAL_DIR "${CMAKE_SOURCE_DIR}/.." CACHE PATH "Path to the parent directory containing OOpenCAL sources")
 
 if(OOPENCAL_DIR)
-    message(STATUS "Using OOpenCAL directory: ${OOPENCAL_DIR}")
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        ${OOPENCAL_DIR}
-        ${OOPENCAL_DIR}/OOpenCAL
-    )
+    # Resolve relative path to absolute
+    get_filename_component(OOPENCAL_DIR_ABS "${OOPENCAL_DIR}" ABSOLUTE)
+
+    # Check if OOpenCAL subdirectory exists
+    if(EXISTS "${OOPENCAL_DIR_ABS}/OOpenCAL")
+        message(STATUS "Using OOpenCAL base directory: ${OOPENCAL_DIR_ABS}")
+        message(STATUS "OOpenCAL found at: ${OOPENCAL_DIR_ABS}/OOpenCAL")
+
+        target_include_directories(${PROJECT_NAME} PRIVATE
+            ${OOPENCAL_DIR_ABS}
+            ${OOPENCAL_DIR_ABS}/OOpenCAL
+        )
+
+        # Define OOPENCAL_DIR for use in C++ code (use absolute path)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE OOPENCAL_DIR="${OOPENCAL_DIR_ABS}")
+    else()
+        message(WARNING "OOpenCAL not found in: ${OOPENCAL_DIR_ABS}/OOpenCAL")
+        message(WARNING "OOPENCAL_DIR should point to the parent directory containing OOpenCAL/")
+        message(WARNING "Current structure should be:")
+        message(WARNING "  ${OOPENCAL_DIR_ABS}/")
+        message(WARNING "  ├── OOpenCAL/")
+        message(WARNING "  └── OOpenCAL-Visualiser/")
+        message(WARNING "Set correct path with: cmake -DOOPENCAL_DIR=/path/to/parent ..")
+    endif()
 else()
     message(WARNING "OOPENCAL_DIR not set! Includes like <OOpenCAL/...> may not work.")
 endif()
@@ -271,12 +355,45 @@ else()
     message(FATAL_ERROR "argparse source directory not found. Ensure initial FetchContent download succeeded.")
 endif()
 
+# ============================================
+# Tiny Process Library (FetchContent)
+# ============================================
+FetchContent_Declare(
+    tiny_process_library
+    GIT_REPOSITORY https://gitlab.com/eidheim/tiny-process-library.git
+    GIT_TAG master
+    ${_UPDATE_ARGS}
+)
+
+FetchContent_MakeAvailable(tiny_process_library)
+
+FetchContent_GetProperties(tiny_process_library)
+if(tiny_process_library_SOURCE_DIR)
+    target_sources(${PROJECT_NAME} PRIVATE
+        ${tiny_process_library_SOURCE_DIR}/process.cpp
+    )
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        ${tiny_process_library_SOURCE_DIR}
+    )
+else()
+    message(FATAL_ERROR "tiny_process_library source directory not found. Ensure initial FetchContent download succeeded.")
+endif()
+
 
 # ============================================
 # Linking
 # ============================================
-target_link_libraries(${PROJECT_NAME} PRIVATE ${VTK_LIBRARIES})
-#target_link_libraries(${PROJECT_NAME} PRIVATE Qt5::Widgets Qt5::OpenGL VTK::GUISupportQt VTK::IOLegacy)
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    # Qt:
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Gui
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::OpenGL
+    # VTK:
+    ${VTK_LIBRARIES}
+    # other:
+    tiny-process-library
+)
 
 # Export symbols for plugins to use
 # This allows plugins to call functions from the main executable
@@ -286,6 +403,68 @@ vtk_module_autoinit(
     TARGETS ${PROJECT_NAME}
     MODULES VTK::GUISupportQt VTK::IOLegacy
 )
+
+# ============================================
+# Export VTK compile flags as compile definition (this is temporary as long as plugin needs VTK)
+# ============================================
+
+# Select the main VTK target (always present)
+set(VTK_MAIN_TARGET VTK::CommonCore)
+
+# Safely read target properties (may contain generator expressions)
+get_target_property(_vtk_includes ${VTK_MAIN_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(_vtk_defs     ${VTK_MAIN_TARGET} INTERFACE_COMPILE_DEFINITIONS)
+get_target_property(_vtk_opts     ${VTK_MAIN_TARGET} INTERFACE_COMPILE_OPTIONS)
+
+# Prepare resolved lists
+set(VTK_INCLUDES_EXPANDED "")
+set(VTK_DEFS_EXPANDED "")
+set(VTK_OPTS_EXPANDED "")
+
+# Function to strip generator expressions like $<BUILD_INTERFACE:...> or $<INSTALL_INTERFACE:...>
+function(clean_genex output input_list)
+    set(temp_list "")
+    foreach(item IN LISTS input_list)
+        # Remove $<BUILD_INTERFACE:...> and $<INSTALL_INTERFACE:...>
+        string(REGEX REPLACE "\\$<BUILD_INTERFACE:([^>]+)>" "\\1" item "${item}")
+        string(REGEX REPLACE "\\$<INSTALL_INTERFACE:([^>]+)>" "\\1" item "${item}")
+        string(REGEX REPLACE "\\$<[^>]+>" "" item "${item}") # remove any remaining generator expressions
+        string(STRIP "${item}" item)
+        if (NOT "${item}" STREQUAL "")
+            list(APPEND temp_list "${item}")
+        endif()
+    endforeach()
+    set(${output} "${temp_list}" PARENT_SCOPE)
+endfunction()
+
+# Clean all lists
+clean_genex(VTK_INCLUDES_EXPANDED "${_vtk_includes}")
+clean_genex(VTK_DEFS_EXPANDED "${_vtk_defs}")
+clean_genex(VTK_OPTS_EXPANDED "${_vtk_opts}")
+
+# Build final compile flags string
+set(VTK_COMPILE_FLAGS_STR "")
+foreach(inc IN LISTS VTK_INCLUDES_EXPANDED)
+    if (EXISTS "${inc}")
+        string(APPEND VTK_COMPILE_FLAGS_STR "-I${inc} ")
+    endif()
+endforeach()
+
+# Escape special characters for use in compile definition
+# Replace backslashes and quotes to ensure proper string literal
+string(REPLACE "\\" "\\\\" VTK_COMPILE_FLAGS_ESCAPED "${VTK_COMPILE_FLAGS_STR}")
+string(REPLACE "\"" "\\\"" VTK_COMPILE_FLAGS_ESCAPED "${VTK_COMPILE_FLAGS_ESCAPED}")
+
+# Add as compile definition (accessible as VTK_COMPILE_FLAGS macro in C++)
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    VTK_COMPILE_FLAGS="${VTK_COMPILE_FLAGS_ESCAPED}"
+)
+
+# (Optional) Debug print to verify values
+message(STATUS "VTK compile includes: ${VTK_INCLUDES_EXPANDED}")
+message(STATUS "VTK compile defs: ${VTK_DEFS_EXPANDED}")
+message(STATUS "VTK compile opts: ${VTK_OPTS_EXPANDED}")
+
 
 # ============================================
 # Doxygen Documentation (optional)
@@ -619,8 +798,26 @@ else()
     message(STATUS "valgrind not found: skipping valgrind target")
 endif()
 
+# ============================================
+# Optional example plugins / demos
+# ============================================
+option(BUILD_EXAMPLES "Build example plugin demo" ON)
+
+if (BUILD_EXAMPLES)
+    message(STATUS "Building example plugins (BUILD_EXAMPLES=ON)")
+    add_subdirectory(examples/custom_model_plugin)
+else()
+    message(STATUS "Skipping example plugins (BUILD_EXAMPLES=OFF)")
+endif()
 
 # ============================================
-# Subproject:
+# Tests
 # ============================================
-add_subdirectory(examples/custom_model_plugin)
+option(BUILD_TESTS "Build unit tests" ON)
+
+if (BUILD_TESTS)
+    message(STATUS "Building tests (BUILD_TESTS=ON)")
+    add_subdirectory(tests)
+else()
+    message(STATUS "Skipping tests (BUILD_TESTS=OFF)")
+endif()

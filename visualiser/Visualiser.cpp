@@ -1,6 +1,7 @@
+#include <limits>
 #include "Line.h"
 #include "visualiser/Visualizer.hpp"
-#include "widgets/ColorSettings.h"
+#include "widgets/ColorSettings.h" // ColorSettings
 
 
 namespace
@@ -39,7 +40,7 @@ void Visualizer::buildLoadBalanceLine(const std::vector<Line>& lines,
     // actorBuildLine->GetProperty()->SetLineWidth(1.5);
 
     // 5. Add to renderer
-    renderer->AddActor2D(actorBuildLine);
+    renderer->AddViewProp(actorBuildLine);
 }
 
 vtkSmartPointer<vtkPolyData> Visualizer::createLinePolyData(const std::vector<Line>& lines, int nRows)
@@ -47,10 +48,52 @@ vtkSmartPointer<vtkPolyData> Visualizer::createLinePolyData(const std::vector<Li
     vtkNew<vtkPoints> pts;
     vtkNew<vtkCellArray> cellLines;
 
+    // Small offset to move grid lines slightly outside the scene to avoid obscuring data at corners
+    // This offset is in world coordinates (typically pixels)
+    constexpr double GRID_LINE_OFFSET = 0.5;
+
+    // Find the bounds of all lines to determine scene extent
+    double minX = std::numeric_limits<double>::max();
+    double maxX = std::numeric_limits<double>::lowest();
+    double minY = std::numeric_limits<double>::max();
+    double maxY = std::numeric_limits<double>::lowest();
+
+    for (const auto& line : lines)
+    {
+        minX = std::min(minX, static_cast<double>(line.x1));
+        minX = std::min(minX, static_cast<double>(line.x2));
+        maxX = std::max(maxX, static_cast<double>(line.x1));
+        maxX = std::max(maxX, static_cast<double>(line.x2));
+        minY = std::min(minY, static_cast<double>(line.y1));
+        minY = std::min(minY, static_cast<double>(line.y2));
+        maxY = std::max(maxY, static_cast<double>(line.y1));
+        maxY = std::max(maxY, static_cast<double>(line.y2));
+    }
+
     for (size_t i = 0; i < lines.size(); ++i)
     {
-        pts->InsertNextPoint(lines[i].x1, nRows - 1 - lines[i].y1, 0.0);
-        pts->InsertNextPoint(lines[i].x2, nRows - 1 - lines[i].y2, 0.0);
+        double x1 = lines[i].x1;
+        double y1 = nRows - 1 - lines[i].y1;
+        double x2 = lines[i].x2;
+        double y2 = nRows - 1 - lines[i].y2;
+
+        // Apply offset based on which edge the line is on
+        // Left edge (x == minX)
+        if (x1 == minX && x2 == minX)
+            x1 = x2 = minX - GRID_LINE_OFFSET;
+        // Right edge (x == maxX)
+        else if (x1 == maxX && x2 == maxX)
+            x1 = x2 = maxX + GRID_LINE_OFFSET;
+
+        // Bottom edge in VTK coords (y == nRows - 1 - maxY) - move down (minus)
+        if (y1 == (nRows - 1 - maxY) && y2 == (nRows - 1 - maxY))
+            y1 = y2 = (nRows - 1 - maxY) - GRID_LINE_OFFSET;
+        // Top edge in VTK coords (y == nRows - 1 - minY) - move up (plus)
+        else if (y1 == (nRows - 1 - minY) && y2 == (nRows - 1 - minY))
+            y1 = y2 = (nRows - 1 - minY) + GRID_LINE_OFFSET;
+
+        pts->InsertNextPoint(x1, y1, 0.0);
+        pts->InsertNextPoint(x2, y2, 0.0);
         cellLines->InsertNextCell(2);
         cellLines->InsertCellPoint(i * 2);
         cellLines->InsertCellPoint(i * 2 + 1);
@@ -123,6 +166,90 @@ vtkNew<vtkActor2D> Visualizer::buildStepText(StepIndex step,
     stepLineTextActor->SetMapper(stepLineTextMapper);
     stepLineTextActor->GetPositionCoordinate()->SetCoordinateSystemToNormalizedDisplay();
     stepLineTextActor->GetPositionCoordinate()->SetValue(0.05, 0.85);
-    renderer->AddActor2D(stepLineTextActor);
+    renderer->AddViewProp(stepLineTextActor);
     return stepLineTextActor;
+}
+
+void Visualizer::drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor)
+{
+    // Validate inputs
+    if (!backgroundActor || !renderer)
+    {
+        return;
+    }
+
+    const auto numberOfPoints = nRows * nCols;
+    vtkNew<vtkDoubleArray> pointValues;
+    pointValues->SetNumberOfTuples(numberOfPoints);
+
+    // Set scalar values - all same value for uniform color
+    for (int row = 0; row < nRows; row++)
+    {
+        for (int col = 0; col < nCols; col++)
+        {
+            int pointIndex = row * nCols + col;
+            pointValues->SetValue(pointIndex, 0);  // All points have same value for uniform color
+        }
+    }
+
+    vtkNew<vtkLookupTable> lut;
+    lut->SetNumberOfTableValues(1);  // Only one color needed
+
+    // Set uniform color for the background plane from settings
+    const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
+    lut->SetTableValue(0, sceneColor.redF(), sceneColor.greenF(), sceneColor.blueF(), 1.0);
+
+    // Create flat plane at Z=0
+    vtkNew<vtkPoints> points;
+    for (int row = 0; row < nRows; row++)
+    {
+        for (int col = 0; col < nCols; col++)
+        {
+            // Z=0 for flat background plane
+            points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/0);
+        }
+    }
+
+    vtkNew<vtkStructuredGrid> structuredGrid;
+    structuredGrid->SetDimensions(nCols, nRows, 1);
+    structuredGrid->SetPoints(points);
+    structuredGrid->GetPointData()->SetScalars(pointValues);
+
+    vtkNew<vtkDataSetMapper> backgroundMapper;
+    backgroundMapper->UpdateDataObject();
+    backgroundMapper->SetInputData(structuredGrid);
+    backgroundMapper->SetLookupTable(lut);
+    backgroundMapper->SetScalarRange(0, 0);  // Single color
+
+    backgroundActor->SetMapper(backgroundMapper);
+    renderer->AddActor(backgroundActor);
+}
+
+void Visualizer::refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor)
+{
+    // Validate input
+    if (! backgroundActor || ! backgroundActor->GetMapper())
+    {
+        return;
+    }
+
+    if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(backgroundActor->GetMapper()->GetLookupTable()))
+    {
+        // Keep uniform color from settings - no need to update from cell data
+        const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
+        lut->SetTableValue(0, sceneColor.redF(), sceneColor.greenF(), sceneColor.blueF(), 1.0);
+        backgroundActor->GetMapper()->SetLookupTable(lut);
+        backgroundActor->GetMapper()->Update();
+    }
+}
+
+Color Visualizer::flatSceneBackgroundColor() const
+{
+    const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
+    return Color(
+        static_cast<std::uint8_t>(sceneColor.red()),
+        static_cast<std::uint8_t>(sceneColor.green()),
+        static_cast<std::uint8_t>(sceneColor.blue()),
+        255
+    );
 }
