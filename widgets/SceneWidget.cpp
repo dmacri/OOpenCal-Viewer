@@ -21,6 +21,7 @@
 #include <vtkCaptionActor2D.h>
 #include <vtkTextProperty.h>
 #include <vtkCoordinate.h>
+#include <vtkMath.h>
 #include <vtkNew.h>
 #include <vtkObjectFactory.h>
 #include <vtkPolyData.h>
@@ -186,6 +187,94 @@ void SceneWidget::applyCameraAngles()
     vtkObject::SetGlobalWarningDisplay(oldWarningState);
 }
 
+void SceneWidget::applyCameraAnglesPreservingZoom()
+{
+    auto camera = renderer->GetActiveCamera();
+    if (! camera)
+        return;
+
+    double originalPosition[3];
+    camera->GetPosition(originalPosition);
+
+    const double pivot[3] = {
+        cameraPivot[0],
+        cameraPivot[1],
+        cameraPivot[2]
+    };
+
+    double vectorFromPivot[3] = {
+        originalPosition[0] - pivot[0],
+        originalPosition[1] - pivot[1],
+        originalPosition[2] - pivot[2]
+    };
+
+    double distance = vtkMath::Norm(vectorFromPivot);
+    if (distance < 1e-3)
+    {
+        distance = 1.0;
+    }
+
+    bool oldWarningState = vtkObject::GetGlobalWarningDisplay();
+    vtkObject::GlobalWarningDisplayOff();
+
+    camera->SetPosition(0.0, 0.0, distance);
+    camera->SetFocalPoint(0.0, 0.0, 0.0);
+    camera->SetViewUp(0.0, 1.0, 0.0);
+
+    camera->Azimuth(cameraAzimuth);
+    const double clampedElevation = std::clamp(cameraElevation, -89.9, 89.9);
+    camera->Elevation(clampedElevation);
+    camera->Roll(cameraRoll);
+    camera->Pitch(cameraPitch);
+    camera->Yaw(cameraYaw);
+
+    double rotatedPosition[3];
+    double rotatedFocal[3];
+    camera->GetPosition(rotatedPosition);
+    camera->GetFocalPoint(rotatedFocal);
+
+    const double translation[3] = {
+        pivot[0] - rotatedFocal[0],
+        pivot[1] - rotatedFocal[1],
+        pivot[2] - rotatedFocal[2]
+    };
+
+    camera->SetPosition(rotatedPosition[0] + translation[0],
+                        rotatedPosition[1] + translation[1],
+                        rotatedPosition[2] + translation[2]);
+    camera->SetFocalPoint(pivot[0], pivot[1], pivot[2]);
+
+    renderer->ResetCameraClippingRange();
+    triggerRenderUpdate();
+
+    vtkObject::SetGlobalWarningDisplay(oldWarningState);
+}
+
+void SceneWidget::updateCameraPivotFromBounds()
+{
+    if (! renderer)
+        return;
+
+    double bounds[6];
+    renderer->ComputeVisiblePropBounds(bounds);
+
+    const bool validX = std::isfinite(bounds[0]) && std::isfinite(bounds[1]) && bounds[0] < bounds[1];
+    const bool validY = std::isfinite(bounds[2]) && std::isfinite(bounds[3]) && bounds[2] < bounds[3];
+
+    if (! validX || ! validY)
+        return;
+
+    const double midZ = (std::isfinite(bounds[4]) && std::isfinite(bounds[5]))
+                        ? (bounds[4] + bounds[5]) * 0.5
+                        : 0.0;
+
+    cameraPivot = {
+        (bounds[0] + bounds[1]) * 0.5,
+        (bounds[2] + bounds[3]) * 0.5,
+        midZ
+    };
+}
+
 void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 {
     // Resize lines vector to match expected number of lines
@@ -255,8 +344,10 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                               gridActor,
                                                               activeSubstateFor3D,
                                                               substateInfo.minValue,
-                                                              substateInfo.maxValue);
+                                                              substateInfo.maxValue,
+                                                              &substateInfo);
 
+            updateCameraPivotFromBounds();
             return;
         }
     }
@@ -268,6 +359,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         substateInfo2D = &settingParameter->substateInfo[activeSubstateFor2D];
     }
     sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, substateInfo2D);
+    updateCameraPivotFromBounds();
 }
 
 void SceneWidget::refreshVisualizationWithOptional3DSubstate()
@@ -291,7 +383,9 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                     gridActor,
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
-                                                                    substateInfo.maxValue);
+                                                                    substateInfo.maxValue,
+                                                                    &substateInfo);
+            updateCameraPivotFromBounds();
             return;
         }
     }
@@ -303,6 +397,7 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
         substateInfo2D = &settingParameter->substateInfo[activeSubstateFor2D];
     }
     sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor, substateInfo2D);
+    updateCameraPivotFromBounds();
 }
 
 void SceneWidget::addVisualizer(const std::string& filename, StepIndex stepNumber)
@@ -713,6 +808,7 @@ void SceneWidget::renderVtkScene()
                                                               singleLineTextStep,
                                                               renderer);
 
+    updateCameraPivotFromBounds();
     // Reset camera to fit the new scene properly
     applyCameraAngles();
 
@@ -1265,7 +1361,10 @@ void SceneWidget::setCameraAzimuth(double angle)
     cameraAzimuth = angle;
 
     // Apply camera angles using helper method
-    applyCameraAngles();
+    if (currentViewMode == ViewMode::Mode3D)
+        applyCameraAnglesPreservingZoom();
+    else
+        applyCameraAngles();
 }
 
 void SceneWidget::setCameraElevation(double angle)
@@ -1274,7 +1373,10 @@ void SceneWidget::setCameraElevation(double angle)
     cameraElevation = angle;
 
     // Apply camera angles using helper method
-    applyCameraAngles();
+    if (currentViewMode == ViewMode::Mode3D)
+        applyCameraAnglesPreservingZoom();
+    else
+        applyCameraAngles();
 }
 
 void SceneWidget::setCameraRoll(double angle)
@@ -1283,7 +1385,10 @@ void SceneWidget::setCameraRoll(double angle)
     cameraRoll = angle;
 
     // Apply camera angles using helper method
-    applyCameraAngles();
+    if (currentViewMode == ViewMode::Mode3D)
+        applyCameraAnglesPreservingZoom();
+    else
+        applyCameraAngles();
 }
 
 void SceneWidget::setCameraPitch(double angle)
@@ -1292,7 +1397,10 @@ void SceneWidget::setCameraPitch(double angle)
     cameraPitch = angle;
 
     // Apply camera angles using helper method
-    applyCameraAngles();
+    if (currentViewMode == ViewMode::Mode3D)
+        applyCameraAnglesPreservingZoom();
+    else
+        applyCameraAngles();
 }
 
 void SceneWidget::setCameraYaw(double angle)
@@ -1301,7 +1409,23 @@ void SceneWidget::setCameraYaw(double angle)
     cameraYaw = angle;
 
     // Apply camera angles using helper method
-    applyCameraAngles();
+    if (currentViewMode == ViewMode::Mode3D)
+        applyCameraAnglesPreservingZoom();
+    else
+        applyCameraAngles();
+}
+
+void SceneWidget::resetCameraZoom()
+{
+    auto camera = renderer->GetActiveCamera();
+    if (! camera)
+        return;
+
+    // Reset camera to default position while preserving rotation angles
+    // This is done by calling ResetCamera which fits all objects in view
+    renderer->ResetCamera();
+
+    triggerRenderUpdate();
 }
 
 void SceneWidget::setSubstatesDockWidget(SubstatesDockWidget* dockWidget)

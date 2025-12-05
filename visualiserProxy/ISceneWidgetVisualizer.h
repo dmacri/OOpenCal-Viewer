@@ -67,10 +67,10 @@ public:
     virtual void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const struct SubstateInfo* substateInfo = nullptr) = 0;
 
     /// @brief Draw the visualization using VTK with 3D substate as quad mesh surface.
-    virtual void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue) = 0;
+    virtual void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) = 0;
 
     /// @brief Refresh the VTK windows with 3D substate quad mesh surface.
-    virtual void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue) = 0;
+    virtual void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) = 0;
 
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
     virtual void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor) = 0;

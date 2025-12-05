@@ -10,6 +10,7 @@
 #include <QEvent>
 #include <QPushButton>
 #include <QColorDialog>
+#include <QCheckBox>
 #include "SubstateDisplayWidget.h"
 #include "ui_SubstateDisplayWidget.h"
 
@@ -64,6 +65,21 @@ void SubstateDisplayWidget::connectSignals()
 
     connect(ui->use2dButton, &QPushButton::clicked, this, &SubstateDisplayWidget::onUse2DClicked);
 
+    // Connect "Apply Custom Colors" button (clearColorsButton)
+    connect(ui->clearColorsButton, &QPushButton::clicked, this, [this]() {
+        // After clearing colors, emit signal to apply default colors
+        emit applyCustomColorsRequested(fieldName());
+    });
+
+    // Connect "Apply Custom Colors" button (applyCustomColorsPushButton) if it exists
+    if (ui->applyCustomColorsPushButton)
+    {
+        connect(ui->applyCustomColorsPushButton, &QPushButton::clicked, this, [this]() {
+            // Apply custom colors with current min/max color settings
+            emit applyCustomColorsRequested(fieldName());
+        });
+    }
+
     // Connect color buttons
     connect(ui->minColorButton, &QPushButton::clicked, this, &SubstateDisplayWidget::onMinColorClicked);
     connect(ui->maxColorButton, &QPushButton::clicked, this, &SubstateDisplayWidget::onMaxColorClicked);
@@ -74,6 +90,15 @@ void SubstateDisplayWidget::connectSignals()
             this, &SubstateDisplayWidget::updateButtonState);
     connect(ui->maxSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
             this, &SubstateDisplayWidget::updateButtonState);
+
+    // Connect noValue changes
+    #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+        connect(ui->noValueCheckBox, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onNoValueCheckBoxChanged);
+    #else
+        connect(ui->noValueCheckBox, &QCheckBox::stateChanged, this, &SubstateDisplayWidget::onNoValueCheckBoxChanged);
+    #endif
+    connect(ui->noValueDoubleSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &SubstateDisplayWidget::onNoValueSpinBoxChanged);
 
     // Install event filters on spinboxes to detect focus out
     ui->minSpinBox->installEventFilter(this);
@@ -235,6 +260,29 @@ void SubstateDisplayWidget::updateButtonState()
         ui->use2dButton->setToolTip("Set both Min and Max values to enable 2D visualization");
     }
 
+    // Update "Apply Custom Colors" button state - enabled only if both min/max AND colors are set
+    const bool hasMinColor = !getMinColor().empty();
+    const bool hasMaxColor = !getMaxColor().empty();
+    const bool hasColors = hasMinColor && hasMaxColor;
+    const bool applyColorsEnabled = isEnabled && hasColors;
+    
+    if (ui->applyCustomColorsPushButton)
+    {
+        ui->applyCustomColorsPushButton->setEnabled(applyColorsEnabled);
+        if (applyColorsEnabled)
+        {
+            ui->applyCustomColorsPushButton->setToolTip("Apply custom colors to visualization");
+        }
+        else if (!isEnabled)
+        {
+            ui->applyCustomColorsPushButton->setToolTip("Set both Min and Max values to enable");
+        }
+        else
+        {
+            ui->applyCustomColorsPushButton->setToolTip("Set both Min and Max colors to enable");
+        }
+    }
+
     // Emit signal with current min/max values so they can be stored in substateInfo
     emit minMaxValuesChanged(fieldName(), getMinValue(), getMaxValue());
 }
@@ -286,11 +334,10 @@ void SubstateDisplayWidget::contextMenuEvent(QContextMenuEvent* event)
     QMenu menu;
     
     // Add calculation actions with icons
+    // Note: "Calculate minimum > 0" and "Calculate maximum and minimum > 0" are removed
+    // Instead, when noValue is enabled, the calculate functions will skip noValue automatically
     auto calcMinAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate minimum");
     connect(calcMinAction, &QAction::triggered, this, &SubstateDisplayWidget::onCalculateMinimum);
-    
-    auto calcMinGtZeroAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate minimum > 0");
-    connect(calcMinGtZeroAction, &QAction::triggered, this, &SubstateDisplayWidget::onCalculateMinimumGreaterThanZero);
     
     menu.addSeparator();
     
@@ -299,8 +346,13 @@ void SubstateDisplayWidget::contextMenuEvent(QContextMenuEvent* event)
 
     menu.addSeparator();
 
-    auto calcMaxAndMinGtZeroAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate maximum and minimum > 0");
-    connect(calcMaxAndMinGtZeroAction, &QAction::triggered, this, &SubstateDisplayWidget::onCalculateMinimumGreaterThanZeroAndMaximum);
+    // Show "Calculate maximum and minimum"
+    auto calcMaxAndMinAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate maximum and minimum");
+    connect(calcMaxAndMinAction, &QAction::triggered, this, [this]() {
+        emit calculateMinimumRequested(fieldName());
+        emit calculateMaximumRequested(fieldName());
+        emit visualizationRefreshRequested();
+    });
     
     // Show menu at cursor position
     menu.exec(event->globalPos());
@@ -340,16 +392,26 @@ void SubstateDisplayWidget::setMinColor(const std::string& color)
 {
     m_minColor = color;
     updateColorButtonAppearance();
+    updateButtonState();  // Update button enabled state when colors change
     emit colorsChanged(fieldName(), m_minColor, m_maxColor);
-    emit visualizationRefreshRequested();
+    // Only refresh visualization if both colors are set (gradient coloring requires both)
+    if (!m_minColor.empty() && !m_maxColor.empty())
+    {
+        emit visualizationRefreshRequested();
+    }
 }
 
 void SubstateDisplayWidget::setMaxColor(const std::string& color)
 {
     m_maxColor = color;
     updateColorButtonAppearance();
+    updateButtonState();  // Update button enabled state when colors change
     emit colorsChanged(fieldName(), m_minColor, m_maxColor);
-    emit visualizationRefreshRequested();
+    // Only refresh visualization if both colors are set (gradient coloring requires both)
+    if (!m_minColor.empty() && !m_maxColor.empty())
+    {
+        emit visualizationRefreshRequested();
+    }
 }
 
 void SubstateDisplayWidget::onMinColorClicked()
@@ -425,4 +487,67 @@ void SubstateDisplayWidget::setActive(bool active)
         setStyleSheet("");
         setAutoFillBackground(false);
     }
+}
+
+bool SubstateDisplayWidget::isActive() const
+{
+    // Check if the widget has the active highlight style
+    return styleSheet().contains("E3F2FD");
+}
+
+double SubstateDisplayWidget::getNoValue() const
+{
+    const double value = ui->noValueDoubleSpinBox->value();
+    // Return NaN if value is the "empty" sentinel (-1e9)
+    if (value == emptyValue)
+        return std::numeric_limits<double>::quiet_NaN();
+    return value;
+}
+
+void SubstateDisplayWidget::setNoValue(double value)
+{
+    if (std::isnan(value))
+        ui->noValueDoubleSpinBox->setValue(emptyValue);  // Empty state
+    else
+        ui->noValueDoubleSpinBox->setValue(value);
+}
+
+bool SubstateDisplayWidget::isNoValueEnabled() const
+{
+    return ui->noValueCheckBox->isChecked();
+}
+
+void SubstateDisplayWidget::setNoValueEnabled(bool enabled)
+{
+    ui->noValueCheckBox->setChecked(enabled);
+    ui->noValueDoubleSpinBox->setEnabled(enabled);
+}
+
+std::string SubstateDisplayWidget::getMinColor() const
+{
+    return m_minColor;
+}
+
+std::string SubstateDisplayWidget::getMaxColor() const
+{
+    return m_maxColor;
+}
+
+void SubstateDisplayWidget::onNoValueSpinBoxChanged()
+{
+    // Enable spinbox only if checkbox is checked
+    if (ui->noValueCheckBox->isChecked())
+    {
+        emit noValueChanged(fieldName(), getNoValue(), true);
+        emit visualizationRefreshRequested();
+    }
+}
+
+void SubstateDisplayWidget::onNoValueCheckBoxChanged()
+{
+    // Enable/disable spinbox based on checkbox state
+    ui->noValueDoubleSpinBox->setEnabled(ui->noValueCheckBox->isChecked());
+    
+    emit noValueChanged(fieldName(), getNoValue(), ui->noValueCheckBox->isChecked());
+    emit visualizationRefreshRequested();
 }

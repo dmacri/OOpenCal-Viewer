@@ -1,7 +1,7 @@
 #include <limits>
 #include "Line.h"
 #include "visualiser/Visualizer.hpp"
-#include "widgets/ColorSettings.h"  // ColorSettings
+#include "widgets/ColorSettings.h" // ColorSettings
 
 
 namespace
@@ -241,4 +241,15 @@ void Visualizer::refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointe
         backgroundActor->GetMapper()->SetLookupTable(lut);
         backgroundActor->GetMapper()->Update();
     }
+}
+
+Color Visualizer::flatSceneBackgroundColor() const
+{
+    const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
+    return Color(
+        static_cast<std::uint8_t>(sceneColor.red()),
+        static_cast<std::uint8_t>(sceneColor.green()),
+        static_cast<std::uint8_t>(sceneColor.blue()),
+        255
+    );
 }

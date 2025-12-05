@@ -31,9 +31,32 @@
 #include "utilities/types.h"    // StepIndex
 #include "OOpenCAL/base/Cell.h" // Color
 #include "visualiser/SettingParameter.h" // SubstateInfo
-#include "widgets/ColorSettings.h" // ColorSettings
 
 class Line;
+
+
+/** @brief Converts a color channel value to a normalized range [0, 1].
+ *
+ * This function is designed to be forward-compatible with upcoming changes in OOpenCal.
+ * Currently, OOpenCal provides color values in the 0–255 integer range. VTK, however,
+ * expects normalized double precision values in the 0–1 range.
+ *
+ * If the input value is greater than 1, it is assumed to be in the 0–255 range
+ * and will be scaled down to [0, 1]. If the value is already in the [0, 1] range
+ * (future OOpenCal format), it will be returned unchanged.
+ *
+ * @param channel The input color component (either in 0–255 or already in 0–1).
+ * @return Normalized color value in the range [0, 1]. */
+inline double toUnitColor(double channel)
+{
+    // Backward compatibility: if value is > 1, assume 0–255 format and scale.
+    if (channel > 1.0)
+        return channel / 255.0;
+
+    // Already normalized (future format) — return as-is.
+    return channel;
+}
+
 
 /** @class Visualizer
  * @brief Handles VTK-based visualization of simulation data.
@@ -51,10 +74,10 @@ public:
 
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
-    void drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue);
+    void drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const SubstateInfo* substateInfo = nullptr);
     /// @brief Refresh 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
-    void refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue);
+    void refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const SubstateInfo* substateInfo = nullptr);
 
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor);
@@ -70,6 +93,10 @@ private:
     template<class Matrix>
     void buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p, const struct SubstateInfo* substateInfo = nullptr);
 
+    /// @brief The method is calculating color for specific cell with substateInfo considered
+    template<class Matrix>
+    Color calculateCellColor(int row, int column, const Matrix &p, const SubstateInfo* substateInfo);
+
     /** @brief Build 3D quad mesh surface for 3D substate visualization (healed quad approach).
      * 
      * Creates a quad mesh where each grid cell becomes a quadrilateral.
@@ -82,17 +109,22 @@ private:
      * @param substateFieldName Name of the substate field to extract
      * @param minValue Minimum value for normalization
      * @param maxValue Maximum value for normalization
+     * @param substateInfo Substate info for custom coloring (optional)
      * @return vtkSmartPointer<vtkPolyData> with quad mesh and colors */
     template<class Matrix>
     vtkSmartPointer<vtkPolyData> build3DSubstateSurfaceQuadMesh(const Matrix& p, int nRows, int nCols,
                                                                 const std::string& substateFieldName,
-                                                                double minValue, double maxValue);
+                                                                double minValue, double maxValue,
+                                                                const SubstateInfo* substateInfo = nullptr);
 
     /** @brief Creates a vtkPolyData representing a set of 2D lines.
       * @param lines Vector of Line objects (each defines a line segment)
       * @param nRows Number of grid rows (used to invert Y coordinates)
       * @return vtkSmartPointer<vtkPolyData> with points and lines set */
     vtkSmartPointer<vtkPolyData> createLinePolyData(const std::vector<Line>& lines, int nRows);
+
+    /// @brief This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
+    Color flatSceneBackgroundColor() const;
 };
 
 ////////////////////////////////////////////////////////////////////
@@ -160,28 +192,6 @@ void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSma
         throw std::runtime_error("Invalid dynamic cast!");
 }
 
-/** @brief Converts a color channel value to a normalized range [0, 1].
- *
- * This function is designed to be forward-compatible with upcoming changes in OOpenCal.
- * Currently, OOpenCal provides color values in the 0–255 integer range. VTK, however,
- * expects normalized double precision values in the 0–1 range.
- *
- * If the input value is greater than 1, it is assumed to be in the 0–255 range
- * and will be scaled down to [0, 1]. If the value is already in the [0, 1] range
- * (future OOpenCal format), it will be returned unchanged.
- *
- * @param channel The input color component (either in 0–255 or already in 0–1).
- * @return Normalized color value in the range [0, 1]. */
-inline double toUnitColor(double channel)
-{
-    // Backward compatibility: if value is > 1, assume 0–255 format and scale.
-    if (channel > 1.0)
-        return channel / 255.0;
-
-    // Already normalized (future format) — return as-is.
-    return channel;
-}
-
 template<class Matrix>
 void Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix &p, const SubstateInfo* substateInfo)
 {
@@ -189,104 +199,99 @@ void Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matr
     {
         for (int c = 0; c < nCols; ++c)
         {
-            Color color(0, 0, 0, 255);  // Default: opaque black
-            double alpha = 1.0;
-            
-            // If substateInfo with colors is provided, use gradient coloring
-            if (substateInfo && !substateInfo->minColor.empty() && !substateInfo->maxColor.empty())
-            {
-                // Get substate value for this cell
-                const char* fieldNamePtr = substateInfo->name.empty() ? nullptr : substateInfo->name.c_str();
-                std::string cellValue = p[r][c].stringEncoding(fieldNamePtr);
-                
-                try
-                {
-                    double value = std::stod(cellValue);
-                    double minVal = substateInfo->minValue;
-                    double maxVal = substateInfo->maxValue;
-                    
-                    // Check if value is noValue (out of range or equals noValue)
-                    bool isNoValue = false;
-                    if (std::isnan(minVal) || std::isnan(maxVal))
-                    {
-                        // Min/max not set - use default coloring
-                        isNoValue = false;
-                    }
-                    else if (!std::isnan(substateInfo->noValue) && value == substateInfo->noValue)
-                    {
-                        // Value equals noValue
-                        isNoValue = true;
-                    }
-                    else if (value < minVal || value > maxVal)
-                    {
-                        // Value out of range
-                        isNoValue = true;
-                    }
-                    
-                    if (isNoValue)
-                    {
-                        // Use flat scene background color for noValue
-                        const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
-                        color = Color(
-                            static_cast<std::uint8_t>(sceneColor.red()),
-                            static_cast<std::uint8_t>(sceneColor.green()),
-                            static_cast<std::uint8_t>(sceneColor.blue()),
-                            255
-                        );
-                    }
-                    else
-                    {
-                        // Normalize value to [0, 1]
-                        double normalized = (value - minVal) / (maxVal - minVal);
-                        
-                        // Parse min and max colors (hex format: #RRGGBB)
-                        auto parseHexColor = [](const std::string& hex) -> std::tuple<int, int, int> {
-                            if (hex.length() != 7 || hex[0] != '#')
-                                return {0, 0, 0};
-                            int r = std::stoi(hex.substr(1, 2), nullptr, 16);
-                            int g = std::stoi(hex.substr(3, 2), nullptr, 16);
-                            int b = std::stoi(hex.substr(5, 2), nullptr, 16);
-                            return {r, g, b};
-                        };
-                        
-                        auto [minR, minG, minB] = parseHexColor(substateInfo->minColor);
-                        auto [maxR, maxG, maxB] = parseHexColor(substateInfo->maxColor);
-                        
-                        // Interpolate between min and max colors
-                        int r = static_cast<int>(minR + (maxR - minR) * normalized);
-                        int g = static_cast<int>(minG + (maxG - minG) * normalized);
-                        int b = static_cast<int>(minB + (maxB - minB) * normalized);
-                        
-                        color = Color(static_cast<std::uint8_t>(r), static_cast<std::uint8_t>(g), static_cast<std::uint8_t>(b), 255);
-                    }
-                }
-                catch (const std::exception&)
-                {
-                    // Failed to parse value - use flat scene background color
-                    const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
-                    color = Color(
-                        static_cast<std::uint8_t>(sceneColor.red()),
-                        static_cast<std::uint8_t>(sceneColor.green()),
-                        static_cast<std::uint8_t>(sceneColor.blue()),
-                        255
-                    );
-                }
-            }
-            else
-            {
-                // Use default outputValue coloring
-                const char* fieldNamePtr = nullptr;
-                color = p[r][c].outputValue(fieldNamePtr);
-            }
-            
+            const auto color = calculateCellColor(r, c, p, substateInfo);
             lut->SetTableValue(
                 (nRows - 1 - r) * nCols + c,
                 toUnitColor(color.getRed()),
                 toUnitColor(color.getGreen()),
-                toUnitColor(color.getBlue()),
-                alpha
+                toUnitColor(color.getBlue())
             );
         }
+    }
+}
+
+template<class Matrix>
+Color Visualizer::calculateCellColor(int row, int column, const Matrix &p, const SubstateInfo* substateInfo)
+{
+    Color color(0, 0, 0, 255);  // Default: opaque black
+
+    // If substateInfo with colors is provided, use gradient coloring
+    if (substateInfo && ! substateInfo->minColor.empty() && ! substateInfo->maxColor.empty())
+    {
+        // Get substate value for this cell
+        const char* fieldNamePtr = substateInfo->name.empty() ? nullptr : substateInfo->name.c_str();
+        std::string cellValue = p[row][column].stringEncoding(fieldNamePtr);
+
+        try
+        {
+            double value = std::stod(cellValue);
+            double minVal = substateInfo->minValue;
+            double maxVal = substateInfo->maxValue;
+
+            // Check if value is noValue (out of range or equals noValue)
+            bool isNoValue = false;
+            if (std::isnan(minVal) || std::isnan(maxVal))
+            {
+                // Min/max not set - use default coloring
+                isNoValue = false;
+            }
+            else if (substateInfo->noValueEnabled && !std::isnan(substateInfo->noValue) && value == substateInfo->noValue)
+            {
+                // Value equals noValue and noValue filtering is enabled
+                isNoValue = true;
+            }
+            else if (value < minVal || value > maxVal)
+            {
+                // Value out of range
+                isNoValue = true;
+            }
+
+            if (isNoValue)
+            {
+                color = flatSceneBackgroundColor(); // Use flat scene background color for noValue
+            }
+            else
+            {
+                // Normalize value to [0, 1]
+                double normalized = (value - minVal) / (maxVal - minVal);
+
+                // Parse min and max colors (hex format: #RRGGBB)
+                auto parseHexColor = [](const std::string& hex) -> std::tuple<int, int, int> {
+                    if (hex.length() != 7 || hex[0] != '#')
+                        return {0, 0, 0};
+                    int r = std::stoi(hex.substr(1, 2), nullptr, 16);
+                    int g = std::stoi(hex.substr(3, 2), nullptr, 16);
+                    int b = std::stoi(hex.substr(5, 2), nullptr, 16);
+                    return {r, g, b};
+                };
+
+                auto [minR, minG, minB] = parseHexColor(substateInfo->minColor);
+                auto [maxR, maxG, maxB] = parseHexColor(substateInfo->maxColor);
+
+                // Interpolate between min and max colors
+                int r = static_cast<int>(minR + (maxR - minR) * normalized);
+                int g = static_cast<int>(minG + (maxG - minG) * normalized);
+                int b = static_cast<int>(minB + (maxB - minB) * normalized);
+
+                color = Color(static_cast<std::uint8_t>(r), static_cast<std::uint8_t>(g), static_cast<std::uint8_t>(b), 255);
+            }
+        }
+        catch (const std::exception&)
+        {
+            // Failed to parse value - use flat scene background color
+            color = flatSceneBackgroundColor(); // Use flat scene background color for noValue
+        }
+        return color;
+    }
+    else
+    {
+        // Use outputValue coloring
+        // If substateInfo is provided but no custom colors, use the substate field name
+        // Otherwise use nullptr for default coloring
+        const char* fieldNamePtr = (substateInfo && !substateInfo->name.empty()) 
+                                    ? substateInfo->name.c_str() 
+                                    : nullptr;
+        return p[row][column].outputValue(fieldNamePtr);
     }
 }
 
@@ -295,7 +300,8 @@ void Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matr
 template<class Matrix>
 vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Matrix& p, int nRows, int nCols,
                                                                         const std::string& substateFieldName,
-                                                                        double minValue, double maxValue)
+                                                                        double minValue, double maxValue,
+                                                                        const SubstateInfo* substateInfo)
 {
     // Validate min/max values
     if (std::isnan(minValue) || std::isnan(maxValue) || minValue >= maxValue)
@@ -321,11 +327,11 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Ma
         }
     };
 
-    // Helper lambda to get cell color
+    // Helper lambda to get cell color using calculateCellColor for proper custom color handling
     auto getCellColor = [&](int row, int col) -> Color {
         if (row < 0 || row >= nRows || col < 0 || col >= nCols)
             return Color(0, 0, 0);
-        return p[row][col].outputValue(nullptr);
+        return calculateCellColor(row, col, p, substateInfo);
     };
 
     // Helper lambda to check if value is valid (not no-data)
@@ -461,7 +467,8 @@ void Visualizer::drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols,
                                        vtkSmartPointer<vtkRenderer> renderer,
                                        vtkSmartPointer<vtkActor> gridActor,
                                        const std::string& substateFieldName,
-                                       double minValue, double maxValue)
+                                       double minValue, double maxValue,
+                                       const SubstateInfo* substateInfo)
 {
     // Validate min/max values
     if (std::isnan(minValue) || std::isnan(maxValue) || minValue >= maxValue)
@@ -478,7 +485,7 @@ void Visualizer::drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols,
     }
 
     // Build quad mesh surface
-    vtkSmartPointer<vtkPolyData> surfacePolyData = build3DSubstateSurfaceQuadMesh(p, nRows, nCols, substateFieldName, minValue, maxValue);
+    vtkSmartPointer<vtkPolyData> surfacePolyData = build3DSubstateSurfaceQuadMesh(p, nRows, nCols, substateFieldName, minValue, maxValue, substateInfo);
 
     // Create mapper
     vtkNew<vtkPolyDataMapper> mapper;
@@ -504,7 +511,8 @@ template<class Matrix>
 void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols,
                                              vtkSmartPointer<vtkActor> gridActor,
                                              const std::string& substateFieldName,
-                                             double minValue, double maxValue)
+                                             double minValue, double maxValue,
+                                             const SubstateInfo* substateInfo)
 {
     // Validate min/max values
     if (std::isnan(minValue) || std::isnan(maxValue) || minValue >= maxValue)
@@ -513,7 +521,7 @@ void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCo
     if (auto mapper = vtkPolyDataMapper::SafeDownCast(gridActor->GetMapper()))
     {
         // Build new quad mesh surface
-        vtkSmartPointer<vtkPolyData> surfacePolyData = build3DSubstateSurfaceQuadMesh(p, nRows, nCols, substateFieldName, minValue, maxValue);
+        vtkSmartPointer<vtkPolyData> surfacePolyData = build3DSubstateSurfaceQuadMesh(p, nRows, nCols, substateFieldName, minValue, maxValue, substateInfo);
 
         // Update mapper with new data
         mapper->SetInputData(surfacePolyData);
