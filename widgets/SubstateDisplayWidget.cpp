@@ -394,7 +394,11 @@ void SubstateDisplayWidget::setMinColor(const std::string& color)
     updateColorButtonAppearance();
     updateButtonState();  // Update button enabled state when colors change
     emit colorsChanged(fieldName(), m_minColor, m_maxColor);
-    emit visualizationRefreshRequested();
+    // Only refresh visualization if both colors are set (gradient coloring requires both)
+    if (!m_minColor.empty() && !m_maxColor.empty())
+    {
+        emit visualizationRefreshRequested();
+    }
 }
 
 void SubstateDisplayWidget::setMaxColor(const std::string& color)
@@ -403,7 +407,11 @@ void SubstateDisplayWidget::setMaxColor(const std::string& color)
     updateColorButtonAppearance();
     updateButtonState();  // Update button enabled state when colors change
     emit colorsChanged(fieldName(), m_minColor, m_maxColor);
-    emit visualizationRefreshRequested();
+    // Only refresh visualization if both colors are set (gradient coloring requires both)
+    if (!m_minColor.empty() && !m_maxColor.empty())
+    {
+        emit visualizationRefreshRequested();
+    }
 }
 
 void SubstateDisplayWidget::onMinColorClicked()
