@@ -88,6 +88,7 @@ private slots: // menu actions
 
     void onUse3rdDimensionRequested(const std::string& fieldName);
     void onUse2DRequested(const std::string& fieldName);
+    void onApplyCustomColorsRequested(const std::string& fieldName);
     void onDeactivateRequested();
 
     void onPlayButtonClicked();

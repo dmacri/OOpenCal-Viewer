@@ -196,6 +196,12 @@ public:
         return cameraYaw;
     }
 
+    /// @brief Reset camera zoom to default level (fit all objects in view).
+    /// 
+    /// This method resets the camera distance to its default position, fitting all
+    /// scene objects in the viewport. The camera orientation (rotation angles) is preserved.
+    void resetCameraZoom();
+
     /// @brief Set the substate dock widget for displaying cell information.
     /// 
     /// @param dockWidget Pointer to the SubstatesDockWidget
@@ -431,6 +437,11 @@ protected:
      * consistent camera positioning when angles are modified. */
     void applyCameraAngles();
 
+    void applyCameraAnglesPreservingZoom();
+
+    /// @brief Update cached camera pivot using current visible bounds
+    void updateCameraPivotFromBounds();
+
     /** @brief Load and update visualization data for the current step.
      * 
      * This helper reads stage state from files for the current step and refreshes
@@ -554,6 +565,9 @@ protected:
 
     /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number in the scene.
     vtkNew<vtkTextMapper> singleLineTextStep;
+
+    /// @brief Pivot point used for GUI-controlled camera rotations in 3D mode
+    std::array<double, 3> cameraPivot{ 0.0, 0.0, 0.0 };
 
     /// @brief Axes actor for showing coordinate system orientation
     vtkNew<vtkAxesActor> axesActor;
