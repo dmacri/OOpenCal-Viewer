@@ -212,7 +212,8 @@ log_step "Configuring CMake..."
 cmake "$VIEWER_ROOT" \
     -DCMAKE_BUILD_TYPE=Release \
     -DUSE_QT6=$( [[ "$QT_VERSION" == "qt6" ]] && echo ON || echo OFF ) \
-    -DOOPENCAL_DIR="$OOPENCAL_DIR"
+    -DOOPENCAL_DIR="$OOPENCAL_DIR" \
+    -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
 
 log_step "Building (make)..."
 make -j"$(nproc)"
