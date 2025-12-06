@@ -216,8 +216,8 @@ set(CMAKE_AUTOMOC "YES")
 set(CMAKE_AUTOUIC "YES")
 
 # Qt version selection
-# Default: Qt6 (can be overridden with -DUSE_QT6=OFF for Qt5)
-option(USE_QT6 "Use Qt6 instead of Qt5" ON)
+# Default: Qt5 (can be overridden with -DUSE_QT6=OFF for Qt5)
+option(USE_QT6 "Use Qt6 instead of Qt5" OFF)
 
 if(USE_QT6)
     find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL)
