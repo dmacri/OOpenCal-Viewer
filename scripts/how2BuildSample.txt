@@ -5,6 +5,10 @@ export VIEWER_ROOT=$(pwd)
 # ----------- building with script:
 ./scripts/build_plugin.sh ${VIEWER_ROOT}/../OOpenCAL/models/Ball/Output/BallCell.h -DPLUGIN_MODEL_NAME='"Ball2"' -DPLUGIN_CELL_CLASS=BallCell -DOOPENCAL_DIR=${VIEWER_ROOT}/../ -DOOPENCALVIEWER_DIR=${VIEWER_ROOT}/ --includes  ${VIEWER_ROOT}/../OOpenCAL/base # --template ${VIEWER_ROOT}/examples/custom_model_plugin/
 
+
+./scripts/build_plugin.sh/../OOpenCAL/models/SciddicaT/Output/SciddicaTCell.h -DPLUGIN_MODEL_NAME='"SciddicaT2"' -DPLUGIN_CELL_CLASS=SciddicaTCell -DOOPENCAL_DIR=${VIEWER_ROOT}/../ -DOOPENCALVIEWER_DIR=${VIEWER_ROOT}/ --includes  ${VIEWER_ROOT}/../OOpenCAL/base # --template ${VIEWER_ROOT}/examples/custom_model_plugin/
+
+
 # ----------- building with cmake:
 cmake . -DOOPENCAL_DIR=${VIEWER_ROOT}/../ -DOOPENCALVIEWER_DIR=${VIEWER_ROOT}
 cmake . -DOOPENCAL_DIR=${VIEWER_ROOT}/../ -DOOPENCALVIEWER_DIR=${VIEWER_ROOT} -DPLUGIN_CELL_CLASS="BallCell" -DPLUGIN_MODEL_NAME='"My ball model"'
