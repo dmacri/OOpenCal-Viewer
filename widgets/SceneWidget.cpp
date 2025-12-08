@@ -1346,7 +1346,10 @@ void SceneWidget::setActiveSubstateFor2D(const std::string& fieldName)
 {
     activeSubstateFor2D = fieldName;
     // Refresh visualization to apply the new 2D substate only if settingParameter is initialized
-    refreshVisualization();
+    if (! fieldName.empty())
+    {
+        refreshVisualization();
+    }
 }
 
 void SceneWidget::refreshVisualization()
