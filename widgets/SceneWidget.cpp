@@ -42,6 +42,27 @@
 
 namespace
 {
+/** @brief Enum for interactor style variants in 3D mode.
+ * 
+ * Used to test different interactor implementations:
+ * - None: No custom interactor (VTK default)
+ * - Current: Current CustomInteractorStyle with ray-plane zoom
+ * - PolymorphicWaitCursor: Subclass of TrackballCamera with wait cursor */
+enum class InteractorVariant
+{
+    None,                    ///< No custom interactor - VTK default
+    Current,                 ///< Current CustomInteractorStyle (ray-plane zoom)
+    PolymorphicWaitCursor    ///< Subclass with wait cursor (minimal overhead)
+};
+
+/** @brief Hardcoded constant to select interactor variant for testing.
+ * 
+ * Change this to test different interactor implementations:
+ * - InteractorVariant::None: No custom interactor
+ * - InteractorVariant::Current: Current implementation
+ * - InteractorVariant::PolymorphicWaitCursor: New polymorphic variant */
+constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::None;
+
 /** @brief Checks if the given directory already contains data files matching the output name pattern
  *  @param configDir Directory to check
  *  @param outputFileNameFromCfg Base output filename to look for
@@ -1524,8 +1545,28 @@ bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
 
 void SceneWidget::setupInteractorStyleWithWaitCursor()
 {
-    vtkNew<CustomInteractorStyle> style;
-    interactor()->SetInteractorStyle(style);
+    if constexpr (INTERACTOR_VARIANT == InteractorVariant::None)
+    {
+        // Variant 1: No custom interactor - VTK default
+        // VTK will automatically use vtkInteractorStyleTrackballCamera
+        // No need to set anything
+    }
+    else if constexpr (INTERACTOR_VARIANT == InteractorVariant::Current)
+    {
+        // Variant 2: Current CustomInteractorStyle
+        // Features: Ray-plane zoom (zoom towards cursor), wait cursor, Shift+Drag panning
+        // Cost: ~5% overhead due to ray-plane calculations
+        vtkNew<CustomInteractorStyle> style;
+        interactor()->SetInteractorStyle(style);
+    }
+    else if constexpr (INTERACTOR_VARIANT == InteractorVariant::PolymorphicWaitCursor)
+    {
+        // Variant 3: Polymorphic wait cursor variant
+        // Features: Standard VTK zoom (center), wait cursor, Shift+Drag panning
+        // Cost: ~0.5% overhead (just polymorphic call)
+        vtkNew<SimpleInteractorWithWaitCursor> style;
+        interactor()->SetInteractorStyle(style);
+    }
 }
 
 void SceneWidget::applyGridLinesSettings()

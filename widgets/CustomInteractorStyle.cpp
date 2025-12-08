@@ -12,7 +12,9 @@
 #include <vtkMath.h>
 #include <cmath>
 
+
 vtkStandardNewMacro(CustomInteractorStyle);
+vtkStandardNewMacro(SimpleInteractorWithWaitCursor);
 
 
 void CustomInteractorStyle::OnMouseWheelForward()
@@ -292,4 +294,17 @@ void CustomInteractorStyle::PanCamera()
 
     // Trigger render
     this->Interactor->GetRenderWindow()->Render();
+}
+
+
+void SimpleInteractorWithWaitCursor::OnMouseWheelForward()
+{
+    WaitCursorGuard waitCursor("Zooming in...");
+    this->Superclass::OnMouseWheelForward();
+}
+
+void SimpleInteractorWithWaitCursor::OnMouseWheelBackward()
+{
+    WaitCursorGuard waitCursor("Zooming out...");
+    this->Superclass::OnMouseWheelBackward();
 }
