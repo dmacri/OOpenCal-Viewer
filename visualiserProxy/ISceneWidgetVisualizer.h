@@ -78,6 +78,12 @@ public:
     /// @brief Refresh flat background plane colors.
     virtual void refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor) = 0;
 
+    /// @brief Draw grid lines projected onto the 3D substate surface.
+    virtual void drawGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) = 0;
+
+    /// @brief Refresh grid lines projected onto the 3D substate surface.
+    virtual void refreshGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) = 0;
+
     /// @brief Get the visualizer instance.
     virtual Visualizer& getVisualizer() = 0;
 

@@ -103,6 +103,16 @@ public:
         m_impl.visualiser.refreshFlatSceneBackground(nRows, nCols, backgroundActor);
     }
 
+    void drawGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) override
+    {
+        m_impl.visualiser.drawGridLinesOn3DSurface(m_impl.p, nRows, nCols, lines, renderer, gridLinesActor, substateFieldName, minValue, maxValue, substateInfo);
+    }
+
+    void refreshGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) override
+    {
+        m_impl.visualiser.refreshGridLinesOn3DSurface(m_impl.p, nRows, nCols, lines, gridLinesActor, substateFieldName, minValue, maxValue, substateInfo);
+    }
+
     Visualizer& getVisualizer() override
     {
         return m_impl.visualiser;
