@@ -133,6 +133,7 @@ SceneWidget::SceneWidget(QWidget* parent)
     , gridActor{ vtkSmartPointer<vtkActor>::New() }
     , backgroundActor{ vtkSmartPointer<vtkActor>::New() }
     , actorBuildLine{ vtkSmartPointer<vtkActor2D>::New() }
+    , gridLinesOnSurfaceActor{ vtkSmartPointer<vtkActor>::New() }
 {
     enableToolTipWhenMouseAboveWidget();
 
@@ -336,6 +337,10 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     {
         renderer->RemoveActor(backgroundActor);
     }
+    if (gridLinesOnSurfaceActor && renderer)
+    {
+        renderer->RemoveActor(gridLinesOnSurfaceActor);
+    }
     
     // Check if we should use 3D substate visualization
     if (! activeSubstateFor3D.empty() && settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
@@ -367,6 +372,22 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                               substateInfo.minValue,
                                                               substateInfo.maxValue,
                                                               &substateInfo);
+
+            // Hide 2D grid lines and draw 3D grid lines on surface instead
+            if (actorBuildLine)
+            {
+                actorBuildLine->SetVisibility(false);
+            }
+            
+            sceneWidgetVisualizerProxy->drawGridLinesOn3DSurface(settingParameter->numberOfRowsY,
+                                                                 settingParameter->numberOfColumnX,
+                                                                 lines,
+                                                                 renderer,
+                                                                 gridLinesOnSurfaceActor,
+                                                                 activeSubstateFor3D,
+                                                                 substateInfo.minValue,
+                                                                 substateInfo.maxValue,
+                                                                 &substateInfo);
 
             updateCameraPivotFromBounds();
             return;
@@ -406,6 +427,17 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                     substateInfo.minValue,
                                                                     substateInfo.maxValue,
                                                                     &substateInfo);
+
+            // Refresh 3D grid lines on surface
+            sceneWidgetVisualizerProxy->refreshGridLinesOn3DSurface(settingParameter->numberOfRowsY,
+                                                                    settingParameter->numberOfColumnX,
+                                                                    lines,
+                                                                    gridLinesOnSurfaceActor,
+                                                                    activeSubstateFor3D,
+                                                                    substateInfo.minValue,
+                                                                    substateInfo.maxValue,
+                                                                    &substateInfo);
+
             updateCameraPivotFromBounds();
             return;
         }
