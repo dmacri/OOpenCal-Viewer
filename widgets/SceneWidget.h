@@ -563,6 +563,10 @@ protected:
      *  @note: The type is vtkSmartPointer instead of auto-maintained vtkNew because we need to be able to reset the object */
     vtkSmartPointer<vtkActor2D> actorBuildLine;
 
+    /** @brief Actor for 3D grid lines on surface: Renders grid lines projected onto 3D substate surface.
+     *  @note: The type is vtkSmartPointer instead of auto-maintained vtkNew because we need to be able to reset the object */
+    vtkSmartPointer<vtkActor> gridLinesOnSurfaceActor;
+
     /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number in the scene.
     vtkNew<vtkTextMapper> singleLineTextStep;
 

@@ -42,14 +42,10 @@ if(NOT VTK_FOUND)
         RenderingOpenGL2
         IOXML
         IOOggTheora
+        IOLegacy
         REQUIRED
-            GUISupportQt
-            IOLegacy
     )
 endif()
-
-# Try to find Qt6 first, fall back to Qt5 (Qt5 is for GithubCI for compatibility with VTK)
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL)
 
 # ============================================================================
 # Include directories

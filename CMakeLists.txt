@@ -215,8 +215,17 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOMOC "YES")
 set(CMAKE_AUTOUIC "YES")
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL)
-message(STATUS "Using Qt${QT_VERSION_MAJOR} (${Qt${QT_VERSION_MAJOR}_VERSION})")
+# Qt version selection
+# Default: Qt5 (can be overridden with -DUSE_QT6=ON for Qt6)
+option(USE_QT6 "Use Qt6 instead of Qt5" OFF)
+
+if(USE_QT6)
+    find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL)
+    message(STATUS "Using Qt6 (${Qt6_VERSION})")
+else()
+    find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets OpenGL)
+    message(STATUS "Using Qt5 (${Qt5_VERSION})")
+endif()
 
 # ============================================
 # Executable target
@@ -383,12 +392,18 @@ endif()
 # ============================================
 # Linking
 # ============================================
+if(USE_QT6)
+    set(QT_TARGET_PREFIX Qt6)
+else()
+    set(QT_TARGET_PREFIX Qt5)
+endif()
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
     # Qt:
-    Qt${QT_VERSION_MAJOR}::Core
-    Qt${QT_VERSION_MAJOR}::Gui
-    Qt${QT_VERSION_MAJOR}::Widgets
-    Qt${QT_VERSION_MAJOR}::OpenGL
+    ${QT_TARGET_PREFIX}::Core
+    ${QT_TARGET_PREFIX}::Gui
+    ${QT_TARGET_PREFIX}::Widgets
+    ${QT_TARGET_PREFIX}::OpenGL
     # VTK:
     ${VTK_LIBRARIES}
     # other:
