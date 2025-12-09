@@ -1576,7 +1576,7 @@ bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
 }
 
 void SceneWidget::setupInteractorStyleWithWaitCursor()
-{
+{ // TODO: Show variants to Andres
     if constexpr (INTERACTOR_VARIANT == InteractorVariant::None)
     {
         // Variant 1: No custom interactor - VTK default
