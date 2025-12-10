@@ -181,12 +181,12 @@ list(APPEND Sources
     widgets/SubstateDisplayWidget.cpp
     widgets/SubstatesDockWidget.cpp
     widgets/CustomInteractorStyle.cpp
-    utilities/PluginLoader.cpp
+    plugins/PluginLoader.cpp
+    plugins/ModelLoader.cpp
+    plugins/CppModuleBuilder.cpp
     utilities/ReductionManager.cpp
     utilities/ModelReader.cpp
     utilities/CommandLineParser.cpp
-    utilities/ModelLoader.cpp
-    utilities/CppModuleBuilder.cpp
     utilities/WaitCursorGuard.cpp
 )
 file(GLOB Resources

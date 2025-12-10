@@ -12,7 +12,7 @@
 #include "config/Config.h"
 #include "config/ConfigConstants.h"
 #include "CppModuleBuilder.h"
-#include "directoryConstants.h"
+#include "utilities/directoryConstants.h"
 
 
 namespace

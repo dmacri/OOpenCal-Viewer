@@ -32,7 +32,7 @@
 
 #include "mainwindow.h"
 #include "utilities/CommandLineParser.h"
-#include "utilities/PluginLoader.h"
+#include "plugins/PluginLoader.h"
 
 
 void applyStyleSheet(MainWindow& mainWindow);
