@@ -116,6 +116,10 @@ public:
     vtkNew<vtkActor2D> buildStepText(StepIndex step, int font_size, vtkSmartPointer<vtkTextMapper> stepLineTextMapper, vtkSmartPointer<vtkRenderer> renderer);
 
 private:
+    /// @brief Apply grid color settings to 3D grid lines actor.
+    /// @note This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
+    void applyGridColorTo3DGridLinesActor(vtkSmartPointer<vtkActor> gridLinesActor);
+
     template<class Matrix>
     void buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p, const struct SubstateInfo* substateInfo = nullptr);
 
@@ -275,6 +279,10 @@ void Visualizer::drawGridLinesOn3DSurface(const Matrix& p,
     vtkNew<vtkPolyDataMapper> mapper;
     mapper->SetInputData(polyData);
     gridLinesActor->SetMapper(mapper);
+    gridLinesActor->GetProperty()->SetLineWidth(1.0);
+
+    // Apply grid color from settings
+    applyGridColorTo3DGridLinesActor(gridLinesActor);
 
     renderer->AddActor(gridLinesActor);
 }
@@ -311,6 +319,9 @@ void Visualizer::refreshGridLinesOn3DSurface(const Matrix& p,
                                                                             substateInfo);
     mapper->SetInputData(polyData);
     mapper->Update();
+
+    // Update grid color from settings
+    applyGridColorTo3DGridLinesActor(gridLinesActor);
 }
 
 template<class Matrix>

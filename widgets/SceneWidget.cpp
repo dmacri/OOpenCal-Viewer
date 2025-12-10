@@ -393,7 +393,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
             return;
         }
     }
-    
+
     // Fallback to regular 2D visualization
     const SubstateInfo* substateInfo2D = nullptr;
     if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
