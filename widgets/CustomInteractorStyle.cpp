@@ -30,16 +30,44 @@ CustomInteractorStyle::CustomInteractorStyle()
 
 void CustomInteractorStyle::OnMouseWheelForward()
 {
-    WaitCursorGuard waitCursor("Zooming in...");
+    // Accumulate zoom factor instead of applying immediately
+    m_accumulatedZoomFactor *= 1.1;  // Zoom in by 10%
 
-    ZoomTowardsCursor(1.1);  // Zoom in by 10%
+    // If no timer is active, start one to apply accumulated zoom after a short delay
+    if (m_zoomTimerId == 0)
+    {
+        m_zoomTimerId = this->Interactor->CreateRepeatingTimer(50);  // 50ms delay
+    }
 }
 
 void CustomInteractorStyle::OnMouseWheelBackward()
 {
-    WaitCursorGuard waitCursor("Zooming out...");
+    // Accumulate zoom factor instead of applying immediately
+    m_accumulatedZoomFactor /= 1.1;  // Zoom out by ~10%
 
-    ZoomTowardsCursor(1.0 / 1.1);  // Zoom out by ~10%
+    // If no timer is active, start one to apply accumulated zoom after a short delay
+    if (m_zoomTimerId == 0)
+    {
+        m_zoomTimerId = this->Interactor->CreateRepeatingTimer(50);  // 50ms delay
+    }
+}
+
+void CustomInteractorStyle::OnTimer()
+{
+    // Apply accumulated zoom and reset
+    if (m_accumulatedZoomFactor != 1.0)
+    {
+        WaitCursorGuard waitCursor("Zooming...");
+        ZoomTowardsCursor(m_accumulatedZoomFactor);
+        m_accumulatedZoomFactor = 1.0;
+    }
+
+    // Destroy timer after applying zoom
+    if (m_zoomTimerId != 0)
+    {
+        this->Interactor->DestroyTimer(m_zoomTimerId);
+        m_zoomTimerId = 0;
+    }
 }
 
 void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)

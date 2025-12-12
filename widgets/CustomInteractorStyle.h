@@ -51,7 +51,7 @@ public:
 
 private:
     /** @brief Perform zoom towards cursor.
-     * 
+     *
      * @param zoomFactor Multiplicative factor (> 1.0 zooms in, < 1.0 zooms out) */
     void ZoomTowardsCursor(double zoomFactor);
 
@@ -73,6 +73,15 @@ private:
     /// @brief Minimum and maximum allowed camera distance to avoid clipping issues
     double m_minDistance = 0.1;
     double m_maxDistance = 1e6;
+
+    /// @brief Accumulated zoom factor from multiple wheel events
+    double m_accumulatedZoomFactor = 1.0;
+
+    /// @brief Timer ID for deferred zoom application (0 = no timer active)
+    int m_zoomTimerId = 0;
+
+    /// @brief Handle timer events for deferred zoom
+    void OnTimer() override;
 };
 
 /** @brief Simple interactor style with wait cursor feedback.
