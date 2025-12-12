@@ -4,12 +4,14 @@
 #include "CustomInteractorStyle.h"
 #include "widgets/WaitCursorGuard.h"
 #include <vtkCamera.h>
+#include <vtkCellPicker.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkRenderWindow.h>
 #include <vtkRenderer.h>
 #include <vtkRendererCollection.h>
 #include <vtkObjectFactory.h>
 #include <vtkMath.h>
+#include <algorithm>
 #include <cmath>
 
 
@@ -17,18 +19,27 @@ vtkStandardNewMacro(CustomInteractorStyle);
 vtkStandardNewMacro(SimpleInteractorWithWaitCursor);
 
 
+CustomInteractorStyle::CustomInteractorStyle()
+    : m_picker{ vtkSmartPointer<vtkCellPicker>::New() }
+{
+    if (m_picker)
+    {
+        m_picker->SetTolerance(0.0005);
+    }
+}
+
 void CustomInteractorStyle::OnMouseWheelForward()
 {
-    WaitCursorGuard waitCursor("Zooming out...");
-    
-    ZoomTowardsCursor(1.1);  // Zoom out by 10%
+    WaitCursorGuard waitCursor("Zooming in...");
+
+    ZoomTowardsCursor(1.1);  // Zoom in by 10%
 }
 
 void CustomInteractorStyle::OnMouseWheelBackward()
 {
-    WaitCursorGuard waitCursor("Zooming in...");
-    
-    ZoomTowardsCursor(0.9);  // Zoom in by 10%
+    WaitCursorGuard waitCursor("Zooming out...");
+
+    ZoomTowardsCursor(1.0 / 1.1);  // Zoom out by ~10%
 }
 
 void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)
@@ -36,81 +47,123 @@ void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)
     if (!this->Interactor || !this->Interactor->GetRenderWindow())
         return;
 
-    vtkRenderer* renderer = this->Interactor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
+    vtkRenderWindowInteractor* interactor = this->Interactor;
+    vtkRenderWindow* renderWindow = interactor->GetRenderWindow();
+    if (!renderWindow)
+        return;
+
+    int mousePos[2];
+    interactor->GetEventPosition(mousePos);
+
+    vtkRenderer* renderer = interactor->FindPokedRenderer(mousePos[0], mousePos[1]);
+    if (!renderer)
+    {
+        renderer = renderWindow->GetRenderers()->GetFirstRenderer();
+    }
     if (!renderer || !renderer->GetActiveCamera())
         return;
 
     vtkCamera* camera = renderer->GetActiveCamera();
-    int mousePos[2];
-    this->Interactor->GetEventPosition(mousePos);
 
-    //--------------------------------------------------------------------------
-    // STEP 1: Compute ray from camera through mouse pixel
-    //--------------------------------------------------------------------------
-    const int* windowSize = this->Interactor->GetRenderWindow()->GetSize();
-    double displayPt[3] = {
-        static_cast<double>(mousePos[0]),
-        static_cast<double>(windowSize[1] - mousePos[1]),  // Flip Y
-        0.0
-    };
+    double pickWorld[3] = { 0.0, 0.0, 0.0 };
+    bool havePick = false;
 
-    // Get world coordinates for z=0 and z=1 in display
-    renderer->SetDisplayPoint(displayPt);
-    renderer->DisplayToWorld();
-    const double* world0Ptr = renderer->GetWorldPoint();
-    double world0[3] = { world0Ptr[0], world0Ptr[1], world0Ptr[2] };
+    if (m_picker && m_picker->Pick(mousePos[0], mousePos[1], 0.0, renderer) > 0 && m_picker->GetDataSet())
+    {
+        const double* picked = m_picker->GetPickPosition();
+        pickWorld[0] = picked[0];
+        pickWorld[1] = picked[1];
+        pickWorld[2] = picked[2];
+        havePick = true;
+    }
 
-    double displayPt1[3] = { displayPt[0], displayPt[1], 1.0 };
-    renderer->SetDisplayPoint(displayPt1);
-    renderer->DisplayToWorld();
-    const double* world1Ptr = renderer->GetWorldPoint();
-    const double world1[3] = { world1Ptr[0], world1Ptr[1], world1Ptr[2] };
+    if (!havePick)
+    {
+        double displayPt[3] = {
+            static_cast<double>(mousePos[0]),
+            static_cast<double>(mousePos[1]),
+            0.0
+        };
 
-    // Ray direction
-    double rayDir[3] = { world1[0] - world0[0],
-                        world1[1] - world0[1],
-                        world1[2] - world0[2] };
-    vtkMath::Normalize(rayDir);
+        renderer->SetDisplayPoint(displayPt);
+        renderer->DisplayToWorld();
+        double world0[4];
+        renderer->GetWorldPoint(world0);
+        if (std::abs(world0[3]) > 1e-12)
+        {
+            world0[0] /= world0[3];
+            world0[1] /= world0[3];
+            world0[2] /= world0[3];
+        }
 
-    //--------------------------------------------------------------------------
-    // STEP 2: Compute ray-plane intersection
-    //         Plane = perpendicular to view direction, passing through focal point
-    //--------------------------------------------------------------------------
-    double camPos[3], focal[3], viewUp[3];
+        double displayPt1[3] = { displayPt[0], displayPt[1], 1.0 };
+        renderer->SetDisplayPoint(displayPt1);
+        renderer->DisplayToWorld();
+        double world1[4];
+        renderer->GetWorldPoint(world1);
+        if (std::abs(world1[3]) > 1e-12)
+        {
+            world1[0] /= world1[3];
+            world1[1] /= world1[3];
+            world1[2] /= world1[3];
+        }
+
+        double rayDir[3] = {
+            world1[0] - world0[0],
+            world1[1] - world0[1],
+            world1[2] - world0[2]
+        };
+        vtkMath::Normalize(rayDir);
+
+        double camPos[3];
+        double focal[3];
+        double viewUp[3];
+        camera->GetPosition(camPos);
+        camera->GetFocalPoint(focal);
+        camera->GetViewUp(viewUp);
+
+        double viewNormal[3] = {
+            focal[0] - camPos[0],
+            focal[1] - camPos[1],
+            focal[2] - camPos[2]
+        };
+        vtkMath::Normalize(viewNormal);
+
+        double numer = vtkMath::Dot(focal, viewNormal) - vtkMath::Dot(world0, viewNormal);
+        double denom = vtkMath::Dot(rayDir, viewNormal);
+
+        if (std::abs(denom) > 1e-12)
+        {
+            double t = numer / denom;
+            pickWorld[0] = world0[0] + t * rayDir[0];
+            pickWorld[1] = world0[1] + t * rayDir[1];
+            pickWorld[2] = world0[2] + t * rayDir[2];
+            havePick = true;
+        }
+        else
+        {
+            pickWorld[0] = focal[0];
+            pickWorld[1] = focal[1];
+            pickWorld[2] = focal[2];
+            havePick = true;
+        }
+    }
+
+    if (!havePick)
+    {
+        camera->Dolly(zoomFactor);
+        renderer->ResetCameraClippingRange();
+        renderWindow->Render();
+        return;
+    }
+
+    double camPos[3];
+    double focal[3];
+    double viewUp[3];
     camera->GetPosition(camPos);
     camera->GetFocalPoint(focal);
     camera->GetViewUp(viewUp);
 
-    double viewNormal[3] = { focal[0] - camPos[0],
-                            focal[1] - camPos[1],
-                            focal[2] - camPos[2] };
-    vtkMath::Normalize(viewNormal);
-
-    // Solve intersection:
-    // dot( world0 + t*rayDir - focal, viewNormal ) = 0
-    double numer = vtkMath::Dot(focal, viewNormal) - vtkMath::Dot(world0, viewNormal);
-    double denom = vtkMath::Dot(rayDir, viewNormal);
-
-    double pickWorld[3];
-    if (fabs(denom) > 1e-12)
-    {
-        double t = numer / denom;
-        pickWorld[0] = world0[0] + t * rayDir[0];
-        pickWorld[1] = world0[1] + t * rayDir[1];
-        pickWorld[2] = world0[2] + t * rayDir[2];
-    }
-    else
-    {
-        // Ray is parallel to focal plane - use focal point
-        pickWorld[0] = focal[0];
-        pickWorld[1] = focal[1];
-        pickWorld[2] = focal[2];
-    }
-
-    //--------------------------------------------------------------------------
-    // STEP 3: Compute new camera position so pickWorld stays stationary
-    //--------------------------------------------------------------------------
-    // Vector from camera to picked point
     double v[3] = {
         pickWorld[0] - camPos[0],
         pickWorld[1] - camPos[1],
@@ -120,21 +173,18 @@ void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)
     if (dist < 1e-12)
         return;
 
-    // New distance after zoom (zoomFactor < 1 = zoom in, > 1 = zoom out)
     double newDist = dist / zoomFactor;
+    newDist = std::clamp(newDist, m_minDistance, m_maxDistance);
 
-    // Normalized direction
-    const double vnorm[3] = { v[0] / dist, v[1] / dist, v[2] / dist };
+    double vnorm[3] = { v[0] / dist, v[1] / dist, v[2] / dist };
 
-    // New camera position
     double newCamPos[3] = {
         pickWorld[0] - vnorm[0] * newDist,
         pickWorld[1] - vnorm[1] * newDist,
         pickWorld[2] - vnorm[2] * newDist
     };
 
-    // Translation applied equally to focal point (prevents rotation)
-    const double translation[3] = {
+    double translation[3] = {
         newCamPos[0] - camPos[0],
         newCamPos[1] - camPos[1],
         newCamPos[2] - camPos[2]
@@ -151,7 +201,7 @@ void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)
     camera->SetViewUp(viewUp);
 
     renderer->ResetCameraClippingRange();
-    this->Interactor->GetRenderWindow()->Render();
+    renderWindow->Render();
 }
 
 void CustomInteractorStyle::OnLeftButtonDown()

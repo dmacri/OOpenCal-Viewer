@@ -61,7 +61,7 @@ enum class InteractorVariant
  * - InteractorVariant::None: No custom interactor
  * - InteractorVariant::Current: Current implementation
  * - InteractorVariant::PolymorphicWaitCursor: New polymorphic variant */
-constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::None;
+constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::Current;
 
 /** @brief Checks if the given directory already contains data files matching the output name pattern
  *  @param configDir Directory to check
