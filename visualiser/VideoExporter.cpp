@@ -3,7 +3,7 @@
 #include <vtkWindowToImageFilter.h>
 #include <vtkRenderWindow.h>
 #include <vtkNew.h>
-#include "utilities/types.h"
+#include "core/types.h"
 #include "visualiser/VideoExporter.h"
 
 

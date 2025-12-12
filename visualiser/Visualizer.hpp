@@ -30,7 +30,7 @@
 #include <vtkCellData.h>
 #include <vtkProperty.h>
 
-#include "utilities/types.h"    // StepIndex
+#include "core/types.h"    // StepIndex
 #include "OOpenCAL/base/Cell.h" // Color
 #include "visualiser/SettingParameter.h" // SubstateInfo
 #include "visualiser/Line.h"

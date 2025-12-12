@@ -31,7 +31,7 @@
 #include <vtkGenericOpenGLRenderWindow.h>
 
 #include "mainwindow.h"
-#include "utilities/CommandLineParser.h"
+#include "core/CommandLineParser.h"
 #include "plugins/PluginLoader.h"
 
 

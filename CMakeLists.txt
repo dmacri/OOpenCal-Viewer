@@ -184,10 +184,12 @@ list(APPEND Sources
     plugins/PluginLoader.cpp
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp
-    utilities/ReductionManager.cpp
-    utilities/ModelReader.cpp
-    utilities/CommandLineParser.cpp
-    utilities/WaitCursorGuard.cpp
+    core/CommandLineParser.cpp
+    core/types.h
+    core/directoryConstants.h
+    data/ReductionManager.cpp
+    data/ModelReader.cpp
+    widgets/WaitCursorGuard.cpp
 )
 file(GLOB Resources
     LIST_DIRECTORIES false

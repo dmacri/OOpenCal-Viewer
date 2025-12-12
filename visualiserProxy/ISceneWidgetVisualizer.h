@@ -19,7 +19,7 @@
 
 #include <vtkRenderer.h>
 
-#include "utilities/types.h"
+#include "core/types.h"
 
 // Forward declarations
 class SettingParameter;

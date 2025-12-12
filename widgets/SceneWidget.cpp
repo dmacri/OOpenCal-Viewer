@@ -6,8 +6,8 @@
 #include <filesystem>
 #include <string>
 #include <QApplication>
-#include "utilities/directoryConstants.h"
-#include "utilities/WaitCursorGuard.h"
+#include "core/directoryConstants.h"
+#include "widgets/WaitCursorGuard.h"
 #include <vtkCallbackCommand.h>
 #include <vtkInteractorStyleImage.h>
 #include <vtkInteractorStyleTrackballCamera.h>

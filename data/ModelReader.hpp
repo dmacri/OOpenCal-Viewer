@@ -21,7 +21,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "types.h"
+#include "core/types.h"
 #include "visualiser/Line.h"
 #include "visualiser/SettingParameter.h"
 #include "plugins/CellConcept.hpp"

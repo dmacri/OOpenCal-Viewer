@@ -2,7 +2,7 @@
  * @brief Implementation of CustomInteractorStyle for cursor-based zoom. */
 
 #include "CustomInteractorStyle.h"
-#include "utilities/WaitCursorGuard.h"
+#include "widgets/WaitCursorGuard.h"
 #include <vtkCamera.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkRenderWindow.h>
