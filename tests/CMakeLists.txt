@@ -24,7 +24,7 @@ endif()
 # Add test executable for ModelReader
 add_executable(ModelReaderTests
     ModelReaderTests.cpp
-    ${CMAKE_SOURCE_DIR}/utilities/ModelReader.cpp
+    ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
 )
 
 # Link against GTest
@@ -35,7 +35,9 @@ target_link_libraries(ModelReaderTests
 # Include directories for the project
 target_include_directories(ModelReaderTests PRIVATE
     ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/utilities
+    ${CMAKE_SOURCE_DIR}/data
+    ${CMAKE_SOURCE_DIR}/core
+    ${CMAKE_SOURCE_DIR}/visualiser
     ${OOPENCAL_DIR}
     ${OOPENCAL_DIR}/OOpenCAL
 )
@@ -65,7 +67,7 @@ target_link_libraries(SettingParameterTests
 target_include_directories(SettingParameterTests PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/visualiser
-    ${CMAKE_SOURCE_DIR}/utilities
+    ${CMAKE_SOURCE_DIR}/core
 )
 
 # Register SettingParameterTests
