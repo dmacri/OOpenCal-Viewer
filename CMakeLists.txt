@@ -185,8 +185,6 @@ list(APPEND Sources
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp
     core/CommandLineParser.cpp
-    core/types.h
-    core/directoryConstants.h
     data/ReductionManager.cpp
     data/ModelReader.cpp
     widgets/WaitCursorGuard.cpp
@@ -221,6 +219,24 @@ set(OTHER_FILES
 )
 
 # ============================================
+# CMake policies
+# ============================================
+# CMP0072: FindOpenGL prefers GLVND by default
+# Set to NEW to use GLVND (modern OpenGL) instead of legacy GL
+if(POLICY CMP0072)
+    cmake_policy(SET CMP0072 NEW)
+endif()
+set(OpenGL_GL_PREFERENCE GLVND)
+
+# ============================================
+# Optional VTK dependencies (suppress warnings)
+# ============================================
+# These packages are optional for VTK and not required for this project.
+# We search for them with QUIET to avoid CMake warnings if not found.
+find_package(utf8cpp QUIET)
+find_package(freetype QUIET)
+
+# ============================================
 # VTK dependencies
 # ============================================
 # NOTE:
@@ -229,7 +245,7 @@ set(OTHER_FILES
 # "Some (but not all) targets in this export set were already defined" errors.
 # The 'GUISupportQt' module internally calls find_package(Qt6),
 # so finding VTK first prevents duplicate Qt target definitions.
-find_package(VTK COMPONENTS
+find_package(VTK QUIET COMPONENTS
     CommonColor
     CommonCore
     CommonDataModel
