@@ -234,7 +234,7 @@ void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)
 
 void CustomInteractorStyle::OnLeftButtonDown()
 {
-    // Only start panning if Shift key is pressed
+    // If Shift is pressed: start custom panning
     if (this->Interactor->GetShiftKey())
     {
         m_isPanning = true;
@@ -247,7 +247,7 @@ void CustomInteractorStyle::OnLeftButtonDown()
     }
     else
     {
-        // No Shift - allow normal click processing
+        // No Shift - allow normal trackball rotation from parent class
         this->Superclass::OnLeftButtonDown();
     }
 }
@@ -262,7 +262,7 @@ void CustomInteractorStyle::OnLeftButtonUp()
     }
     else
     {
-        // Normal click processing
+        // Normal click processing (trackball rotation)
         this->Superclass::OnLeftButtonUp();
     }
 }
@@ -271,7 +271,13 @@ void CustomInteractorStyle::OnMouseMove()
 {
     if (m_isPanning)
     {
+        // Custom panning when Shift+Left is held
         PanCamera();
+    }
+    else
+    {
+        // Allow parent class to handle trackball rotation
+        this->Superclass::OnMouseMove();
     }
 }
 

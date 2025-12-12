@@ -13,9 +13,19 @@ class vtkCellPicker;
 
 /** @brief Custom interactor style for cursor-based zoom and 3D rotation.
  * 
- * Extends vtkInteractorStyleTrackballCamera to override mouse wheel events
- * and zoom towards the cursor position instead of the screen center.
- * Also supports 3D rotation with trackball camera. */
+ * Extends vtkInteractorStyleTrackballCamera to provide enhanced interaction:
+ * 
+ * **Inherited from vtkInteractorStyleTrackballCamera:**
+ * - Left mouse button: 3D trackball rotation (rotate around focal point)
+ * - Right mouse button: Zoom (dolly - move camera closer/farther)
+ * - Middle mouse button: Pan (move focal point in view plane)
+ * 
+ * **Custom enhancements:**
+ * - Mouse wheel: Zoom towards cursor position (instead of screen center)
+ * - Shift + Left drag: Pan (alternative to middle button)
+ * - Accumulated zoom: Multiple wheel events are batched for smooth zooming
+ * 
+ * This provides intuitive 3D navigation with cursor-aware zoom behavior. */
 class CustomInteractorStyle : public vtkInteractorStyleTrackballCamera
 {
 public:
