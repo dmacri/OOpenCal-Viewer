@@ -51,7 +51,7 @@ namespace
 enum class InteractorVariant
 {
     None,                    ///< No custom interactor - VTK default
-    Current,                 ///< Current CustomInteractorStyle (ray-plane zoom)
+    Custom,                  ///< CustomInteractorStyle (ray-plane zoom)
     PolymorphicWaitCursor    ///< Subclass with wait cursor (minimal overhead)
 };
 
@@ -61,7 +61,7 @@ enum class InteractorVariant
  * - InteractorVariant::None: No custom interactor
  * - InteractorVariant::Current: Current implementation
  * - InteractorVariant::PolymorphicWaitCursor: New polymorphic variant */
-constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::Current;
+constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::Custom;
 
 /** @brief Checks if the given directory already contains data files matching the output name pattern
  *  @param configDir Directory to check
