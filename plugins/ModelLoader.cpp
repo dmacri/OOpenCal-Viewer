@@ -12,7 +12,7 @@
 #include "config/Config.h"
 #include "config/ConfigConstants.h"
 #include "CppModuleBuilder.h"
-#include "directoryConstants.h"
+#include "core/directoryConstants.h"
 
 
 namespace
@@ -147,16 +147,16 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
         std::cout << "Found header file: '" << sourceFile << "'\n";
 
         // Determine output file path
-        const std::string outputFile = generateModuleNameForSourceFile(sourceFile);
-        std::cout << "Trying to open: " << outputFile << "'\t, source never than compiled?: " << std::boolalpha << isFileNewer(sourceFile, outputFile) << std::endl;
+        const std::string moduleFileName = generateModuleNameForSourceFile(sourceFile);
+        std::cout << "Trying to open: " << moduleFileName << "'\t, source never than compiled?: " << std::boolalpha << isFileNewer(sourceFile, moduleFileName) << std::endl;
 
         // Check if compilation is needed
-        if (moduleExists(outputFile))
+        if (moduleExists(moduleFileName))
         {
-            std::cout << "Module '" << outputFile << "' already exists" << std::endl;
-            if (isFileNewer(sourceFile, outputFile))
+            std::cout << "Module '" << moduleFileName << "' already exists" << std::endl;
+            if (isFileNewer(sourceFile, moduleFileName))
             {
-                std::cerr << "[WARNING] C++ source file '" << sourceFile << "' is never than module file '" << outputFile << "'" << std::endl;
+                std::cerr << "[WARNING] C++ source file '" << sourceFile << "' is never than module file '" << moduleFileName << "'" << std::endl;
             }
         }
         else // if module does not exist
@@ -176,7 +176,7 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
 
             // Compile the wrapper to .so (which includes the model header)
             // Empty string for cppStandard triggers auto-detection in CppModuleBuilder
-            auto compilationResult = builder->compileModule(wrapperSource, outputFile);
+            auto compilationResult = builder->compileModule(wrapperSource, moduleFileName);
             if (! compilationResult.success)
             {
                 std::cerr << "Compilation failed with exit code: " << compilationResult.exitCode << std::endl;
@@ -208,7 +208,7 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             }
         }
 
-        result.compiledModulePath = outputFile;
+        result.compiledModulePath = moduleFileName;
         result.success = true;
         return result;
     }

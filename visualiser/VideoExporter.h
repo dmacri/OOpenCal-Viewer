@@ -6,7 +6,7 @@
 #include <QObject>
 #include <QString>
 #include <functional>
-#include "utilities/types.h"
+#include "core/types.h"
 
 class vtkRenderWindow;
 

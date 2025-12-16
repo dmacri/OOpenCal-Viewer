@@ -8,6 +8,59 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Detect whether we are running on an Ubuntu release that may not
+# provide a recent-enough GNU toolchain out of the box.  Older
+# distributions (e.g. 22.04 LTS) need the ubuntu-toolchain-r/test PPA.
+set(UBUNTU_GCC13_HINT "")
+if (EXISTS "/etc/os-release")
+    file(READ "/etc/os-release" _OS_RELEASE_CONTENTS)
+    if (_OS_RELEASE_CONTENTS MATCHES "ID=ubuntu")
+        string(REGEX MATCH "VERSION_ID=\"?([0-9]+\\.[0-9]+)" _VER_MATCH "${_OS_RELEASE_CONTENTS}")
+        if (CMAKE_MATCH_1)
+            set(_UBUNTU_VERSION "${CMAKE_MATCH_1}")
+            if (_UBUNTU_VERSION VERSION_LESS "24.04")
+                set(UBUNTU_GCC13_HINT
+"Your Ubuntu ${_UBUNTU_VERSION} repositories might not ship g++-13 by default.\n"
+"If g++-13 is unavailable, install it via:\n"
+"  sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test\n"
+"  sudo apt update\n"
+"  sudo apt install -y gcc-13 g++-13\n"
+"  sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 --slave /usr/bin/g++ g++ /usr/bin/g++-13\n")
+            endif()
+        endif()
+    endif()
+endif()
+
+# Provide an explicit and user-friendly diagnostic when the compiler
+# is too old to understand C++23.  Ubuntu 22.04, for example, ships
+# g++-11 by default which will fail later with confusing errors.
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
+        set(_gcc_error
+            "Detected GNU g++ ${CMAKE_CXX_COMPILER_VERSION}.\n"
+            "This project requires a compiler with full C++23 support.\n"
+            "Please install a newer toolchain (e.g. sudo apt install g++-13) and rerun CMake.\n")
+        if (UBUNTU_GCC13_HINT)
+            string(APPEND _gcc_error "\n${UBUNTU_GCC13_HINT}")
+        endif()
+        message(FATAL_ERROR "${_gcc_error}")
+    else()
+        message(STATUS "GNU g++ ${CMAKE_CXX_COMPILER_VERSION} provides C++23 support – OK")
+    endif()
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
+        message(FATAL_ERROR
+            "Detected Clang ${CMAKE_CXX_COMPILER_VERSION}.\n"
+            "This project requires C++23. Please install clang-16 (or newer) and rerun CMake.")
+    else()
+        message(STATUS "Clang ${CMAKE_CXX_COMPILER_VERSION} provides C++23 support – OK")
+    endif()
+else()
+    message(WARNING
+        "Compiler ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION} has not been validated.\n"
+        "Ensure it supports -std=c++23 before proceeding.")
+endif()
+
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build libraries statically" FORCE)
 
 # ============================================
@@ -128,13 +181,13 @@ list(APPEND Sources
     widgets/SubstateDisplayWidget.cpp
     widgets/SubstatesDockWidget.cpp
     widgets/CustomInteractorStyle.cpp
-    utilities/PluginLoader.cpp
-    utilities/ReductionManager.cpp
-    utilities/ModelReader.cpp
-    utilities/CommandLineParser.cpp
-    utilities/ModelLoader.cpp
-    utilities/CppModuleBuilder.cpp
-    utilities/WaitCursorGuard.cpp
+    plugins/PluginLoader.cpp
+    plugins/ModelLoader.cpp
+    plugins/CppModuleBuilder.cpp
+    core/CommandLineParser.cpp
+    data/ReductionManager.cpp
+    data/ModelReader.cpp
+    widgets/WaitCursorGuard.cpp
 )
 file(GLOB Resources
     LIST_DIRECTORIES false
@@ -166,6 +219,24 @@ set(OTHER_FILES
 )
 
 # ============================================
+# CMake policies
+# ============================================
+# CMP0072: FindOpenGL prefers GLVND by default
+# Set to NEW to use GLVND (modern OpenGL) instead of legacy GL
+if(POLICY CMP0072)
+    cmake_policy(SET CMP0072 NEW)
+endif()
+set(OpenGL_GL_PREFERENCE GLVND)
+
+# ============================================
+# Optional VTK dependencies (suppress warnings)
+# ============================================
+# These packages are optional for VTK and not required for this project.
+# We search for them with QUIET to avoid CMake warnings if not found.
+find_package(utf8cpp QUIET)
+find_package(freetype QUIET)
+
+# ============================================
 # VTK dependencies
 # ============================================
 # NOTE:
@@ -174,7 +245,7 @@ set(OTHER_FILES
 # "Some (but not all) targets in this export set were already defined" errors.
 # The 'GUISupportQt' module internally calls find_package(Qt6),
 # so finding VTK first prevents duplicate Qt target definitions.
-find_package(VTK COMPONENTS
+find_package(VTK QUIET COMPONENTS
     CommonColor
     CommonCore
     CommonDataModel

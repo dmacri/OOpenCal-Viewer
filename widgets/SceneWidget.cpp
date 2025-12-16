@@ -6,8 +6,8 @@
 #include <filesystem>
 #include <string>
 #include <QApplication>
-#include "utilities/directoryConstants.h"
-#include "utilities/WaitCursorGuard.h"
+#include "core/directoryConstants.h"
+#include "widgets/WaitCursorGuard.h"
 #include <vtkCallbackCommand.h>
 #include <vtkInteractorStyleImage.h>
 #include <vtkInteractorStyleTrackballCamera.h>
@@ -51,7 +51,7 @@ namespace
 enum class InteractorVariant
 {
     None,                    ///< No custom interactor - VTK default
-    Current,                 ///< Current CustomInteractorStyle (ray-plane zoom)
+    Custom,                  ///< CustomInteractorStyle (ray-plane zoom)
     PolymorphicWaitCursor    ///< Subclass with wait cursor (minimal overhead)
 };
 
@@ -61,7 +61,7 @@ enum class InteractorVariant
  * - InteractorVariant::None: No custom interactor
  * - InteractorVariant::Current: Current implementation
  * - InteractorVariant::PolymorphicWaitCursor: New polymorphic variant */
-constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::None;
+constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::Custom;
 
 /** @brief Checks if the given directory already contains data files matching the output name pattern
  *  @param configDir Directory to check
@@ -299,11 +299,11 @@ void SceneWidget::updateCameraPivotFromBounds()
 
 void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 {
-    // Resize lines vector to match expected number of lines
-    lines.resize(settingParameter->numberOfLines);
-
     if (settingParameter && settingParameter->numberOfLines > 0)
     {
+        // Resize lines vector to match expected number of lines
+        lines.resize(settingParameter->numberOfLines);
+
         // Read stage state from files for the current step
         sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
 
@@ -393,7 +393,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
             return;
         }
     }
-    
+
     // Fallback to regular 2D visualization
     const SubstateInfo* substateInfo2D = nullptr;
     if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)

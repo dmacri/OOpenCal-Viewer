@@ -7,7 +7,7 @@
 #include <vector>
 #include <map>
 
-#include "utilities/types.h"
+#include "core/types.h"
 #include "SubstateInfo.h"
 
 /** @struct SettingParameter

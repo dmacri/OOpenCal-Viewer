@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <vector>
 #include <vtkActor2D.h>
 #include <vtkCellArray.h>
@@ -30,7 +31,7 @@
 #include <vtkCellData.h>
 #include <vtkProperty.h>
 
-#include "utilities/types.h"    // StepIndex
+#include "core/types.h"    // StepIndex
 #include "OOpenCAL/base/Cell.h" // Color
 #include "visualiser/SettingParameter.h" // SubstateInfo
 #include "visualiser/Line.h"
@@ -116,12 +117,23 @@ public:
     vtkNew<vtkActor2D> buildStepText(StepIndex step, int font_size, vtkSmartPointer<vtkTextMapper> stepLineTextMapper, vtkSmartPointer<vtkRenderer> renderer);
 
 private:
+    /// @brief Apply grid color settings to 3D grid lines actor.
+    /// @note This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
+    void applyGridColorTo3DGridLinesActor(vtkSmartPointer<vtkActor> gridLinesActor);
+
     template<class Matrix>
     void buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p, const struct SubstateInfo* substateInfo = nullptr);
 
     /// @brief The method is calculating color for specific cell with substateInfo considered
     template<class Matrix>
     Color calculateCellColor(int row, int column, const Matrix &p, const SubstateInfo* substateInfo);
+
+    /// @brief Calculate color for a specific cell, returning std::optional<Color>.
+    /// Returns nullopt if the value is out of range, equals noValue, or parsing fails.
+    /// Otherwise returns the calculated color.
+    /// This method is useful for aggregating colors from multiple substates.
+    template<class Matrix>
+    std::optional<Color> calculateCellColorOptional(int row, int column, const Matrix &p, const SubstateInfo* substateInfo);
 
     /** @brief Build 3D quad mesh surface for 3D substate visualization (healed quad approach).
      * 
@@ -275,6 +287,10 @@ void Visualizer::drawGridLinesOn3DSurface(const Matrix& p,
     vtkNew<vtkPolyDataMapper> mapper;
     mapper->SetInputData(polyData);
     gridLinesActor->SetMapper(mapper);
+    gridLinesActor->GetProperty()->SetLineWidth(1.0);
+
+    // Apply grid color from settings
+    applyGridColorTo3DGridLinesActor(gridLinesActor);
 
     renderer->AddActor(gridLinesActor);
 }
@@ -311,13 +327,30 @@ void Visualizer::refreshGridLinesOn3DSurface(const Matrix& p,
                                                                             substateInfo);
     mapper->SetInputData(polyData);
     mapper->Update();
+
+    // Update grid color from settings
+    applyGridColorTo3DGridLinesActor(gridLinesActor);
 }
 
 template<class Matrix>
 Color Visualizer::calculateCellColor(int row, int column, const Matrix &p, const SubstateInfo* substateInfo)
 {
-    Color color(0, 0, 0, 255);  // Default: opaque black
+    // Try to get color from optional version
+    auto optionalColor = calculateCellColorOptional(row, column, p, substateInfo);
+    if (optionalColor.has_value())
+    {
+        return optionalColor.value();
+    }
+    else
+    {
+        // Return flat scene background color for noValue or out of range
+        return flatSceneBackgroundColor();
+    }
+}
 
+template<class Matrix>
+std::optional<Color> Visualizer::calculateCellColorOptional(int row, int column, const Matrix &p, const SubstateInfo* substateInfo)
+{
     // If substateInfo with colors is provided, use gradient coloring
     if (substateInfo && ! substateInfo->minColor.empty() && ! substateInfo->maxColor.empty())
     {
@@ -332,68 +365,59 @@ Color Visualizer::calculateCellColor(int row, int column, const Matrix &p, const
             double maxVal = substateInfo->maxValue;
 
             // Check if value is noValue (out of range or equals noValue)
-            bool isNoValue = false;
             if (std::isnan(minVal) || std::isnan(maxVal))
             {
-                // Min/max not set - use default coloring
-                isNoValue = false;
+                // Min/max not set - return nullopt
+                return std::nullopt;
             }
             else if (substateInfo->noValueEnabled && !std::isnan(substateInfo->noValue) && value == substateInfo->noValue)
             {
                 // Value equals noValue and noValue filtering is enabled
-                isNoValue = true;
+                return std::nullopt;
             }
-            else if (value < minVal || value > maxVal)
+            else if (value <= minVal || value >= maxVal)
             {
                 // Value out of range
-                isNoValue = true;
+                return std::nullopt;
             }
 
-            if (isNoValue)
-            {
-                color = flatSceneBackgroundColor(); // Use flat scene background color for noValue
-            }
-            else
-            {
-                // Normalize value to [0, 1]
-                double normalized = (value - minVal) / (maxVal - minVal);
+            // Normalize value to [0, 1]
+            double normalized = (value - minVal) / (maxVal - minVal);
 
-                // Parse min and max colors (hex format: #RRGGBB)
-                auto parseHexColor = [](const std::string& hex) -> std::tuple<int, int, int> {
-                    if (hex.length() != 7 || hex[0] != '#')
-                        return {0, 0, 0};
-                    int r = std::stoi(hex.substr(1, 2), nullptr, 16);
-                    int g = std::stoi(hex.substr(3, 2), nullptr, 16);
-                    int b = std::stoi(hex.substr(5, 2), nullptr, 16);
-                    return {r, g, b};
-                };
+            // Parse min and max colors (hex format: #RRGGBB)
+            auto parseHexColor = [](const std::string& hex) -> std::tuple<int, int, int> {
+                if (hex.length() != 7 || hex[0] != '#')
+                    return {0, 0, 0};
+                int r = std::stoi(hex.substr(1, 2), nullptr, 16);
+                int g = std::stoi(hex.substr(3, 2), nullptr, 16);
+                int b = std::stoi(hex.substr(5, 2), nullptr, 16);
+                return {r, g, b};
+            };
 
-                auto [minR, minG, minB] = parseHexColor(substateInfo->minColor);
-                auto [maxR, maxG, maxB] = parseHexColor(substateInfo->maxColor);
+            auto [minR, minG, minB] = parseHexColor(substateInfo->minColor);
+            auto [maxR, maxG, maxB] = parseHexColor(substateInfo->maxColor);
 
-                // Interpolate between min and max colors
-                int r = static_cast<int>(minR + (maxR - minR) * normalized);
-                int g = static_cast<int>(minG + (maxG - minG) * normalized);
-                int b = static_cast<int>(minB + (maxB - minB) * normalized);
+            // Interpolate between min and max colors
+            int r = static_cast<int>(minR + (maxR - minR) * normalized);
+            int g = static_cast<int>(minG + (maxG - minG) * normalized);
+            int b = static_cast<int>(minB + (maxB - minB) * normalized);
 
-                color = Color(static_cast<std::uint8_t>(r), static_cast<std::uint8_t>(g), static_cast<std::uint8_t>(b), 255);
-            }
+            return Color(static_cast<std::uint8_t>(r), static_cast<std::uint8_t>(g), static_cast<std::uint8_t>(b), 255);
         }
         catch (const std::exception&)
         {
-            // Failed to parse value - use flat scene background color
-            color = flatSceneBackgroundColor(); // Use flat scene background color for noValue
+            // Failed to parse value - return nullopt
+            return std::nullopt;
         }
-        return color;
     }
     else
     {
-        // Use outputValue coloring
+        // No custom colors configured - use outputValue coloring
         // If substateInfo is provided but no custom colors, use the substate field name
         // Otherwise use nullptr for default coloring
-        const char* fieldNamePtr = (substateInfo && !substateInfo->name.empty()) 
-                                    ? substateInfo->name.c_str() 
-                                    : nullptr;
+        const char* fieldNamePtr = (substateInfo && !substateInfo->name.empty())
+                                       ? substateInfo->name.c_str()
+                                       : nullptr;
         return p[row][column].outputValue(fieldNamePtr);
     }
 }

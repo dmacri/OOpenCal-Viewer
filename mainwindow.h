@@ -7,7 +7,7 @@
 #include <QStyle>
 #include <QTimer>
 #include <memory>
-#include "utilities/types.h"
+#include "core/types.h"
 
 namespace Ui
 {

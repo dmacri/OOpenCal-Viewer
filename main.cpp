@@ -31,8 +31,8 @@
 #include <vtkGenericOpenGLRenderWindow.h>
 
 #include "mainwindow.h"
-#include "utilities/CommandLineParser.h"
-#include "utilities/PluginLoader.h"
+#include "core/CommandLineParser.h"
+#include "plugins/PluginLoader.h"
 
 
 void applyStyleSheet(MainWindow& mainWindow);

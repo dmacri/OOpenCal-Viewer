@@ -21,10 +21,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "types.h"
+#include "core/types.h"
 #include "visualiser/Line.h"
 #include "visualiser/SettingParameter.h"
-#include "utilities/CellConcept.hpp"
+#include "plugins/CellConcept.hpp"
 
 /** @class ModelReader
  * @brief Template class for reading and processing model data from files.

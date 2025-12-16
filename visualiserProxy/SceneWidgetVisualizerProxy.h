@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "utilities/ModelReader.hpp"
+#include "data/ModelReader.hpp"
 #include "visualiser/Visualizer.hpp"
 
 /** @class SceneWidgetVisualizerTemplate
