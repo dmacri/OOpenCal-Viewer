@@ -299,11 +299,11 @@ void SceneWidget::updateCameraPivotFromBounds()
 
 void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 {
-    // Resize lines vector to match expected number of lines
-    lines.resize(settingParameter->numberOfLines);
-
     if (settingParameter && settingParameter->numberOfLines > 0)
     {
+        // Resize lines vector to match expected number of lines
+        lines.resize(settingParameter->numberOfLines);
+
         // Read stage state from files for the current step
         sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
 
