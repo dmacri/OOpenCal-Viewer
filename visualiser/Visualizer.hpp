@@ -375,7 +375,7 @@ std::optional<Color> Visualizer::calculateCellColorOptional(int row, int column,
                 // Value equals noValue and noValue filtering is enabled
                 return std::nullopt;
             }
-            else if (value <= minVal || value >= maxVal)
+            else if (value < minVal || value > maxVal)
             {
                 // Value out of range
                 return std::nullopt;
@@ -463,7 +463,7 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Ma
 
     // Helper lambda to check if value is valid (not no-data)
     auto isValidValue = [&](double val) -> bool {
-        return !std::isnan(val) && std::fabs(val - minValue) > eps;
+        return !std::isnan(val) && val >= minValue && val <= maxValue;
     };
 
     // Helper lambda to convert value to Z height
