@@ -1576,14 +1576,14 @@ bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
 }
 
 void SceneWidget::setupInteractorStyleWithWaitCursor()
-{ // TODO: Show variants to Andres
+{
     if constexpr (INTERACTOR_VARIANT == InteractorVariant::None)
     {
         // Variant 1: No custom interactor - VTK default
         // VTK will automatically use vtkInteractorStyleTrackballCamera
         // No need to set anything
     }
-    else if constexpr (INTERACTOR_VARIANT == InteractorVariant::Current)
+    else if constexpr (INTERACTOR_VARIANT == InteractorVariant::Custom)
     {
         // Variant 2: Current CustomInteractorStyle
         // Features: Ray-plane zoom (zoom towards cursor), wait cursor, Shift+Drag panning
