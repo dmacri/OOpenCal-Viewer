@@ -88,7 +88,12 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
         connect(widget, &SubstateDisplayWidget::use3rdDimensionRequested,
                 this, &SubstatesDockWidget::use3rdDimensionRequested);
         connect(widget, &SubstateDisplayWidget::use2DRequested,
-                this, &SubstatesDockWidget::use2DRequested);
+                this, [this, field](const std::string& fieldName) {
+                    // Handle exclusive checkbox behavior
+                    this->onUse2DCheckboxChanged(fieldName);
+                    // Forward the signal
+                    emit use2DRequested(fieldName);
+                });
         connect(widget, &SubstateDisplayWidget::applyCustomColorsRequested,
                 this, &SubstatesDockWidget::applyCustomColorsRequested);
         connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged),
@@ -435,5 +440,30 @@ void SubstatesDockWidget::onNoValueChanged(const std::string& fieldName, double 
             it->second.noValue = noValue;
             it->second.noValueEnabled = isEnabled;
         }
+    }
+}
+
+void SubstatesDockWidget::onUse2DCheckboxChanged(const std::string& fieldName)
+{
+    // If fieldName is empty, it means the checkbox was unchecked - do nothing
+    if (fieldName.empty())
+        return;
+    
+    // Uncheck all other checkboxes (exclusive behavior)
+    for (auto& [name, widget] : m_substateWidgets)
+    {
+        if (name != fieldName)
+        {
+            widget->setUse2DChecked(false);
+        }
+    }
+}
+
+void SubstatesDockWidget::uncheckAllUse2DCheckboxes()
+{
+    // Uncheck all use2D checkboxes
+    for (auto& [name, widget] : m_substateWidgets)
+    {
+        widget->setUse2DChecked(false);
     }
 }

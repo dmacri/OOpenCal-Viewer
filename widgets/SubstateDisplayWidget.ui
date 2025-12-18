@@ -362,7 +362,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="use2dButton">
+         <widget class="QCheckBox" name="use2dButton">
           <property name="maximumSize">
            <size>
             <width>16777215</width>
@@ -370,7 +370,7 @@
            </size>
           </property>
           <property name="styleSheet">
-           <string notr="true">QPushButton { font-size: 8pt; padding: 2px; }</string>
+           <string notr="true">QCheckBox { font-size: 8pt; padding: 2px; }</string>
           </property>
           <property name="text">
            <string>Use as 2D</string>

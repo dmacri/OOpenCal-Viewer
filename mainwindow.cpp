@@ -2289,6 +2289,9 @@ void MainWindow::onDeactivateRequested()
     // Clear highlight from all substates in the dock widget
     ui->substatesDockWidget->setActiveSubstate("");
     
+    // Uncheck all use2D checkboxes
+    ui->substatesDockWidget->uncheckAllUse2DCheckboxes();
+    
     // Immediately refresh visualization to show the change
     ui->sceneWidget->refreshVisualization();
     
