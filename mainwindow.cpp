@@ -2244,12 +2244,11 @@ void MainWindow::onUse3rdDimensionRequested(const std::string& fieldName)
 void MainWindow::onUse2DRequested(const std::string& fieldName)
 {
     // Show wait cursor during visualization change
-    WaitCursorGuard waitCursor("Switching to 2D substate visualization...");
+    WaitCursorGuard waitCursor("Updating substate coloring...");
 
-    // Switch to 2D mode first
-    on2DModeRequested();
-    
-    // Set the active substate for 2D visualization with custom colors (outputValue(substateName))
+    // Set the active substate for 2D coloring (works in both 2D and 3D modes)
+    // In 2D mode: controls the cell coloring
+    // In 3D mode: controls the surface coloring (while 3D button controls height)
     ui->sceneWidget->setActiveSubstateFor2D(fieldName);
     
     // Highlight the active substate in the dock widget

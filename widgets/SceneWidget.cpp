@@ -364,6 +364,13 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                                     backgroundActor);
             }
 
+            // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
+            const SubstateInfo* colorSubstateInfo = &substateInfo;
+            if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
+            {
+                colorSubstateInfo = &settingParameter->substateInfo[activeSubstateFor2D];
+            }
+            
             sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY,
                                                               settingParameter->numberOfColumnX,
                                                               renderer,
@@ -371,7 +378,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                               activeSubstateFor3D,
                                                               substateInfo.minValue,
                                                               substateInfo.maxValue,
-                                                              &substateInfo);
+                                                              colorSubstateInfo);
 
             // Hide 2D grid lines and draw 3D grid lines on surface instead
             if (actorBuildLine)
@@ -387,7 +394,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                                  activeSubstateFor3D,
                                                                  substateInfo.minValue,
                                                                  substateInfo.maxValue,
-                                                                 &substateInfo);
+                                                                 colorSubstateInfo);
 
             updateCameraPivotFromBounds();
             return;
@@ -420,13 +427,20 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                        backgroundActor);
             }
 
+            // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
+            const SubstateInfo* colorSubstateInfo = &substateInfo;
+            if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
+            {
+                colorSubstateInfo = &settingParameter->substateInfo[activeSubstateFor2D];
+            }
+            
             sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY,
                                                                     settingParameter->numberOfColumnX,
                                                                     gridActor,
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
                                                                     substateInfo.maxValue,
-                                                                    &substateInfo);
+                                                                    colorSubstateInfo);
 
             // Refresh 3D grid lines on surface
             sceneWidgetVisualizerProxy->refreshGridLinesOn3DSurface(settingParameter->numberOfRowsY,
@@ -436,7 +450,7 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
                                                                     substateInfo.maxValue,
-                                                                    &substateInfo);
+                                                                    colorSubstateInfo);
 
             updateCameraPivotFromBounds();
             return;
