@@ -35,6 +35,7 @@ public:
     static constexpr const char ARG_STEP[] = "--step";
     static constexpr const char ARG_EXIT_AFTER_LAST[] = "--exitAfterLastStep";
     static constexpr const char ARG_SILENT[] = "--silent";
+    static constexpr const char ARG_LOUD[]   = "--loud";
 
     /** @brief Parse command-line arguments.
      * @param argc Number of arguments
@@ -96,5 +97,5 @@ private:
     std::optional<std::string> configFile;
     bool isDirectory = false;  ///< true if configFile is actually a model directory
     bool exitAfterLastStep = false;
-    bool silentMode = false;
+    bool silentMode = true;
 };
