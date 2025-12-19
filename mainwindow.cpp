@@ -19,16 +19,16 @@
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "utilities/WaitCursorGuard.h"
+#include "widgets/WaitCursorGuard.h"
 
 #include "config/Config.h"
 #include "config/ConfigConstants.h"
-#include "utilities/CommandLineParser.h"
-#include "utilities/CppModuleBuilder.h"
-#include "utilities/ModelLoader.h"
-#include "utilities/PluginLoader.h"
-#include "utilities/ReductionManager.h"
-#include "utilities/directoryConstants.h"
+#include "core/CommandLineParser.h"
+#include "plugins/CppModuleBuilder.h"
+#include "plugins/ModelLoader.h"
+#include "plugins/PluginLoader.h"
+#include "data/ReductionManager.h"
+#include "core/directoryConstants.h"
 #include "visualiser/SettingParameter.h"
 #include "visualiser/VideoExporter.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
@@ -2244,12 +2244,11 @@ void MainWindow::onUse3rdDimensionRequested(const std::string& fieldName)
 void MainWindow::onUse2DRequested(const std::string& fieldName)
 {
     // Show wait cursor during visualization change
-    WaitCursorGuard waitCursor("Switching to 2D substate visualization...");
+    WaitCursorGuard waitCursor("Updating substate coloring...");
 
-    // Switch to 2D mode first
-    on2DModeRequested();
-    
-    // Set the active substate for 2D visualization with custom colors (outputValue(substateName))
+    // Set the active substate for 2D coloring (works in both 2D and 3D modes)
+    // In 2D mode: controls the cell coloring
+    // In 3D mode: controls the surface coloring (while 3D button controls height)
     ui->sceneWidget->setActiveSubstateFor2D(fieldName);
     
     // Highlight the active substate in the dock widget
@@ -2288,6 +2287,9 @@ void MainWindow::onDeactivateRequested()
     
     // Clear highlight from all substates in the dock widget
     ui->substatesDockWidget->setActiveSubstate("");
+    
+    // Uncheck all use2D checkboxes
+    ui->substatesDockWidget->uncheckAllUse2DCheckboxes();
     
     // Immediately refresh visualization to show the change
     ui->sceneWidget->refreshVisualization();

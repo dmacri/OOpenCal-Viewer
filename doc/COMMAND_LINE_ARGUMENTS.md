@@ -75,14 +75,22 @@ Exit the application after processing the last step. This is particularly useful
 ```
 
 ### `--silent`
-Suppress error dialogs and console messages. This is useful for batch processing and automated testing where you don't want any interactive prompts or verbose output.
+Suppress information dialogs and most message boxes. Since silent mode is now the default behaviour, passing `--silent` only prints a warning reminding you of this fact.
 
 **Example:**
 ```bash
 ./QtVtkViewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep --silent
 ```
 
-**Note:** When silent mode is enabled, only critical errors are suppressed. The application will still exit with appropriate status codes.
+**Note:** When silent mode is enabled, only critical errors are shown. The application still exits with appropriate status codes. If you need confirmation dialogs, use `--loud`.
+
+### `--loud`
+Enable confirmation/info dialogs even when running from command line. This is useful when you expect interactive prompts.
+
+**Example:**
+```bash
+./QtVtkViewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep --loud
+```
 
 ## Examples
 
@@ -113,14 +121,17 @@ This loads two custom plugins and starts with the first one.
 ```
 This loads the configuration, jumps to step 75, generates an image, and exits.
 
-### Example 5: Batch processing with silent mode
+### Example 5: Batch processing with default silent mode
 ```bash
-./QtVtkViewer config.txt \
-  --generateMoviePath=/tmp/movie.ogv \
-  --exitAfterLastStep \
-  --silent
+./QtVtkViewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep
 ```
 This generates a video in silent mode without any console output or error dialogs.
+
+### Example 6: Batch processing with loud mode
+```bash
+./QtVtkViewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep --loud
+```
+This generates a video with confirmation dialogs.
 
 ## Current Behavior
 

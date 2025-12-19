@@ -253,3 +253,14 @@ Color Visualizer::flatSceneBackgroundColor() const
         255
     );
 }
+
+void Visualizer::applyGridColorTo3DGridLinesActor(vtkSmartPointer<vtkActor> gridLinesActor)
+{
+    if (!gridLinesActor)
+    {
+        return;
+    }
+
+    const QColor gridColor = ColorSettings::instance().gridColor();
+    gridLinesActor->GetProperty()->SetColor(toVtkColor(gridColor).GetData());
+}

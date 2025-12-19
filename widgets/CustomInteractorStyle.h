@@ -7,17 +7,32 @@
 #pragma once
 
 #include <vtkInteractorStyleTrackballCamera.h>
+#include <vtkSmartPointer.h>
+
+class vtkCellPicker;
 
 /** @brief Custom interactor style for cursor-based zoom and 3D rotation.
  * 
- * Extends vtkInteractorStyleTrackballCamera to override mouse wheel events
- * and zoom towards the cursor position instead of the screen center.
- * Also supports 3D rotation with trackball camera. */
+ * Extends vtkInteractorStyleTrackballCamera to provide enhanced interaction:
+ * 
+ * **Inherited from vtkInteractorStyleTrackballCamera:**
+ * - Left mouse button: 3D trackball rotation (rotate around focal point)
+ * - Right mouse button: Zoom (dolly - move camera closer/farther)
+ * - Middle mouse button: Pan (move focal point in view plane)
+ * 
+ * **Custom enhancements:**
+ * - Mouse wheel: Zoom towards cursor position (instead of screen center)
+ * - Shift + Left drag: Pan (alternative to middle button)
+ * - Accumulated zoom: Multiple wheel events are batched for smooth zooming
+ * 
+ * This provides intuitive 3D navigation with cursor-aware zoom behavior. */
 class CustomInteractorStyle : public vtkInteractorStyleTrackballCamera
 {
 public:
     static CustomInteractorStyle* New();
     vtkTypeMacro(CustomInteractorStyle, vtkInteractorStyleTrackballCamera);
+
+    CustomInteractorStyle();
 
     /** @brief Handle mouse wheel forward event (zoom in).
      * 
@@ -46,8 +61,8 @@ public:
 
 private:
     /** @brief Perform zoom towards cursor.
-     * 
-     * @param zoomFactor Factor to zoom by (< 1.0 for zoom in, > 1.0 for zoom out) */
+     *
+     * @param zoomFactor Multiplicative factor (> 1.0 zooms in, < 1.0 zooms out) */
     void ZoomTowardsCursor(double zoomFactor);
 
     /** @brief Perform panning based on mouse movement.
@@ -61,6 +76,22 @@ private:
 
     /// @brief Flag indicating if panning is active
     bool m_isPanning = false;
+
+    /// @brief Picker used to find world position under cursor
+    vtkSmartPointer<vtkCellPicker> m_picker;
+
+    /// @brief Minimum and maximum allowed camera distance to avoid clipping issues
+    double m_minDistance = 0.1;
+    double m_maxDistance = 1e6;
+
+    /// @brief Accumulated zoom factor from multiple wheel events
+    double m_accumulatedZoomFactor = 1.0;
+
+    /// @brief Timer ID for deferred zoom application (0 = no timer active)
+    int m_zoomTimerId = 0;
+
+    /// @brief Handle timer events for deferred zoom
+    void OnTimer() override;
 };
 
 /** @brief Simple interactor style with wait cursor feedback.

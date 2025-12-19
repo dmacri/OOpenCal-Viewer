@@ -8,7 +8,7 @@
 #include <QMessageBox>
 
 #include "ReductionDisplayWidget.h"
-#include "utilities/ReductionManager.h"
+#include "data/ReductionManager.h"
 #include "ReductionDialog.h"
 
 

@@ -10,7 +10,7 @@
 #include <QPushButton>
 #include <QFontDatabase>
 
-#include "utilities/ModelLoader.h"
+#include "plugins/ModelLoader.h"
 
 
 CompilationLogWidget::CompilationLogWidget(QWidget* parent)

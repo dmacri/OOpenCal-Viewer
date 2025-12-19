@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <vector>
-#include "utilities/types.h"
-#include "utilities/ModelReader.hpp"
+#include "core/types.h"
+#include "data/ModelReader.hpp"
 
 /**
  * Test Suite: calculateXYOffsetForNode

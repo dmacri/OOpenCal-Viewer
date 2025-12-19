@@ -6,8 +6,8 @@
 #include <filesystem>
 #include <string>
 #include <QApplication>
-#include "utilities/directoryConstants.h"
-#include "utilities/WaitCursorGuard.h"
+#include "core/directoryConstants.h"
+#include "widgets/WaitCursorGuard.h"
 #include <vtkCallbackCommand.h>
 #include <vtkInteractorStyleImage.h>
 #include <vtkInteractorStyleTrackballCamera.h>
@@ -51,7 +51,7 @@ namespace
 enum class InteractorVariant
 {
     None,                    ///< No custom interactor - VTK default
-    Current,                 ///< Current CustomInteractorStyle (ray-plane zoom)
+    Custom,                  ///< CustomInteractorStyle (ray-plane zoom)
     PolymorphicWaitCursor    ///< Subclass with wait cursor (minimal overhead)
 };
 
@@ -61,7 +61,7 @@ enum class InteractorVariant
  * - InteractorVariant::None: No custom interactor
  * - InteractorVariant::Current: Current implementation
  * - InteractorVariant::PolymorphicWaitCursor: New polymorphic variant */
-constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::None;
+constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::Custom;
 
 /** @brief Checks if the given directory already contains data files matching the output name pattern
  *  @param configDir Directory to check
@@ -299,11 +299,11 @@ void SceneWidget::updateCameraPivotFromBounds()
 
 void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 {
-    // Resize lines vector to match expected number of lines
-    lines.resize(settingParameter->numberOfLines);
-
     if (settingParameter && settingParameter->numberOfLines > 0)
     {
+        // Resize lines vector to match expected number of lines
+        lines.resize(settingParameter->numberOfLines);
+
         // Read stage state from files for the current step
         sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
 
@@ -364,6 +364,13 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                                     backgroundActor);
             }
 
+            // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
+            const SubstateInfo* colorSubstateInfo = &substateInfo;
+            if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
+            {
+                colorSubstateInfo = &settingParameter->substateInfo[activeSubstateFor2D];
+            }
+            
             sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY,
                                                               settingParameter->numberOfColumnX,
                                                               renderer,
@@ -371,7 +378,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                               activeSubstateFor3D,
                                                               substateInfo.minValue,
                                                               substateInfo.maxValue,
-                                                              &substateInfo);
+                                                              colorSubstateInfo);
 
             // Hide 2D grid lines and draw 3D grid lines on surface instead
             if (actorBuildLine)
@@ -387,13 +394,13 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                                  activeSubstateFor3D,
                                                                  substateInfo.minValue,
                                                                  substateInfo.maxValue,
-                                                                 &substateInfo);
+                                                                 colorSubstateInfo);
 
             updateCameraPivotFromBounds();
             return;
         }
     }
-    
+
     // Fallback to regular 2D visualization
     const SubstateInfo* substateInfo2D = nullptr;
     if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
@@ -420,13 +427,20 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                        backgroundActor);
             }
 
+            // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
+            const SubstateInfo* colorSubstateInfo = &substateInfo;
+            if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
+            {
+                colorSubstateInfo = &settingParameter->substateInfo[activeSubstateFor2D];
+            }
+            
             sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY,
                                                                     settingParameter->numberOfColumnX,
                                                                     gridActor,
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
                                                                     substateInfo.maxValue,
-                                                                    &substateInfo);
+                                                                    colorSubstateInfo);
 
             // Refresh 3D grid lines on surface
             sceneWidgetVisualizerProxy->refreshGridLinesOn3DSurface(settingParameter->numberOfRowsY,
@@ -436,7 +450,7 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
                                                                     substateInfo.maxValue,
-                                                                    &substateInfo);
+                                                                    colorSubstateInfo);
 
             updateCameraPivotFromBounds();
             return;
@@ -1576,14 +1590,14 @@ bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
 }
 
 void SceneWidget::setupInteractorStyleWithWaitCursor()
-{ // TODO: Show variants to Andres
+{
     if constexpr (INTERACTOR_VARIANT == InteractorVariant::None)
     {
         // Variant 1: No custom interactor - VTK default
         // VTK will automatically use vtkInteractorStyleTrackballCamera
         // No need to set anything
     }
-    else if constexpr (INTERACTOR_VARIANT == InteractorVariant::Current)
+    else if constexpr (INTERACTOR_VARIANT == InteractorVariant::Custom)
     {
         // Variant 2: Current CustomInteractorStyle
         // Features: Ray-plane zoom (zoom towards cursor), wait cursor, Shift+Drag panning

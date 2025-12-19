@@ -18,7 +18,7 @@
 #include <vtkSmartPointer.h>
 #include <vtkTextMapper.h>
 
-#include "utilities/types.h"
+#include "core/types.h"
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
 

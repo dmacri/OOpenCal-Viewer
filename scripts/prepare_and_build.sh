@@ -198,6 +198,34 @@ fi
 
 
 # ================================================================
+# Check for VTK_DIR environment variable
+# ================================================================
+if [[ -n "$VTK_DIR" ]]; then
+    echo
+    echo -e "${YELLOW}${BOLD}=============================================================="
+    echo -e " WARNING: VTK_DIR environment variable is set!"
+    echo -e "=============================================================${RESET}"
+    echo -e "${YELLOW}VTK_DIR is currently set to:${RESET}"
+    echo    "$VTK_DIR"
+    echo
+    echo -e "${YELLOW}This may interfere with building using system packages.${RESET}"
+    echo
+    echo -e "${YELLOW}To unset this variable for this build session, run:${RESET}"
+    echo     "unset VTK_DIR"
+    echo
+    echo -e "${YELLOW}Or to unset it permanently, remove it from your shell configuration:${RESET}"
+    echo     "~/.bashrc, ~/.bash_profile, ~/.zshrc, or ~/.profile"
+    echo
+    echo -e "${YELLOW}Then restart your terminal or run:${RESET}"
+    echo     "source ~/.bashrc  (or appropriate shell config file)"
+    echo
+    echo -e "${YELLOW}Proceeding with build anyway...${RESET}"
+    echo -e "=============================================================${RESET}"
+    echo
+fi
+
+
+# ================================================================
 # Build using CMake + Make
 # ================================================================
 BUILD_DIR="${VIEWER_ROOT}/build"
