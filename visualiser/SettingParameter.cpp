@@ -38,7 +38,7 @@ static std::tuple<int, int, int> parseHexColor(const std::string& hex)
     int g = std::stoi(hex.substr(3, 2), nullptr, 16);
     int b = std::stoi(hex.substr(5, 2), nullptr, 16);
     return {r, g, b};
-} // TODO: Use this and parse once, not for each cell as it is in Visualizer::calculateCellColorOptional
+} // TODO: GB: Use this and parse once, not for each cell as it is in Visualizer::calculateCellColorOptional
 
 
 std::map<std::string, SubstateInfo> SettingParameter::parseSubstates() const

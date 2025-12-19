@@ -151,14 +151,6 @@ signals:
      * @param fieldName The name of the field */
     void use2DRequested(const std::string& fieldName);
 
-    /** @brief Signal emitted when "Apply Custom Colors" button is clicked.
-     * 
-     * Applies custom colors (min/max color gradient) to the current visualization.
-     * Works in both 2D and 3D modes.
-     * 
-     * @param fieldName The name of the field */
-    void applyCustomColorsRequested(const std::string& fieldName);
-
     /** @brief Signal emitted when min or max values change.
      * 
      * @param fieldName The name of the field

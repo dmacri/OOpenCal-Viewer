@@ -80,13 +80,6 @@ signals:
      * @param fieldName The name of the field */
     void use2DRequested(const std::string& fieldName);
 
-    /** @brief Signal emitted when custom colors should be applied to visualization.
-     * 
-     * Works in both 2D and 3D modes.
-     * 
-     * @param fieldName The name of the field */
-    void applyCustomColorsRequested(const std::string& fieldName);
-
     /** @brief Signal emitted when deactivation of substate is requested.
      * 
      * Requests to deactivate any active substate (use default colors) */

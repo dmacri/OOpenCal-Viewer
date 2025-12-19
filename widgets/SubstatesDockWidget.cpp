@@ -94,8 +94,6 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
                     // Forward the signal
                     emit use2DRequested(fieldName);
                 });
-        connect(widget, &SubstateDisplayWidget::applyCustomColorsRequested,
-                this, &SubstatesDockWidget::applyCustomColorsRequested);
         connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged),
                 this, &SubstatesDockWidget::onMinMaxValuesChanged);
         connect(widget, &SubstateDisplayWidget::calculateMinimumRequested,
@@ -192,9 +190,6 @@ void SubstatesDockWidget::clearWidgets()
     // - First 2 items: label + separator (header)
     // - Last 2 items: stretch + deactivate button (footer)
     // We need to count total items and remove only the middle ones (substates)
-    
-    // Count total items
-    int totalItems = m_containerLayout->count();
     
     // Remove items from index 2 to (totalItems - 2)
     // This preserves header (0-1) and footer (totalItems-2 to totalItems-1)
