@@ -65,7 +65,7 @@ void SubstateDisplayWidget::connectSignals()
 
     // Connect "Use as 2D" checkbox state change
     #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-        connect(ui->useForColorringCheckbox, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
+        connect(ui->useForColorringCheckbox, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onUseSubstateColorring);
     #else
         connect(ui->useForColorringCheckbox, &QCheckBox::stateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
     #endif
@@ -73,7 +73,7 @@ void SubstateDisplayWidget::connectSignals()
     // Connect "Apply Custom Colors" button (clearColorsButton)
     connect(ui->clearColorsButton, &QPushButton::clicked, this, [this]() {
         // After clearing colors, emit signal to apply default colors
-        emit onUse2DClicked();
+        emit onUseSubstateColorring();
         // TODO: GB: This should restore default way of filling colors
     });
 
@@ -349,17 +349,17 @@ void SubstateDisplayWidget::onCalculateMinimumGreaterThanZeroAndMaximum()
     emit visualizationRefreshRequested();
 }
 
-void SubstateDisplayWidget::onUse2DClicked()
+void SubstateDisplayWidget::onUseSubstateColorring()
 {
     // Only emit signal when checkbox is checked
     if (ui->useForColorringCheckbox->isChecked())
     {
-        emit use2DRequested(fieldName());
+        emit useSubstateColorringRequested(fieldName());
     }
     else
     {
         // When unchecked, emit signal with empty string to deactivate
-        emit use2DRequested("");
+        emit useSubstateColorringRequested("");
     }
 }
 

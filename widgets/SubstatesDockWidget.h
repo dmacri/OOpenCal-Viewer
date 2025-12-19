@@ -78,7 +78,7 @@ signals:
     /** @brief Signal emitted when a field is requested to be used as 2D visualization.
      * 
      * @param fieldName The name of the field */
-    void use2DRequested(const std::string& fieldName);
+    void useSubstateColorringRequested(const std::string& fieldName);
 
     /** @brief Signal emitted when deactivation of substate is requested.
      * 

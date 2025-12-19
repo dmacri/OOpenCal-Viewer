@@ -149,7 +149,7 @@ signals:
     /** @brief Signal emitted when "Use as 2D" button is clicked.
      * 
      * @param fieldName The name of the field */
-    void use2DRequested(const std::string& fieldName);
+    void useSubstateColorringRequested(const std::string& fieldName);
 
     /** @brief Signal emitted when min or max values change.
      * 
@@ -212,7 +212,7 @@ private slots:
     void onCalculateMinimumGreaterThanZeroAndMaximum();
 
     /// @brief Handle "Use as 2D" button click
-    void onUse2DClicked();
+    void onUseSubstateColorring();
 
 protected:
     /// @brief Override context menu event to add custom actions.

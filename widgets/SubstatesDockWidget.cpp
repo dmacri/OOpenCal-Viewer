@@ -87,12 +87,12 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
         // Connect signals
         connect(widget, &SubstateDisplayWidget::use3rdDimensionRequested,
                 this, &SubstatesDockWidget::use3rdDimensionRequested);
-        connect(widget, &SubstateDisplayWidget::use2DRequested,
+        connect(widget, &SubstateDisplayWidget::useSubstateColorringRequested,
                 this, [this, field](const std::string& fieldName) {
                     // Handle exclusive checkbox behavior
                     this->onUse2DCheckboxChanged(fieldName);
                     // Forward the signal
-                    emit use2DRequested(fieldName);
+                    emit useSubstateColorringRequested(fieldName);
                 });
         connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged),
                 this, &SubstatesDockWidget::onMinMaxValuesChanged);

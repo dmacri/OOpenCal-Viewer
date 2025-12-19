@@ -215,18 +215,18 @@ public:
     /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to disable
     void setActiveSubstateFor3D(const std::string& fieldName);
 
-    /// @brief Set the active substate field for 2D visualization.
+    /// @brief Set the active substate field for colorring.
     /// 
     /// When a substate is set as active for 2D, the visualization will use that field's values
     /// to determine the color of each cell in 2D mode via outputValue(fieldName.c_str()).
     /// 
     /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to use default
-    void setActiveSubstateFor2D(const std::string& fieldName);
+    void setActiveSubstateColorring(const std::string& fieldName);
 
     /// @brief Get the active substate field for 2D visualization.
     /// 
     /// @return The name of the active substate field, or empty string if using default
-    std::string getActiveSubstateFor2D() const { return activeSubstateFor2D; }
+    std::string getActiveSubstateFor2D() const { return activeSubstateForColorring; }
 
     /// @brief Refresh the visualization for the current step.
     /// 
@@ -527,7 +527,7 @@ protected:
     std::string activeSubstateFor3D;
 
     /// @brief Name of the substate field currently used for 2D visualization (empty if using default)
-    std::string activeSubstateFor2D;
+    std::string activeSubstateForColorring;
 
     /// @brief Current camera azimuth angle (cached to avoid recalculation)
     double cameraAzimuth{};
