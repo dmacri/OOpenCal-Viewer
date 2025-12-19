@@ -376,12 +376,15 @@
         </property>
         <layout class="QGridLayout" name="gridLayout">
          <item row="1" column="0" colspan="5">
-          <widget class="QCheckBox" name="use2dButton">
+          <widget class="QCheckBox" name="useForColorringCheckbox">
            <property name="maximumSize">
             <size>
              <width>16777215</width>
              <height>22</height>
             </size>
+           </property>
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;It is using the substate for colloring for both &lt;span style=&quot; font-weight:700;&quot;&gt;2D&lt;/span&gt; and &lt;span style=&quot; font-weight:700;&quot;&gt;3D&lt;/span&gt; mode.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;It uses default colorring from model (using the substate name).&lt;/p&gt;&lt;p&gt;Setting up: min, max, minColor and maxColor causes custom way of colorring&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
            </property>
            <property name="styleSheet">
             <string notr="true">QCheckBox { font-size: 8pt; padding: 2px; }</string>

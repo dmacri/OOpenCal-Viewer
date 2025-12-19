@@ -65,9 +65,9 @@ void SubstateDisplayWidget::connectSignals()
 
     // Connect "Use as 2D" checkbox state change
     #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-        connect(ui->use2dButton, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
+        connect(ui->useForColorringCheckbox, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
     #else
-        connect(ui->use2dButton, &QCheckBox::stateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
+        connect(ui->useForColorringCheckbox, &QCheckBox::stateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
     #endif
 
     // Connect "Apply Custom Colors" button (clearColorsButton)
@@ -247,15 +247,7 @@ void SubstateDisplayWidget::updateButtonState()
     }
 
     // Update "Use as 2D" button state (same requirement as 3D)
-    ui->use2dButton->setEnabled(isEnabled);
-    if (isEnabled)
-    {
-        ui->use2dButton->setToolTip("Use this field as 2D visualization");
-    }
-    else
-    {
-        ui->use2dButton->setToolTip("Set both Min and Max values to enable 2D visualization");
-    }
+    ui->useForColorringCheckbox->setEnabled(isEnabled);
 
     // Emit signal with current min/max values so they can be stored in substateInfo
     emit minMaxValuesChanged(fieldName(), getMinValue(), getMaxValue());
@@ -360,7 +352,7 @@ void SubstateDisplayWidget::onCalculateMinimumGreaterThanZeroAndMaximum()
 void SubstateDisplayWidget::onUse2DClicked()
 {
     // Only emit signal when checkbox is checked
-    if (ui->use2dButton->isChecked())
+    if (ui->useForColorringCheckbox->isChecked())
     {
         emit use2DRequested(fieldName());
     }
@@ -373,15 +365,15 @@ void SubstateDisplayWidget::onUse2DClicked()
 
 bool SubstateDisplayWidget::isUse2DChecked() const
 {
-    return ui->use2dButton->isChecked();
+    return ui->useForColorringCheckbox->isChecked();
 }
 
 void SubstateDisplayWidget::setUse2DChecked(bool checked)
 {
     // Block signals to avoid triggering onUse2DClicked
-    ui->use2dButton->blockSignals(true);
-    ui->use2dButton->setChecked(checked);
-    ui->use2dButton->blockSignals(false);
+    ui->useForColorringCheckbox->blockSignals(true);
+    ui->useForColorringCheckbox->setChecked(checked);
+    ui->useForColorringCheckbox->blockSignals(false);
 }
 
 void SubstateDisplayWidget::setMinColor(const std::string& color)
