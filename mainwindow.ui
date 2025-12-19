@@ -892,11 +892,14 @@
    <property name="checkable">
     <bool>true</bool>
    </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Silent Mode</string>
    </property>
    <property name="toolTip">
-    <string>Suppress confirmation dialogs during automation</string>
+    <string>Suppress confirmation dialogs during automation (uncheck for loud mode)</string>
    </property>
   </action>
  </widget>

@@ -148,6 +148,17 @@ private slots:
      * @param isEnabled True if noValue checkbox is checked */
     void onNoValueChanged(const std::string& fieldName, double noValue, bool isEnabled);
 
+    /** @brief Handle use2D checkbox changes - ensures only one checkbox is checked at a time.
+     * 
+     * When a checkbox is checked, unchecks all other checkboxes.
+     * 
+     * @param fieldName The name of the field whose checkbox changed */
+    void onUse2DCheckboxChanged(const std::string& fieldName);
+
+public slots:
+    /** @brief Uncheck all use2D checkboxes. */
+    void uncheckAllUse2DCheckboxes();
+
 private:
     /** @brief Clear all substate widgets. */
     void clearWidgets();

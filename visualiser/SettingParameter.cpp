@@ -29,6 +29,18 @@ static bool isValidHexColor(const std::string& color)
     return true;
 }
 
+// Parse min and max colors (hex format: #RRGGBB)
+static std::tuple<int, int, int> parseHexColor(const std::string& hex)
+{
+    if (hex.length() != 7 || hex[0] != '#')
+        return {0, 0, 0};
+    int r = std::stoi(hex.substr(1, 2), nullptr, 16);
+    int g = std::stoi(hex.substr(3, 2), nullptr, 16);
+    int b = std::stoi(hex.substr(5, 2), nullptr, 16);
+    return {r, g, b};
+} // TODO: Use this and parse once, not for each cell as it is in Visualizer::calculateCellColorOptional
+
+
 std::map<std::string, SubstateInfo> SettingParameter::parseSubstates() const
 {
     std::map<std::string, SubstateInfo> result;

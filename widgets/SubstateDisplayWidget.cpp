@@ -63,7 +63,12 @@ void SubstateDisplayWidget::connectSignals()
         emit use3rdDimensionRequested(fieldName());
     });
 
-    connect(ui->use2dButton, &QPushButton::clicked, this, &SubstateDisplayWidget::onUse2DClicked);
+    // Connect "Use as 2D" checkbox state change
+    #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+        connect(ui->use2dButton, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
+    #else
+        connect(ui->use2dButton, &QCheckBox::stateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
+    #endif
 
     // Connect "Apply Custom Colors" button (clearColorsButton)
     connect(ui->clearColorsButton, &QPushButton::clicked, this, [this]() {
@@ -385,7 +390,29 @@ void SubstateDisplayWidget::onCalculateMinimumGreaterThanZeroAndMaximum()
 
 void SubstateDisplayWidget::onUse2DClicked()
 {
-    emit use2DRequested(fieldName());
+    // Only emit signal when checkbox is checked
+    if (ui->use2dButton->isChecked())
+    {
+        emit use2DRequested(fieldName());
+    }
+    else
+    {
+        // When unchecked, emit signal with empty string to deactivate
+        emit use2DRequested("");
+    }
+}
+
+bool SubstateDisplayWidget::isUse2DChecked() const
+{
+    return ui->use2dButton->isChecked();
+}
+
+void SubstateDisplayWidget::setUse2DChecked(bool checked)
+{
+    // Block signals to avoid triggering onUse2DClicked
+    ui->use2dButton->blockSignals(true);
+    ui->use2dButton->setChecked(checked);
+    ui->use2dButton->blockSignals(false);
 }
 
 void SubstateDisplayWidget::setMinColor(const std::string& color)

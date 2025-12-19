@@ -463,7 +463,10 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Ma
 
     // Helper lambda to check if value is valid (not no-data)
     auto isValidValue = [&](double val) -> bool {
-        return !std::isnan(val) && std::fabs(val - minValue) > eps;
+        // Values equal to minValue typically represent "no data" (background) points.
+        // Treat them as invalid so the 3D surface remains suspended instead of forming
+        // vertical walls down to the base plane.
+        return !std::isnan(val) && (val - minValue) > eps && val <= maxValue;
     };
 
     // Helper lambda to convert value to Z height

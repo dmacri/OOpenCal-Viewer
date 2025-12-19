@@ -132,6 +132,14 @@ public:
     /// @param enabled True to check the checkbox
     void setNoValueEnabled(bool enabled);
 
+    /// @brief Check if "Use as 2D" checkbox is checked.
+    /// @return True if checkbox is checked
+    bool isUse2DChecked() const;
+
+    /// @brief Set "Use as 2D" checkbox state.
+    /// @param checked True to check the checkbox
+    void setUse2DChecked(bool checked);
+
 signals:
     /** @brief Signal emitted when "Use as 3rd dimension" button is clicked.
      * 
