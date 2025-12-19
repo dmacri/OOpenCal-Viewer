@@ -700,7 +700,6 @@
     <property name="title">
      <string>Settings</string>
     </property>
-    <addaction name="actionSilentMode"/>
     <addaction name="separator"/>
     <addaction name="actionColor_settings"/>
    </widget>
