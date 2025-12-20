@@ -67,7 +67,7 @@ void SubstateDisplayWidget::connectSignals()
     #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
         connect(ui->useForColorringCheckbox, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onUseSubstateColorring);
     #else
-        connect(ui->useForColorringCheckbox, &QCheckBox::stateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
+        connect(ui->useForColorringCheckbox, &QCheckBox::stateChanged, this, &SubstateDisplayWidget::onUseSubstateColorring);
     #endif
 
     // Connect "Apply Custom Colors" button (clearColorsButton)
