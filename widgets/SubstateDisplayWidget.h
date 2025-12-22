@@ -221,6 +221,10 @@ protected:
     /// @brief Override event filter to intercept right-click on child widgets.
     bool eventFilter(QObject* obj, QEvent* event) override;
 
+    /// @brief Override mouse events for drag-and-drop support.
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+
 private:
     /// @brief Connect signals to slots.
     void connectSignals();
@@ -254,6 +258,11 @@ private:
 
     /// @brief Handle noValue checkbox state change
     void onNoValueCheckBoxChanged();
+
+    /// @brief Start drag operation for reordering
+    void startDrag();
+
+    QPoint m_dragStartPosition;
 
     Ui::SubstateDisplayWidget *ui;
     

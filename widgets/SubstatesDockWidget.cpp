@@ -6,6 +6,9 @@
 #include <QLabel>
 #include <QFrame>
 #include <QPushButton>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include "SubstatesDockWidget.h"
 #include "SubstateDisplayWidget.h"
 #include "visualiser/SettingParameter.h"
@@ -33,6 +36,9 @@ SubstatesDockWidget::SubstatesDockWidget(QWidget* parent)
     // Initialize will be called after UI setup in MainWindow
     // Set initial size - narrower for two-column layout
     setMinimumWidth(285);
+    
+    // Enable drag and drop
+    setAcceptDrops(true);
 }
 
 void SubstatesDockWidget::initializeFromUI()
@@ -460,5 +466,140 @@ void SubstatesDockWidget::uncheckAllUse2DCheckboxes()
     for (auto& [name, widget] : m_substateWidgets)
     {
         widget->setUse2DChecked(false);
+    }
+}
+
+void SubstatesDockWidget::dragEnterEvent(QDragEnterEvent* event)
+{
+    // Accept the drag if it contains substate field data
+    if (event->mimeData()->hasFormat("application/x-substate-field"))
+    {
+        event->acceptProposedAction();
+    }
+}
+
+void SubstatesDockWidget::dropEvent(QDropEvent* event)
+{
+    // Get the dragged field name
+    QByteArray fieldData = event->mimeData()->data("application/x-substate-field");
+    std::string draggedField = QString::fromUtf8(fieldData).toStdString();
+    
+    // Reorder the widgets
+    reorderWidgets(draggedField, event->pos());
+    
+    event->acceptProposedAction();
+}
+
+void SubstatesDockWidget::reorderWidgets(const std::string& draggedField, const QPoint& dropPosition)
+{
+    // Find the dragged widget
+    auto draggedIt = m_substateWidgets.find(draggedField);
+    if (draggedIt == m_substateWidgets.end())
+        return;
+    
+    SubstateDisplayWidget* draggedWidget = draggedIt->second;
+    
+    // Find the widget at the drop position
+    QWidget* dropWidget = m_containerWidget->childAt(dropPosition);
+    if (!dropWidget)
+        return;
+    
+    // Find which substate widget was dropped on
+    std::string targetField;
+    for (const auto& [name, widget] : m_substateWidgets)
+    {
+        if (widget == dropWidget || widget->isAncestorOf(dropWidget))
+        {
+            targetField = name;
+            break;
+        }
+    }
+    
+    if (targetField.empty() || targetField == draggedField)
+        return;
+    
+    // Get current positions in layout
+    int draggedIndex = m_containerLayout->indexOf(draggedWidget);
+    int targetIndex = m_containerLayout->indexOf(m_substateWidgets[targetField]);
+    
+    if (draggedIndex == -1 || targetIndex == -1)
+        return;
+    
+    // Remove the dragged widget from its current position
+    m_containerLayout->removeWidget(draggedWidget);
+    
+    // Insert it at the new position
+    m_containerLayout->insertWidget(targetIndex, draggedWidget);
+    
+    // Update separators by finding and removing old ones, then adding new ones
+    // Remove all existing separators from the layout
+    for (int i = m_containerLayout->count() - 1; i >= 0; --i)
+    {
+        QLayoutItem* item = m_containerLayout->itemAt(i);
+        if (QFrame* frame = qobject_cast<QFrame*>(item->widget()))
+        {
+            if (frame->frameShape() == QFrame::HLine)
+            {
+                m_containerLayout->removeItem(item);
+                delete frame;
+            }
+        }
+    }
+    
+    // Add new separators between widgets
+    std::vector<SubstateDisplayWidget*> widgetList;
+    for (const auto& [name, widget] : m_substateWidgets)
+    {
+        widgetList.push_back(widget);
+    }
+    
+    // Re-add separators in the new order
+    for (size_t i = 0; i < widgetList.size(); ++i)
+    {
+        int widgetIndex = m_containerLayout->indexOf(widgetList[i]);
+        if (widgetIndex != -1 && i < widgetList.size() - 1)
+        {
+            m_containerLayout->insertWidget(widgetIndex + 1, createSeparator());
+        }
+    }
+    
+    // Save the new order to SettingParameter
+    saveFieldOrder();
+}
+
+void SubstatesDockWidget::saveFieldOrder()
+{
+    if (!m_currentSettingParameter)
+        return;
+    
+    // Get the current order of widgets from the layout
+    std::vector<std::string> orderedFields;
+    
+    // Iterate through the layout to find substate widgets in order
+    for (int i = 0; i < m_containerLayout->count(); ++i)
+    {
+        QLayoutItem* item = m_containerLayout->itemAt(i);
+        QWidget* widget = item->widget();
+        
+        // Check if this widget is a SubstateDisplayWidget
+        for (const auto& [name, substateWidget] : m_substateWidgets)
+        {
+            if (substateWidget == widget)
+            {
+                orderedFields.push_back(name);
+                break;
+            }
+        }
+    }
+    
+    // Update the order in SettingParameter's substateInfo
+    for (size_t i = 0; i < orderedFields.size(); ++i)
+    {
+        const std::string& fieldName = orderedFields[i];
+        auto it = m_currentSettingParameter->substateInfo.find(fieldName);
+        if (it != m_currentSettingParameter->substateInfo.end())
+        {
+            it->second.order = static_cast<int>(i);
+        }
     }
 }

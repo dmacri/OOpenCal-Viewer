@@ -8,9 +8,12 @@
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QEvent>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QColorDialog>
 #include <QCheckBox>
+#include <QDrag>
+#include <QMimeData>
 #include "SubstateDisplayWidget.h"
 #include "ui_SubstateDisplayWidget.h"
 
@@ -538,4 +541,48 @@ void SubstateDisplayWidget::onNoValueCheckBoxChanged()
     
     emit noValueChanged(fieldName(), getNoValue(), ui->noValueCheckBox->isChecked());
     emit visualizationRefreshRequested();
+}
+
+void SubstateDisplayWidget::mousePressEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton)
+    {
+        m_dragStartPosition = event->pos();
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void SubstateDisplayWidget::mouseMoveEvent(QMouseEvent* event)
+{
+    if (!(event->buttons() & Qt::LeftButton))
+        return;
+    
+    if ((event->pos() - m_dragStartPosition).manhattanLength() < QApplication::startDragDistance())
+        return;
+    
+    startDrag();
+}
+
+void SubstateDisplayWidget::startDrag()
+{
+    QDrag* drag = new QDrag(this);
+    QMimeData* mimeData = new QMimeData;
+    
+    // Store field name in mime data for identification
+    mimeData->setText(QString::fromStdString(fieldName()));
+    mimeData->setData("application/x-substate-field", QString::fromStdString(fieldName()).toUtf8());
+    
+    drag->setMimeData(mimeData);
+    
+    // Create a semi-transparent pixmap for visual feedback
+    QPixmap pixmap(size());
+    pixmap.fill(Qt::transparent);
+    render(&pixmap);
+    
+    // Set the pixmap as the drag cursor with some transparency
+    drag->setPixmap(pixmap);
+    drag->setHotSpot(QPoint(width() / 2, height() / 2));
+    
+    // Execute the drag operation
+    drag->exec(Qt::MoveAction);
 }
