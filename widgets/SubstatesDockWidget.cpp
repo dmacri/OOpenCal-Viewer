@@ -485,7 +485,7 @@ void SubstatesDockWidget::dropEvent(QDropEvent* event)
     std::string draggedField = QString::fromUtf8(fieldData).toStdString();
     
     // Reorder the widgets
-    reorderWidgets(draggedField, event->position().toPoint());
+    reorderWidgets(draggedField, event->pos());
     
     event->acceptProposedAction();
 }
