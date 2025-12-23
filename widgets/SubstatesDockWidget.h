@@ -128,11 +128,6 @@ private slots:
      * @param maxColor The new maximum color (hex string or empty) */
     void onColorsChanged(const std::string& fieldName, const std::string& minColor, const std::string& maxColor);
 
-    /** @brief Handle visualization refresh request from SubstateDisplayWidget.
-     * 
-     * Refreshes the visualization when colors, min/max values, or other settings change. */
-    void onVisualizationRefreshRequested();
-
     /** @brief Handle noValue changes from SubstateDisplayWidget.
      * 
      * Updates the substateInfo in SettingParameter when user changes noValue.

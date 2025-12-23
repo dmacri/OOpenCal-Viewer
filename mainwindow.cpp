@@ -837,6 +837,7 @@ void MainWindow::updateSubstateDockeWidget()
         settingParam->initializeSubstateInfo();
         ui->substatesDockWidget->updateSubstates(settingParam);
 
+        // TODO: GB: Do we really need to send this to MainWindow? Maybe SubstatesDockWidget can directly control SceneWidget?
         // Connect signal for 3D visualization request
         connect(ui->substatesDockWidget, &SubstatesDockWidget::use3rdDimensionRequested, this, &MainWindow::onUse3rdDimensionRequested);
         connect(ui->substatesDockWidget, &SubstatesDockWidget::useSubstatesColorringRequested, this, &MainWindow::onUseSubstatesColorringRequested);

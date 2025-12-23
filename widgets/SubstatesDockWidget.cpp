@@ -99,7 +99,7 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
         connect(widget, &SubstateDisplayWidget::calculateMaximumRequested, this, &SubstatesDockWidget::onCalculateMaximumRequested);
         connect(widget, &SubstateDisplayWidget::colorsChanged, this, &SubstatesDockWidget::onColorsChanged);
         connect(widget, QOverload<const std::string&, double, bool>::of(&SubstateDisplayWidget::noValueChanged), this, &SubstatesDockWidget::onNoValueChanged);
-        connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested, this, &SubstatesDockWidget::onVisualizationRefreshRequested);
+        connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested, this, &SubstatesDockWidget::visualizationRefreshRequested);
 
         m_containerLayout->addWidget(widget);
         m_substateWidgets[field] = widget;
@@ -389,13 +389,6 @@ void SubstatesDockWidget::onColorsChanged(const std::string& fieldName, const st
             it->second.maxColor = maxColor;
         }
     }
-}
-
-void SubstatesDockWidget::onVisualizationRefreshRequested()
-{
-    // Emit signal to request visualization refresh
-    // This will be handled by MainWindow/SceneWidget which has access to the gridActor
-    emit visualizationRefreshRequested();
 }
 
 void SubstatesDockWidget::setActiveSubstate(const std::string& fieldName)
