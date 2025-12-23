@@ -1407,36 +1407,7 @@ void SceneWidget::setGridLinesVisible(bool visible)
 {
     gridLinesVisible = visible;
     
-    // Check if we're in 3D substate mode
-    bool isIn3DMode = !activeSubstateFor3D.empty() && settingParameter && 
-                     settingParameter->substateInfo.count(activeSubstateFor3D) > 0 &&
-                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].minValue) &&
-                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].maxValue);
-    
-    if (isIn3DMode)
-    {
-        // In 3D mode: only control 3D grid lines, keep 2D lines hidden
-        if (gridLinesOnSurfaceActor)
-        {
-            gridLinesOnSurfaceActor->SetVisibility(visible);
-        }
-        if (actorBuildLine)
-        {
-            actorBuildLine->SetVisibility(false); // Always hide 2D lines in 3D mode
-        }
-    }
-    else
-    {
-        // In 2D mode: only control 2D grid lines, keep 3D lines hidden
-        if (actorBuildLine)
-        {
-            actorBuildLine->SetVisibility(visible);
-        }
-        if (gridLinesOnSurfaceActor)
-        {
-            gridLinesOnSurfaceActor->SetVisibility(false); // Always hide 3D lines in 2D mode
-        }
-    }
+    applyGridLinesSettings();
     
     triggerRenderUpdate();
 }
