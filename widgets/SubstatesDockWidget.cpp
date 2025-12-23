@@ -115,7 +115,7 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
     m_containerLayout->addStretch();
     
     // Add deactivate button at the bottom (only create once)
-    if (!m_deactivateButton)
+    if (! m_deactivateButton)
     {
         m_deactivateButton = new QPushButton("Deactivate Substate");
         m_deactivateButton->setMaximumHeight(24);
