@@ -349,7 +349,14 @@ Color Visualizer::calculateCellColor(int row, int column, const Matrix &p, const
         }
     }
 
-    for (const auto colorSubstateInfo : colorSubstateInfos)
+    auto orderCompare = [](const SubstateInfo* lhs, const SubstateInfo* rhs)
+    {
+        return lhs->order > rhs->order;
+    };
+    auto colorSubstateInfosSorted = colorSubstateInfos; // TODO: GB: It is better to sort once, not for each cell
+    std::ranges::sort(colorSubstateInfosSorted);
+
+    for (const auto colorSubstateInfo : colorSubstateInfosSorted)
     {
         auto optionalColor = calculateCellColorOptional(row, column, p, colorSubstateInfo);
         if (optionalColor.has_value())
