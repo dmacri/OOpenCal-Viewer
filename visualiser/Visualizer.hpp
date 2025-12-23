@@ -133,7 +133,7 @@ private:
     /// Otherwise returns the calculated color.
     /// This method is useful for aggregating colors from multiple substates.
     template<class Matrix>
-    std::optional<Color> calculateCellColorOptional(int row, int column, const Matrix &p, const SubstateInfo* substateInfo);
+    std::optional<Color> calculateCellColorOptional(int row, int column, const Matrix &p, const SubstateInfo* substateInfo=nullptr);
 
     /** @brief Build 3D quad mesh surface for 3D substate visualization (healed quad approach).
      * 
@@ -335,18 +335,31 @@ void Visualizer::refreshGridLinesOn3DSurface(const Matrix& p,
 template<class Matrix>
 Color Visualizer::calculateCellColor(int row, int column, const Matrix &p, const std::vector<const SubstateInfo*> colorSubstateInfos)
 {
-    auto colorSubstateInfo = colorSubstateInfos.empty() ? nullptr : colorSubstateInfos.front(); // TODO: for backward compatibility
-    // Try to get color from optional version
-    auto optionalColor = calculateCellColorOptional(row, column, p, colorSubstateInfo);
-    if (optionalColor.has_value())
+    if (colorSubstateInfos.empty())
     {
-        return optionalColor.value();
+        auto optionalColor = calculateCellColorOptional(row, column, p);
+        if (optionalColor.has_value())
+        {
+            return optionalColor.value();
+        }
+        else
+        {
+            // Return flat scene background color for noValue or out of range
+            return flatSceneBackgroundColor();
+        }
     }
-    else
+
+    for (const auto colorSubstateInfo : colorSubstateInfos)
     {
-        // Return flat scene background color for noValue or out of range
-        return flatSceneBackgroundColor();
+        auto optionalColor = calculateCellColorOptional(row, column, p, colorSubstateInfo);
+        if (optionalColor.has_value())
+        {
+            return optionalColor.value();
+        }
     }
+
+    // Return flat scene background color for noValue or out of range
+    return flatSceneBackgroundColor();
 }
 
 template<class Matrix>

@@ -78,10 +78,8 @@ signals:
      * @param fieldName The name of the field */
     void use3rdDimensionRequested(const std::string& fieldName);
 
-    /** @brief Signal emitted when a field is requested to be used as 2D visualization.
-     * 
-     * @param fieldName The name of the field */
-    void useSubstateColorringRequested(const std::string& fieldName);
+    /// @brief Signal emitted when a field is requested to be used in colorring. It is returning names of all selected substates
+    void useSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
 
     /** @brief Signal emitted when deactivation of substate is requested.
      * 
@@ -152,8 +150,11 @@ private slots:
     void onUse2DCheckboxChanged(const std::string& fieldName);
 
 public slots:
-    /** @brief Uncheck all use2D checkboxes. */
+    /// @brief Uncheck all use2D checkboxes. */
     void uncheckAllUse2DCheckboxes();
+
+    /// @brief Informs about changes in substat colloring
+    void onUseSubstateColorringRequested(const std::string &fieldName);
 
 protected:
     /// @brief Override drag enter event for drag-and-drop support
@@ -163,7 +164,7 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
-    /** @brief Clear all substate widgets. */
+    /// @brief Clear all substate widgets.
     void clearWidgets();
     
     /** @brief Reorder widgets based on drag and drop operation.

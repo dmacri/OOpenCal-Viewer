@@ -1407,34 +1407,11 @@ void SceneWidget::setActiveSubstateFor3D(const std::string& fieldName)
     activeSubstateFor3D = fieldName;
 }
 
-void SceneWidget::setActiveSubstateColorring(const std::string& fieldName)
-{
-    bool changes2Redraw = false;
-    if (fieldName.empty())
-    {
-        activeSubstatesForColorring.clear();
-        changes2Redraw = true;
-    }
+void SceneWidget::setActiveSubstatesForColorring(const std::vector<std::string>& fieldNames)
+{    
+    activeSubstatesForColorring = fieldNames;
 
-    if (auto pos = std::ranges::find(activeSubstatesForColorring, fieldName); pos != activeSubstatesForColorring.end()) // already added
-    {
-        if (pos != activeSubstatesForColorring.begin()) // if not in the beginning
-        {
-            std::iter_swap(pos, activeSubstatesForColorring.begin());
-            changes2Redraw = true;
-        }
-    }
-    else
-    {
-        activeSubstatesForColorring.insert(activeSubstatesForColorring.begin(), fieldName); // add in the beginning
-        changes2Redraw = true;
-    }
-
-    // Refresh visualization to apply the new 2D substate only if settingParameter is initialized
-    if (changes2Redraw)
-    {
-        refreshVisualization();
-    }
+    refreshVisualization();
 }
 
 void SceneWidget::refreshVisualization()

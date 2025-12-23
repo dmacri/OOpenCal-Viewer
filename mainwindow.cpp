@@ -824,7 +824,7 @@ void MainWindow::switchToModel(const QString& modelName)
 void MainWindow::clearActiveSubstates()
 {
     // Clear active substates for both 2D and 3D visualization
-    ui->sceneWidget->setActiveSubstateColorring("");
+    ui->sceneWidget->setActiveSubstatesForColorring({});
     ui->sceneWidget->setActiveSubstateFor3D("");
     activeSubstateFor3D = "";
 }
@@ -838,14 +838,10 @@ void MainWindow::updateSubstateDockeWidget()
         ui->substatesDockWidget->updateSubstates(settingParam);
 
         // Connect signal for 3D visualization request
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3rdDimensionRequested,
-                this, &MainWindow::onUse3rdDimensionRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::useSubstateColorringRequested,
-                this, &MainWindow::onUseSubstateColorringRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::deactivateRequested,
-                this, &MainWindow::onDeactivateRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::visualizationRefreshRequested,
-                ui->sceneWidget, &SceneWidget::refreshVisualization);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3rdDimensionRequested, this, &MainWindow::onUse3rdDimensionRequested);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::useSubstatesColorringRequested, this, &MainWindow::onUseSubstatesColorringRequested);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::deactivateRequested, this, &MainWindow::onDeactivateRequested);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::visualizationRefreshRequested, ui->sceneWidget, &SceneWidget::refreshVisualization);
     }
 }
 
@@ -2110,7 +2106,7 @@ void MainWindow::onUse3rdDimensionRequested(const std::string& fieldName)
     // Cursor restored automatically by WaitCursorGuard destructor
 }
 
-void MainWindow::onUseSubstateColorringRequested(const std::string& fieldName)
+void MainWindow::onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames)
 {
     // Show wait cursor during visualization change
     WaitCursorGuard waitCursor("Updating substate coloring...");
@@ -2118,14 +2114,8 @@ void MainWindow::onUseSubstateColorringRequested(const std::string& fieldName)
     // Set the active substate for 2D coloring (works in both 2D and 3D modes)
     // In 2D mode: controls the cell coloring
     // In 3D mode: controls the surface coloring (while 3D button controls height)
-    ui->sceneWidget->setActiveSubstateColorring(fieldName);
-    
-    // Highlight the active substate in the dock widget
-    ui->substatesDockWidget->setActiveSubstate(fieldName);
-    
-    // Immediately refresh visualization to show the change
-    ui->sceneWidget->refreshVisualization();
-    
+    ui->sceneWidget->setActiveSubstatesForColorring(fieldNames);
+
     // Cursor restored automatically by WaitCursorGuard destructor
 }
 
@@ -2135,7 +2125,7 @@ void MainWindow::onDeactivateRequested()
     WaitCursorGuard waitCursor("Deactivating substate visualization...");
 
     // Clear the active substate for 2D visualization in SceneWidget
-    ui->sceneWidget->setActiveSubstateColorring("");
+    ui->sceneWidget->setActiveSubstatesForColorring({});
     
     // Clear highlight from all substates in the dock widget
     ui->substatesDockWidget->setActiveSubstate("");

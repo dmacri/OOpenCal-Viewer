@@ -91,29 +91,15 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
         }
 
         // Connect signals
-        connect(widget, &SubstateDisplayWidget::use3rdDimensionRequested,
-                this, &SubstatesDockWidget::use3rdDimensionRequested);
-        connect(widget, &SubstateDisplayWidget::useSubstateColorringRequested,
-                this, [this, field](const std::string& fieldName) {
-                    // Handle exclusive checkbox behavior
-                    this->onUse2DCheckboxChanged(fieldName);
-                    // Forward the signal
-                    emit useSubstateColorringRequested(fieldName);
-                });
-        connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged),
-                this, &SubstatesDockWidget::onMinMaxValuesChanged);
-        connect(widget, &SubstateDisplayWidget::calculateMinimumRequested,
-                this, &SubstatesDockWidget::onCalculateMinimumRequested);
-        connect(widget, &SubstateDisplayWidget::calculateMinimumGreaterThanZeroRequested,
-                this, &SubstatesDockWidget::onCalculateMinimumGreaterThanZeroRequested);
-        connect(widget, &SubstateDisplayWidget::calculateMaximumRequested,
-                this, &SubstatesDockWidget::onCalculateMaximumRequested);
-        connect(widget, &SubstateDisplayWidget::colorsChanged,
-                this, &SubstatesDockWidget::onColorsChanged);
-        connect(widget, QOverload<const std::string&, double, bool>::of(&SubstateDisplayWidget::noValueChanged),
-                this, &SubstatesDockWidget::onNoValueChanged);
-        connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested,
-                this, &SubstatesDockWidget::onVisualizationRefreshRequested);
+        connect(widget, &SubstateDisplayWidget::use3rdDimensionRequested, this, &SubstatesDockWidget::use3rdDimensionRequested);
+        connect(widget, &SubstateDisplayWidget::useSubstateColorringRequested, this, &SubstatesDockWidget::onUseSubstateColorringRequested);
+        connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged), this, &SubstatesDockWidget::onMinMaxValuesChanged);
+        connect(widget, &SubstateDisplayWidget::calculateMinimumRequested, this, &SubstatesDockWidget::onCalculateMinimumRequested);
+        connect(widget, &SubstateDisplayWidget::calculateMinimumGreaterThanZeroRequested, this, &SubstatesDockWidget::onCalculateMinimumGreaterThanZeroRequested);
+        connect(widget, &SubstateDisplayWidget::calculateMaximumRequested, this, &SubstatesDockWidget::onCalculateMaximumRequested);
+        connect(widget, &SubstateDisplayWidget::colorsChanged, this, &SubstatesDockWidget::onColorsChanged);
+        connect(widget, QOverload<const std::string&, double, bool>::of(&SubstateDisplayWidget::noValueChanged), this, &SubstatesDockWidget::onNoValueChanged);
+        connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested, this, &SubstatesDockWidget::onVisualizationRefreshRequested);
 
         m_containerLayout->addWidget(widget);
         m_substateWidgets[field] = widget;
@@ -137,6 +123,20 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
         connect(m_deactivateButton, &QPushButton::clicked, this, &SubstatesDockWidget::onDeactivateClicked);
     }
     m_containerLayout->addWidget(m_deactivateButton);
+}
+
+void SubstatesDockWidget::onUseSubstateColorringRequested(const std::string&)
+{
+    std::vector<std::string> fieldNames;
+    for (auto& [name, widget] : m_substateWidgets)
+    {
+        if (widget->isUse2DChecked())
+        {
+            fieldNames.push_back(name);
+        }
+    }
+
+    emit useSubstatesColorringRequested(fieldNames);
 }
 
 void SubstatesDockWidget::updateCellValues(SettingParameter* settingParameter, int row, int col, class ISceneWidgetVisualizer* visualizer)

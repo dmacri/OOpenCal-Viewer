@@ -83,7 +83,7 @@ private slots: // menu actions
     void syncCameraSliders();
 
     void onUse3rdDimensionRequested(const std::string& fieldName);
-    void onUseSubstateColorringRequested(const std::string& fieldName);
+    void onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
     void onDeactivateRequested();
 
     void onPlayButtonClicked();

@@ -221,7 +221,7 @@ public:
     /// to determine the color of each cell in 2D mode via outputValue(fieldName.c_str()).
     /// 
     /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to use default
-    void setActiveSubstateColorring(const std::string& fieldName);
+    void setActiveSubstatesForColorring(const std::vector<std::string>& fieldNames);
 
     /// @brief Get the active substate fields for 2D visualization.
     ///
