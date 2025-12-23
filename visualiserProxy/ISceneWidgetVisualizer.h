@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <vector>
 #include <vtkRenderer.h>
 
 #include "core/types.h"
@@ -25,6 +26,7 @@
 class SettingParameter;
 class Line;
 class Visualizer;
+struct SubstateInfo;
 
 /** @interface ISceneWidgetVisualizer
  * @brief Abstract interface defining the contract for all scene widget visualizers.
@@ -61,16 +63,16 @@ public:
     virtual void readStageStateFromFilesForStep(SettingParameter* sp, Line* lines) = 0;
 
     /// @brief Draw the visualization using VTK.
-    virtual void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const struct SubstateInfo* substateInfo = nullptr) = 0;
+    virtual void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*> colorSubstateInfos={}) = 0;
 
     /// @brief Refresh the VTK windows.
-    virtual void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const struct SubstateInfo* substateInfo = nullptr) = 0;
+    virtual void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*> colorSubstateInfos={}) = 0;
 
     /// @brief Draw the visualization using VTK with 3D substate as quad mesh surface.
-    virtual void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) = 0;
+    virtual void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*> colorSubstateInfos={}) = 0;
 
     /// @brief Refresh the VTK windows with 3D substate quad mesh surface.
-    virtual void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) = 0;
+    virtual void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*> colorSubstateInfos={}) = 0;
 
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
     virtual void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor) = 0;
@@ -79,10 +81,10 @@ public:
     virtual void refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor) = 0;
 
     /// @brief Draw grid lines projected onto the 3D substate surface.
-    virtual void drawGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) = 0;
+    virtual void drawGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*> colorSubstateInfos={}) = 0;
 
     /// @brief Refresh grid lines projected onto the 3D substate surface.
-    virtual void refreshGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue, const struct SubstateInfo* substateInfo = nullptr) = 0;
+    virtual void refreshGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*> colorSubstateInfos={}) = 0;
 
     /// @brief Get the visualizer instance.
     virtual Visualizer& getVisualizer() = 0;

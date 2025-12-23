@@ -365,9 +365,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
             }
 
             // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
-            const auto colorSubstateInfos = getColorSubstateInfos();
-            const SubstateInfo* colorSubstateInfo = colorSubstateInfos.empty() ? nullptr : colorSubstateInfos.front(); // fpr backward compatibility
-            
+            const auto colorSubstateInfos = getColorSubstateInfos();            
             sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY,
                                                               settingParameter->numberOfColumnX,
                                                               renderer,
@@ -375,7 +373,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                               activeSubstateFor3D,
                                                               substateInfo.minValue,
                                                               substateInfo.maxValue,
-                                                              colorSubstateInfo);
+                                                              colorSubstateInfos);
 
             // Hide 2D grid lines and draw 3D grid lines on surface instead
             if (actorBuildLine)
@@ -391,7 +389,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                                  activeSubstateFor3D,
                                                                  substateInfo.minValue,
                                                                  substateInfo.maxValue,
-                                                                 colorSubstateInfo);
+                                                                 colorSubstateInfos);
 
             updateCameraPivotFromBounds();
             return;
@@ -400,9 +398,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
 
     // Fallback to regular 2D visualization
     const auto colorSubstateInfos = getColorSubstateInfos();
-    const SubstateInfo* colorSubstateInfo = colorSubstateInfos.empty() ? nullptr : colorSubstateInfos.front(); // fpr backward compatibility
-
-    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, colorSubstateInfo);
+    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, colorSubstateInfos);
     updateCameraPivotFromBounds();
 }
 
@@ -439,16 +435,14 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
             }
 
             // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
-            const auto colorSubstateInfos = getColorSubstateInfos();
-            const SubstateInfo* colorSubstateInfo = colorSubstateInfos.empty() ? nullptr : colorSubstateInfos.front(); // fpr backward compatibility
-            
+            const auto colorSubstateInfos = getColorSubstateInfos();            
             sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY,
                                                                     settingParameter->numberOfColumnX,
                                                                     gridActor,
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
                                                                     substateInfo.maxValue,
-                                                                    colorSubstateInfo);
+                                                                    colorSubstateInfos);
 
             // Refresh 3D grid lines on surface
             sceneWidgetVisualizerProxy->refreshGridLinesOn3DSurface(settingParameter->numberOfRowsY,
@@ -458,7 +452,7 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
                                                                     substateInfo.maxValue,
-                                                                    colorSubstateInfo);
+                                                                    colorSubstateInfos);
 
             updateCameraPivotFromBounds();
             return;
@@ -467,9 +461,7 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
     
     // Fallback to regular 2D visualization
     const auto colorSubstateInfos = getColorSubstateInfos();
-    const SubstateInfo* colorSubstateInfo = colorSubstateInfos.empty() ? nullptr : colorSubstateInfos.front(); // fpr backward compatibility
-
-    sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor, colorSubstateInfo);
+    sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor, colorSubstateInfos);
     updateCameraPivotFromBounds();
 }
 
