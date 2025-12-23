@@ -375,12 +375,13 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                               substateInfo.maxValue,
                                                               colorSubstateInfos);
 
-            // Hide 2D grid lines and draw 3D grid lines on surface instead
+            // Handle 2D grid lines visibility
             if (actorBuildLine)
             {
-                actorBuildLine->SetVisibility(false);
+                actorBuildLine->SetVisibility(false); // Always hide 2D lines in 3D mode
             }
             
+            // Draw 3D grid lines on surface with proper visibility
             sceneWidgetVisualizerProxy->drawGridLinesOn3DSurface(settingParameter->numberOfRowsY,
                                                                  settingParameter->numberOfColumnX,
                                                                  lines,
@@ -389,6 +390,12 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                                  activeSubstateFor3D,
                                                                  substateInfo.minValue,
                                                                  substateInfo.maxValue);
+            
+            // Apply visibility setting to 3D grid lines
+            if (gridLinesOnSurfaceActor)
+            {
+                gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+            }
 
             updateCameraPivotFromBounds();
             return;
@@ -452,6 +459,12 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                     substateInfo.minValue,
                                                                     substateInfo.maxValue);
 
+            // Apply visibility setting to 3D grid lines
+            if (gridLinesOnSurfaceActor)
+            {
+                gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+            }
+
             updateCameraPivotFromBounds();
             return;
         }
@@ -494,8 +507,19 @@ void SceneWidget::refreshGridColorFromSettings()
 {
     const auto color = ColorSettings::instance().gridColor();
 
-    actorBuildLine->GetProperty()->SetColor(toVtkColor(color).GetData());
-    actorBuildLine->GetProperty()->Modified();
+    // Apply color to 2D grid lines
+    if (actorBuildLine)
+    {
+        actorBuildLine->GetProperty()->SetColor(toVtkColor(color).GetData());
+        actorBuildLine->GetProperty()->Modified();
+    }
+    
+    // Apply color to 3D grid lines
+    if (gridLinesOnSurfaceActor)
+    {
+        gridLinesOnSurfaceActor->GetProperty()->SetColor(toVtkColor(color).GetData());
+        gridLinesOnSurfaceActor->GetProperty()->Modified();
+    }
 
     triggerRenderUpdate();
 }
@@ -1194,6 +1218,7 @@ void SceneWidget::clearScene()
     gridActor = vtkSmartPointer<vtkActor>::New();
     backgroundActor = vtkSmartPointer<vtkActor>::New();
     actorBuildLine = vtkSmartPointer<vtkActor2D>::New();
+    gridLinesOnSurfaceActor = vtkSmartPointer<vtkActor>::New();
 }
 
 void SceneWidget::loadNewConfiguration(const std::string& configFileName, int stepNumber)
@@ -1381,11 +1406,20 @@ void SceneWidget::setAxesWidgetVisible(bool visible)
 void SceneWidget::setGridLinesVisible(bool visible)
 {
     gridLinesVisible = visible;
+    
+    // Handle 2D grid lines
     if (actorBuildLine)
     {
         actorBuildLine->SetVisibility(visible);
-        triggerRenderUpdate();
     }
+    
+    // Handle 3D grid lines on surface
+    if (gridLinesOnSurfaceActor)
+    {
+        gridLinesOnSurfaceActor->SetVisibility(visible);
+    }
+    
+    triggerRenderUpdate();
 }
 
 void SceneWidget::setFlatSceneBackgroundVisible(bool visible)
@@ -1610,12 +1644,19 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
 
 void SceneWidget::applyGridLinesSettings()
 {
-    // Apply the remembered grid lines visibility state and set semi-transparency
+    // Apply the remembered grid lines visibility state to 2D lines and set semi-transparency
     if (actorBuildLine)
     {
         actorBuildLine->SetVisibility(gridLinesVisible);
         // Set grid lines to semi-transparent (50% opacity)
         actorBuildLine->GetProperty()->SetOpacity(0.5);
+    }
+    
+    // For 3D grid lines, only hide them if we're not in 3D substate mode
+    // In 3D mode, visibility is controlled by the specific drawing functions
+    if (gridLinesOnSurfaceActor && activeSubstateFor3D.empty())
+    {
+        gridLinesOnSurfaceActor->SetVisibility(false);
     }
 }
 
