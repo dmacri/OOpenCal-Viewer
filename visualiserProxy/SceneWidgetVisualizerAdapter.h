@@ -73,22 +73,22 @@ public:
         m_impl.modelReader.readStageStateFromFilesForStep(m_impl.p, sp, lines);
     }
 
-    void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*> colorSubstateInfos={}) override
+    void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
         m_impl.visualiser.drawWithVTK(m_impl.p, nRows, nCols, renderer, gridActor, colorSubstateInfos);
     }
 
-    void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*> colorSubstateInfos={}) override
+    void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
         m_impl.visualiser.refreshWindowsVTK(m_impl.p, nRows, nCols, gridActor, colorSubstateInfos);
     }
 
-    void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*> colorSubstateInfos={}) override
+    void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
         m_impl.visualiser.drawWithVTK3DSubstate(m_impl.p, nRows, nCols, renderer, gridActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
     }
 
-    void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*> colorSubstateInfos={}) override
+    void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
         m_impl.visualiser.refreshWindowsVTK3DSubstate(m_impl.p, nRows, nCols, gridActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
     }
@@ -103,14 +103,14 @@ public:
         m_impl.visualiser.refreshFlatSceneBackground(nRows, nCols, backgroundActor);
     }
 
-    void drawGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*> colorSubstateInfos={}) override
+    void drawGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue) override
     {
-        m_impl.visualiser.drawGridLinesOn3DSurface(m_impl.p, nRows, nCols, lines, renderer, gridLinesActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
+        m_impl.visualiser.drawGridLinesOn3DSurface(m_impl.p, nRows, nCols, lines, renderer, gridLinesActor, substateFieldName, minValue, maxValue);
     }
 
-    void refreshGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*> colorSubstateInfos={}) override
+    void refreshGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue) override
     {
-        m_impl.visualiser.refreshGridLinesOn3DSurface(m_impl.p, nRows, nCols, lines, gridLinesActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
+        m_impl.visualiser.refreshGridLinesOn3DSurface(m_impl.p, nRows, nCols, lines, gridLinesActor, substateFieldName, minValue, maxValue);
     }
 
     Visualizer& getVisualizer() override

@@ -388,8 +388,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                                  gridLinesOnSurfaceActor,
                                                                  activeSubstateFor3D,
                                                                  substateInfo.minValue,
-                                                                 substateInfo.maxValue,
-                                                                 colorSubstateInfos);
+                                                                 substateInfo.maxValue);
 
             updateCameraPivotFromBounds();
             return;
@@ -451,8 +450,7 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                     gridLinesOnSurfaceActor,
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
-                                                                    substateInfo.maxValue,
-                                                                    colorSubstateInfos);
+                                                                    substateInfo.maxValue);
 
             updateCameraPivotFromBounds();
             return;
