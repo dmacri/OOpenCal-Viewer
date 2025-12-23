@@ -194,8 +194,9 @@ void SceneWidget::applyCameraAngles()
     // Apply roll rotation (around Y axis)
     camera->Roll(cameraRoll);
 
-    // Apply pitch rotation (around Z axis)
-    camera->Pitch(cameraPitch);
+    // Apply pitch rotation (around Z axis) with clamping to avoid gimbal lock
+    double clampedPitch = std::clamp(cameraPitch, -89.9, 89.9);
+    camera->Pitch(clampedPitch);
 
     // Apply yaw rotation (around X axis)
     camera->Yaw(cameraYaw);
@@ -247,7 +248,10 @@ void SceneWidget::applyCameraAnglesPreservingZoom()
     const double clampedElevation = std::clamp(cameraElevation, -89.9, 89.9);
     camera->Elevation(clampedElevation);
     camera->Roll(cameraRoll);
-    camera->Pitch(cameraPitch);
+    
+    // Clamp pitch to avoid gimbal lock and flipping at ±90 degrees
+    const double clampedPitch = std::clamp(cameraPitch, -89.9, 89.9);
+    camera->Pitch(clampedPitch);
     camera->Yaw(cameraYaw);
 
     double rotatedPosition[3];
