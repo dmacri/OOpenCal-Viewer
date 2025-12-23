@@ -223,10 +223,10 @@ public:
     /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to use default
     void setActiveSubstateColorring(const std::string& fieldName);
 
-    /// @brief Get the active substate field for 2D visualization.
-    /// 
-    /// @return The name of the active substate field, or empty string if using default
-    std::string getActiveSubstateFor2D() const { return activeSubstateForColorring; }
+    /// @brief Get the active substate fields for 2D visualization.
+    ///
+    /// @return The vector of active substate field names in order (empty if using default)
+    std::vector<std::string> getActiveSubstatesForColorring() const { return activeSubstatesForColorring; }
 
     /// @brief Refresh the visualization for the current step.
     /// 
@@ -479,7 +479,6 @@ protected:
      * @return True if coordinates are within grid bounds, false if outside (background) */
     bool isWorldPositionInGrid(const double worldPos[3]) const;
 
-protected:
     /** @brief Setup CustomInteractorStyle with wait cursor callbacks.
      * 
      * This helper method creates a CustomInteractorStyle and configures it to show
@@ -499,6 +498,9 @@ protected:
      * 
      * @param event The mouse event */
     void mousePressEvent(QMouseEvent* event) override;
+
+    /// @brief Returns color substate infos
+    std::vector<const SubstateInfo*> getColorSubstateInfos();
 
     /** @brief Proxy for the scene widget visualizer
      *  This proxy provides access to the visualizer implementation
@@ -526,8 +528,8 @@ protected:
     /// @brief Name of the substate field currently used for 3D visualization (empty if none)
     std::string activeSubstateFor3D;
 
-    /// @brief Name of the substate field currently used for 2D visualization (empty if using default)
-    std::string activeSubstateForColorring;
+    /// @brief Names of the substate fields currently used for 2D visualization (empty if using default)
+    std::vector<std::string> activeSubstatesForColorring;
 
     /// @brief Current camera azimuth angle (cached to avoid recalculation)
     double cameraAzimuth{};

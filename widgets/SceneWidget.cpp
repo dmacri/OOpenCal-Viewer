@@ -365,11 +365,8 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
             }
 
             // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
-            const SubstateInfo* colorSubstateInfo = &substateInfo;
-            if (!activeSubstateForColorring.empty() && settingParameter->substateInfo.count(activeSubstateForColorring) > 0)
-            {
-                colorSubstateInfo = &settingParameter->substateInfo[activeSubstateForColorring];
-            }
+            const auto colorSubstateInfos = getColorSubstateInfos();
+            const SubstateInfo* colorSubstateInfo = colorSubstateInfos.empty() ? nullptr : colorSubstateInfos.front(); // fpr backward compatibility
             
             sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY,
                                                               settingParameter->numberOfColumnX,
@@ -402,13 +399,27 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     }
 
     // Fallback to regular 2D visualization
-    const SubstateInfo* substateInfo2D = nullptr;
-    if (!activeSubstateForColorring.empty() && settingParameter->substateInfo.count(activeSubstateForColorring) > 0)
-    {
-        substateInfo2D = &settingParameter->substateInfo[activeSubstateForColorring];
-    }
-    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, substateInfo2D);
+    const auto colorSubstateInfos = getColorSubstateInfos();
+    const SubstateInfo* colorSubstateInfo = colorSubstateInfos.empty() ? nullptr : colorSubstateInfos.front(); // fpr backward compatibility
+
+    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, colorSubstateInfo);
     updateCameraPivotFromBounds();
+}
+
+std::vector<const SubstateInfo*> SceneWidget::getColorSubstateInfos()
+{
+    std::vector<const SubstateInfo*> colorSubstateInfos;
+    if (! activeSubstatesForColorring.empty())
+    {
+        for (const auto& fieldName : activeSubstatesForColorring)
+        {
+            if (settingParameter->substateInfo.count(fieldName) > 0)
+            {
+                colorSubstateInfos.push_back(&settingParameter->substateInfo[fieldName]);
+            }
+        }
+    }
+    return colorSubstateInfos;
 }
 
 void SceneWidget::refreshVisualizationWithOptional3DSubstate()
@@ -428,11 +439,8 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
             }
 
             // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
-            const SubstateInfo* colorSubstateInfo = &substateInfo;
-            if (!activeSubstateForColorring.empty() && settingParameter->substateInfo.count(activeSubstateForColorring) > 0)
-            {
-                colorSubstateInfo = &settingParameter->substateInfo[activeSubstateForColorring];
-            }
+            const auto colorSubstateInfos = getColorSubstateInfos();
+            const SubstateInfo* colorSubstateInfo = colorSubstateInfos.empty() ? nullptr : colorSubstateInfos.front(); // fpr backward compatibility
             
             sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY,
                                                                     settingParameter->numberOfColumnX,
@@ -458,12 +466,10 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
     }
     
     // Fallback to regular 2D visualization
-    const SubstateInfo* substateInfo2D = nullptr;
-    if (!activeSubstateForColorring.empty() && settingParameter->substateInfo.count(activeSubstateForColorring) > 0)
-    {
-        substateInfo2D = &settingParameter->substateInfo[activeSubstateForColorring];
-    }
-    sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor, substateInfo2D);
+    const auto colorSubstateInfos = getColorSubstateInfos();
+    const SubstateInfo* colorSubstateInfo = colorSubstateInfos.empty() ? nullptr : colorSubstateInfos.front(); // fpr backward compatibility
+
+    sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor, colorSubstateInfo);
     updateCameraPivotFromBounds();
 }
 
@@ -1411,9 +1417,29 @@ void SceneWidget::setActiveSubstateFor3D(const std::string& fieldName)
 
 void SceneWidget::setActiveSubstateColorring(const std::string& fieldName)
 {
-    activeSubstateForColorring = fieldName;
+    bool changes2Redraw = false;
+    if (fieldName.empty())
+    {
+        activeSubstatesForColorring.clear();
+        changes2Redraw = true;
+    }
+
+    if (auto pos = std::ranges::find(activeSubstatesForColorring, fieldName); pos != activeSubstatesForColorring.end()) // already added
+    {
+        if (pos != activeSubstatesForColorring.begin()) // if not in the beginning
+        {
+            std::iter_swap(pos, activeSubstatesForColorring.begin());
+            changes2Redraw = true;
+        }
+    }
+    else
+    {
+        activeSubstatesForColorring.insert(activeSubstatesForColorring.begin(), fieldName); // add in the beginning
+        changes2Redraw = true;
+    }
+
     // Refresh visualization to apply the new 2D substate only if settingParameter is initialized
-    if (! fieldName.empty())
+    if (changes2Redraw)
     {
         refreshVisualization();
     }
