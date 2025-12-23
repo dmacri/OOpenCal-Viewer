@@ -1407,16 +1407,35 @@ void SceneWidget::setGridLinesVisible(bool visible)
 {
     gridLinesVisible = visible;
     
-    // Handle 2D grid lines
-    if (actorBuildLine)
-    {
-        actorBuildLine->SetVisibility(visible);
-    }
+    // Check if we're in 3D substate mode
+    bool isIn3DMode = !activeSubstateFor3D.empty() && settingParameter && 
+                     settingParameter->substateInfo.count(activeSubstateFor3D) > 0 &&
+                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].minValue) &&
+                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].maxValue);
     
-    // Handle 3D grid lines on surface
-    if (gridLinesOnSurfaceActor)
+    if (isIn3DMode)
     {
-        gridLinesOnSurfaceActor->SetVisibility(visible);
+        // In 3D mode: only control 3D grid lines, keep 2D lines hidden
+        if (gridLinesOnSurfaceActor)
+        {
+            gridLinesOnSurfaceActor->SetVisibility(visible);
+        }
+        if (actorBuildLine)
+        {
+            actorBuildLine->SetVisibility(false); // Always hide 2D lines in 3D mode
+        }
+    }
+    else
+    {
+        // In 2D mode: only control 2D grid lines, keep 3D lines hidden
+        if (actorBuildLine)
+        {
+            actorBuildLine->SetVisibility(visible);
+        }
+        if (gridLinesOnSurfaceActor)
+        {
+            gridLinesOnSurfaceActor->SetVisibility(false); // Always hide 3D lines in 2D mode
+        }
     }
     
     triggerRenderUpdate();
@@ -1644,19 +1663,37 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
 
 void SceneWidget::applyGridLinesSettings()
 {
-    // Apply the remembered grid lines visibility state to 2D lines and set semi-transparency
-    if (actorBuildLine)
-    {
-        actorBuildLine->SetVisibility(gridLinesVisible);
-        // Set grid lines to semi-transparent (50% opacity)
-        actorBuildLine->GetProperty()->SetOpacity(0.5);
-    }
+    // Check if we're in 3D substate mode
+    bool isIn3DMode = !activeSubstateFor3D.empty() && settingParameter && 
+                     settingParameter->substateInfo.count(activeSubstateFor3D) > 0 &&
+                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].minValue) &&
+                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].maxValue);
     
-    // For 3D grid lines, only hide them if we're not in 3D substate mode
-    // In 3D mode, visibility is controlled by the specific drawing functions
-    if (gridLinesOnSurfaceActor && activeSubstateFor3D.empty())
+    if (isIn3DMode)
     {
-        gridLinesOnSurfaceActor->SetVisibility(false);
+        // In 3D mode: apply settings only to 3D lines, hide 2D lines
+        if (gridLinesOnSurfaceActor)
+        {
+            gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+        }
+        if (actorBuildLine)
+        {
+            actorBuildLine->SetVisibility(false);
+        }
+    }
+    else
+    {
+        // In 2D mode: apply settings only to 2D lines with semi-transparency, hide 3D lines
+        if (actorBuildLine)
+        {
+            actorBuildLine->SetVisibility(gridLinesVisible);
+            // Set grid lines to semi-transparent (50% opacity)
+            actorBuildLine->GetProperty()->SetOpacity(0.5);
+        }
+        if (gridLinesOnSurfaceActor)
+        {
+            gridLinesOnSurfaceActor->SetVisibility(false);
+        }
     }
 }
 
