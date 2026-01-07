@@ -8,9 +8,12 @@
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QEvent>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QColorDialog>
 #include <QCheckBox>
+#include <QDrag>
+#include <QMimeData>
 #include "SubstateDisplayWidget.h"
 #include "ui_SubstateDisplayWidget.h"
 
@@ -65,25 +68,17 @@ void SubstateDisplayWidget::connectSignals()
 
     // Connect "Use as 2D" checkbox state change
     #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-        connect(ui->use2dButton, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
+        connect(ui->useForColorringCheckbox, &QCheckBox::checkStateChanged, this, &SubstateDisplayWidget::onUseSubstateColorring);
     #else
-        connect(ui->use2dButton, &QCheckBox::stateChanged, this, &SubstateDisplayWidget::onUse2DClicked);
+        connect(ui->useForColorringCheckbox, &QCheckBox::stateChanged, this, &SubstateDisplayWidget::onUseSubstateColorring);
     #endif
 
     // Connect "Apply Custom Colors" button (clearColorsButton)
     connect(ui->clearColorsButton, &QPushButton::clicked, this, [this]() {
         // After clearing colors, emit signal to apply default colors
-        emit applyCustomColorsRequested(fieldName());
+        emit onUseSubstateColorring();
+        // TODO: GB: This should restore default way of filling colors
     });
-
-    // Connect "Apply Custom Colors" button (applyCustomColorsPushButton) if it exists
-    if (ui->applyCustomColorsPushButton)
-    {
-        connect(ui->applyCustomColorsPushButton, &QPushButton::clicked, this, [this]() {
-            // Apply custom colors with current min/max color settings
-            emit applyCustomColorsRequested(fieldName());
-        });
-    }
 
     // Connect color buttons
     connect(ui->minColorButton, &QPushButton::clicked, this, &SubstateDisplayWidget::onMinColorClicked);
@@ -255,38 +250,7 @@ void SubstateDisplayWidget::updateButtonState()
     }
 
     // Update "Use as 2D" button state (same requirement as 3D)
-    ui->use2dButton->setEnabled(isEnabled);
-    if (isEnabled)
-    {
-        ui->use2dButton->setToolTip("Use this field as 2D visualization");
-    }
-    else
-    {
-        ui->use2dButton->setToolTip("Set both Min and Max values to enable 2D visualization");
-    }
-
-    // Update "Apply Custom Colors" button state - enabled only if both min/max AND colors are set
-    const bool hasMinColor = !getMinColor().empty();
-    const bool hasMaxColor = !getMaxColor().empty();
-    const bool hasColors = hasMinColor && hasMaxColor;
-    const bool applyColorsEnabled = isEnabled && hasColors;
-    
-    if (ui->applyCustomColorsPushButton)
-    {
-        ui->applyCustomColorsPushButton->setEnabled(applyColorsEnabled);
-        if (applyColorsEnabled)
-        {
-            ui->applyCustomColorsPushButton->setToolTip("Apply custom colors to visualization");
-        }
-        else if (!isEnabled)
-        {
-            ui->applyCustomColorsPushButton->setToolTip("Set both Min and Max values to enable");
-        }
-        else
-        {
-            ui->applyCustomColorsPushButton->setToolTip("Set both Min and Max colors to enable");
-        }
-    }
+    ui->useForColorringCheckbox->setEnabled(isEnabled);
 
     // Emit signal with current min/max values so they can be stored in substateInfo
     emit minMaxValuesChanged(fieldName(), getMinValue(), getMaxValue());
@@ -388,31 +352,31 @@ void SubstateDisplayWidget::onCalculateMinimumGreaterThanZeroAndMaximum()
     emit visualizationRefreshRequested();
 }
 
-void SubstateDisplayWidget::onUse2DClicked()
+void SubstateDisplayWidget::onUseSubstateColorring()
 {
     // Only emit signal when checkbox is checked
-    if (ui->use2dButton->isChecked())
+    if (ui->useForColorringCheckbox->isChecked())
     {
-        emit use2DRequested(fieldName());
+        emit useSubstateColorringRequested(fieldName());
     }
     else
     {
         // When unchecked, emit signal with empty string to deactivate
-        emit use2DRequested("");
+        emit useSubstateColorringRequested("");
     }
 }
 
 bool SubstateDisplayWidget::isUse2DChecked() const
 {
-    return ui->use2dButton->isChecked();
+    return ui->useForColorringCheckbox->isChecked();
 }
 
 void SubstateDisplayWidget::setUse2DChecked(bool checked)
 {
     // Block signals to avoid triggering onUse2DClicked
-    ui->use2dButton->blockSignals(true);
-    ui->use2dButton->setChecked(checked);
-    ui->use2dButton->blockSignals(false);
+    ui->useForColorringCheckbox->blockSignals(true);
+    ui->useForColorringCheckbox->setChecked(checked);
+    ui->useForColorringCheckbox->blockSignals(false);
 }
 
 void SubstateDisplayWidget::setMinColor(const std::string& color)
@@ -577,4 +541,48 @@ void SubstateDisplayWidget::onNoValueCheckBoxChanged()
     
     emit noValueChanged(fieldName(), getNoValue(), ui->noValueCheckBox->isChecked());
     emit visualizationRefreshRequested();
+}
+
+void SubstateDisplayWidget::mousePressEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton)
+    {
+        m_dragStartPosition = event->pos();
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void SubstateDisplayWidget::mouseMoveEvent(QMouseEvent* event)
+{
+    if (!(event->buttons() & Qt::LeftButton))
+        return;
+    
+    if ((event->pos() - m_dragStartPosition).manhattanLength() < QApplication::startDragDistance())
+        return;
+    
+    startDrag();
+}
+
+void SubstateDisplayWidget::startDrag()
+{
+    QDrag* drag = new QDrag(this);
+    QMimeData* mimeData = new QMimeData;
+    
+    // Store field name in mime data for identification
+    mimeData->setText(QString::fromStdString(fieldName()));
+    mimeData->setData("application/x-substate-field", QString::fromStdString(fieldName()).toUtf8());
+    
+    drag->setMimeData(mimeData);
+    
+    // Create a semi-transparent pixmap for visual feedback
+    QPixmap pixmap(size());
+    pixmap.fill(Qt::transparent);
+    render(&pixmap);
+    
+    // Set the pixmap as the drag cursor with some transparency
+    drag->setPixmap(pixmap);
+    drag->setHotSpot(QPoint(width() / 2, height() / 2));
+    
+    // Execute the drag operation
+    drag->exec(Qt::MoveAction);
 }

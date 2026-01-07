@@ -12,6 +12,9 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 
+class QDragEnterEvent;
+class QDropEvent;
+
 class SubstateDisplayWidget;
 class SettingParameter;
 
@@ -75,17 +78,8 @@ signals:
      * @param fieldName The name of the field */
     void use3rdDimensionRequested(const std::string& fieldName);
 
-    /** @brief Signal emitted when a field is requested to be used as 2D visualization.
-     * 
-     * @param fieldName The name of the field */
-    void use2DRequested(const std::string& fieldName);
-
-    /** @brief Signal emitted when custom colors should be applied to visualization.
-     * 
-     * Works in both 2D and 3D modes.
-     * 
-     * @param fieldName The name of the field */
-    void applyCustomColorsRequested(const std::string& fieldName);
+    /// @brief Signal emitted when a field is requested to be used in colorring. It is returning names of all selected substates
+    void useSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
 
     /** @brief Signal emitted when deactivation of substate is requested.
      * 
@@ -134,11 +128,6 @@ private slots:
      * @param maxColor The new maximum color (hex string or empty) */
     void onColorsChanged(const std::string& fieldName, const std::string& minColor, const std::string& maxColor);
 
-    /** @brief Handle visualization refresh request from SubstateDisplayWidget.
-     * 
-     * Refreshes the visualization when colors, min/max values, or other settings change. */
-    void onVisualizationRefreshRequested();
-
     /** @brief Handle noValue changes from SubstateDisplayWidget.
      * 
      * Updates the substateInfo in SettingParameter when user changes noValue.
@@ -156,12 +145,33 @@ private slots:
     void onUse2DCheckboxChanged(const std::string& fieldName);
 
 public slots:
-    /** @brief Uncheck all use2D checkboxes. */
+    /// @brief Uncheck all use2D checkboxes. */
     void uncheckAllUse2DCheckboxes();
 
+    /// @brief Informs about changes in substat colloring
+    void onUseSubstateColorringRequested(const std::string &fieldName);
+
+protected:
+    /// @brief Override drag enter event for drag-and-drop support
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    
+    /// @brief Override drop event for drag-and-drop support  
+    void dropEvent(QDropEvent* event) override;
+
 private:
-    /** @brief Clear all substate widgets. */
+    /// @brief Clear all substate widgets.
     void clearWidgets();
+    
+    /** @brief Reorder widgets based on drag and drop operation.
+     * 
+     * @param draggedField The field name being dragged
+     * @param dropPosition The position where the widget was dropped */
+    void reorderWidgets(const std::string& draggedField, const QPoint& dropPosition);
+    
+    /** @brief Save the current field order to SettingParameter.
+     * 
+     * Updates the order field in SubstateInfo based on current widget layout. */
+    void saveFieldOrder();
 
     QScrollArea* m_scrollArea;
     QWidget* m_containerWidget;

@@ -5,7 +5,7 @@ The Visualizer application supports various command-line arguments for automated
 ## Usage
 
 ```bash
-./QtVtkViewer [CONFIG_FILE] [OPTIONS]
+./OOpenCal-Viewer [CONFIG_FILE] [OPTIONS]
 ```
 
 ## Positional Arguments
@@ -15,7 +15,7 @@ Path to a configuration file to load at startup. If provided, the visualizer wil
 
 **Example:**
 ```bash
-./QtVtkViewer /path/to/config.txt
+./OOpenCal-Viewer /path/to/config.txt
 ```
 
 ## Optional Arguments
@@ -25,7 +25,7 @@ Load a custom model plugin from the specified path. This argument can be repeate
 
 **Example:**
 ```bash
-./QtVtkViewer --loadModel=/path/to/plugin1.so --loadModel=/path/to/plugin2.so
+./OOpenCal-Viewer --loadModel=/path/to/plugin1.so --loadModel=/path/to/plugin2.so
 ```
 
 ### `--startingModel=<NAME>`
@@ -33,7 +33,7 @@ Start the visualizer with a specific model. The model name must match a register
 
 **Example:**
 ```bash
-./QtVtkViewer config.txt --startingModel=MyCustomModel
+./OOpenCal-Viewer config.txt --startingModel=MyCustomModel
 ```
 
 **Note:** When this option is used, the specified model will be selected in the GUI menu automatically.
@@ -43,7 +43,7 @@ Jump directly to a specific simulation step. The step number must be valid for t
 
 **Example:**
 ```bash
-./QtVtkViewer config.txt --step=100
+./OOpenCal-Viewer config.txt --step=100
 ```
 
 ### `--generateMoviePath=<PATH>`
@@ -51,7 +51,7 @@ Generate a video by running through all simulation steps. This is useful for aut
 
 **Example:**
 ```bash
-./QtVtkViewer config.txt --generateMoviePath=/tmp/output.ogv
+./OOpenCal-Viewer config.txt --generateMoviePath=/tmp/output.ogv
 ```
 
 **Note:** When this option is used, the GUI window is not displayed.
@@ -61,7 +61,7 @@ Generate an image of the current step and save it to the specified path. The ima
 
 **Example:**
 ```bash
-./QtVtkViewer config.txt --step=50 --generateImagePath=/tmp/step50.png
+./OOpenCal-Viewer config.txt --step=50 --generateImagePath=/tmp/step50.png
 ```
 
 **Note:** When this option is used, the GUI window is not displayed.
@@ -71,44 +71,26 @@ Exit the application after processing the last step. This is particularly useful
 
 **Example:**
 ```bash
-./QtVtkViewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep
-```
-
-### `--silent`
-Suppress information dialogs and most message boxes. Since silent mode is now the default behaviour, passing `--silent` only prints a warning reminding you of this fact.
-
-**Example:**
-```bash
-./QtVtkViewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep --silent
-```
-
-**Note:** When silent mode is enabled, only critical errors are shown. The application still exits with appropriate status codes. If you need confirmation dialogs, use `--loud`.
-
-### `--loud`
-Enable confirmation/info dialogs even when running from command line. This is useful when you expect interactive prompts.
-
-**Example:**
-```bash
-./QtVtkViewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep --loud
+./OOpenCal-Viewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep
 ```
 
 ## Examples
 
 ### Example 1: Load configuration and start with specific model
 ```bash
-./QtVtkViewer config.txt --startingModel=Ball
+./OOpenCal-Viewer config.txt --startingModel=Ball
 ```
 This loads the configuration file and automatically selects the "Ball" model.
 
 ### Example 2: Generate a movie for testing
 ```bash
-./QtVtkViewer config.txt --generateMoviePath=/tmp/test_output.ogv --exitAfterLastStep
+./OOpenCal-Viewer config.txt --generateMoviePath=/tmp/test_output.ogv --exitAfterLastStep
 ```
 This runs through all steps, generates a video, and exits automatically.
 
 ### Example 3: Load custom plugins and start with one
 ```bash
-./QtVtkViewer config.txt \
+./OOpenCal-Viewer config.txt \
   --loadModel=/path/to/custom_plugin1.so \
   --loadModel=/path/to/custom_plugin2.so \
   --startingModel=CustomPlugin1
@@ -117,21 +99,9 @@ This loads two custom plugins and starts with the first one.
 
 ### Example 4: Jump to specific step and generate image
 ```bash
-./QtVtkViewer config.txt --step=75 --generateImagePath=/tmp/step75.png --exitAfterLastStep
+./OOpenCal-Viewer config.txt --step=75 --generateImagePath=/tmp/step75.png --exitAfterLastStep
 ```
 This loads the configuration, jumps to step 75, generates an image, and exits.
-
-### Example 5: Batch processing with default silent mode
-```bash
-./QtVtkViewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep
-```
-This generates a video in silent mode without any console output or error dialogs.
-
-### Example 6: Batch processing with loud mode
-```bash
-./QtVtkViewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep --loud
-```
-This generates a video with confirmation dialogs.
 
 ## Current Behavior
 
@@ -154,6 +124,5 @@ The parsed arguments are applied in `MainWindow::applyCommandLineOptions()` meth
 - All paths should be absolute or relative to the current working directory.
 - Model names are case-sensitive and must match exactly as registered in the application.
 - When using `--startingModel`, the model must be loaded before the configuration file is processed. The data will be reloaded with the new model.
-- Silent mode (`--silent`) suppresses console output but does not suppress critical system errors.
 - Image format is automatically determined by the file extension (e.g., `.png`, `.jpg`, `.bmp`).
 - Video generation uses 1 FPS by default for testing purposes.

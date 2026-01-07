@@ -149,15 +149,7 @@ signals:
     /** @brief Signal emitted when "Use as 2D" button is clicked.
      * 
      * @param fieldName The name of the field */
-    void use2DRequested(const std::string& fieldName);
-
-    /** @brief Signal emitted when "Apply Custom Colors" button is clicked.
-     * 
-     * Applies custom colors (min/max color gradient) to the current visualization.
-     * Works in both 2D and 3D modes.
-     * 
-     * @param fieldName The name of the field */
-    void applyCustomColorsRequested(const std::string& fieldName);
+    void useSubstateColorringRequested(const std::string& fieldName);
 
     /** @brief Signal emitted when min or max values change.
      * 
@@ -220,7 +212,7 @@ private slots:
     void onCalculateMinimumGreaterThanZeroAndMaximum();
 
     /// @brief Handle "Use as 2D" button click
-    void onUse2DClicked();
+    void onUseSubstateColorring();
 
 protected:
     /// @brief Override context menu event to add custom actions.
@@ -228,6 +220,10 @@ protected:
 
     /// @brief Override event filter to intercept right-click on child widgets.
     bool eventFilter(QObject* obj, QEvent* event) override;
+
+    /// @brief Override mouse events for drag-and-drop support.
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
 
 private:
     /// @brief Connect signals to slots.
@@ -262,6 +258,11 @@ private:
 
     /// @brief Handle noValue checkbox state change
     void onNoValueCheckBoxChanged();
+
+    /// @brief Start drag operation for reordering
+    void startDrag();
+
+    QPoint m_dragStartPosition;
 
     Ui::SubstateDisplayWidget *ui;
     

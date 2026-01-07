@@ -6,6 +6,9 @@
 #include <QLabel>
 #include <QFrame>
 #include <QPushButton>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include "SubstatesDockWidget.h"
 #include "SubstateDisplayWidget.h"
 #include "visualiser/SettingParameter.h"
@@ -33,6 +36,9 @@ SubstatesDockWidget::SubstatesDockWidget(QWidget* parent)
     // Initialize will be called after UI setup in MainWindow
     // Set initial size - narrower for two-column layout
     setMinimumWidth(285);
+    
+    // Enable drag and drop
+    setAcceptDrops(true);
 }
 
 void SubstatesDockWidget::initializeFromUI()
@@ -85,31 +91,15 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
         }
 
         // Connect signals
-        connect(widget, &SubstateDisplayWidget::use3rdDimensionRequested,
-                this, &SubstatesDockWidget::use3rdDimensionRequested);
-        connect(widget, &SubstateDisplayWidget::use2DRequested,
-                this, [this, field](const std::string& fieldName) {
-                    // Handle exclusive checkbox behavior
-                    this->onUse2DCheckboxChanged(fieldName);
-                    // Forward the signal
-                    emit use2DRequested(fieldName);
-                });
-        connect(widget, &SubstateDisplayWidget::applyCustomColorsRequested,
-                this, &SubstatesDockWidget::applyCustomColorsRequested);
-        connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged),
-                this, &SubstatesDockWidget::onMinMaxValuesChanged);
-        connect(widget, &SubstateDisplayWidget::calculateMinimumRequested,
-                this, &SubstatesDockWidget::onCalculateMinimumRequested);
-        connect(widget, &SubstateDisplayWidget::calculateMinimumGreaterThanZeroRequested,
-                this, &SubstatesDockWidget::onCalculateMinimumGreaterThanZeroRequested);
-        connect(widget, &SubstateDisplayWidget::calculateMaximumRequested,
-                this, &SubstatesDockWidget::onCalculateMaximumRequested);
-        connect(widget, &SubstateDisplayWidget::colorsChanged,
-                this, &SubstatesDockWidget::onColorsChanged);
-        connect(widget, QOverload<const std::string&, double, bool>::of(&SubstateDisplayWidget::noValueChanged),
-                this, &SubstatesDockWidget::onNoValueChanged);
-        connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested,
-                this, &SubstatesDockWidget::onVisualizationRefreshRequested);
+        connect(widget, &SubstateDisplayWidget::use3rdDimensionRequested, this, &SubstatesDockWidget::use3rdDimensionRequested);
+        connect(widget, &SubstateDisplayWidget::useSubstateColorringRequested, this, &SubstatesDockWidget::onUseSubstateColorringRequested);
+        connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged), this, &SubstatesDockWidget::onMinMaxValuesChanged);
+        connect(widget, &SubstateDisplayWidget::calculateMinimumRequested, this, &SubstatesDockWidget::onCalculateMinimumRequested);
+        connect(widget, &SubstateDisplayWidget::calculateMinimumGreaterThanZeroRequested, this, &SubstatesDockWidget::onCalculateMinimumGreaterThanZeroRequested);
+        connect(widget, &SubstateDisplayWidget::calculateMaximumRequested, this, &SubstatesDockWidget::onCalculateMaximumRequested);
+        connect(widget, &SubstateDisplayWidget::colorsChanged, this, &SubstatesDockWidget::onColorsChanged);
+        connect(widget, QOverload<const std::string&, double, bool>::of(&SubstateDisplayWidget::noValueChanged), this, &SubstatesDockWidget::onNoValueChanged);
+        connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested, this, &SubstatesDockWidget::visualizationRefreshRequested);
 
         m_containerLayout->addWidget(widget);
         m_substateWidgets[field] = widget;
@@ -125,7 +115,7 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
     m_containerLayout->addStretch();
     
     // Add deactivate button at the bottom (only create once)
-    if (!m_deactivateButton)
+    if (! m_deactivateButton)
     {
         m_deactivateButton = new QPushButton("Deactivate Substate");
         m_deactivateButton->setMaximumHeight(24);
@@ -133,6 +123,20 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
         connect(m_deactivateButton, &QPushButton::clicked, this, &SubstatesDockWidget::onDeactivateClicked);
     }
     m_containerLayout->addWidget(m_deactivateButton);
+}
+
+void SubstatesDockWidget::onUseSubstateColorringRequested(const std::string&)
+{
+    std::vector<std::string> fieldNames;
+    for (auto& [name, widget] : m_substateWidgets)
+    {
+        if (widget->isUse2DChecked())
+        {
+            fieldNames.push_back(name);
+        }
+    }
+
+    emit useSubstatesColorringRequested(fieldNames);
 }
 
 void SubstatesDockWidget::updateCellValues(SettingParameter* settingParameter, int row, int col, class ISceneWidgetVisualizer* visualizer)
@@ -192,9 +196,6 @@ void SubstatesDockWidget::clearWidgets()
     // - First 2 items: label + separator (header)
     // - Last 2 items: stretch + deactivate button (footer)
     // We need to count total items and remove only the middle ones (substates)
-    
-    // Count total items
-    int totalItems = m_containerLayout->count();
     
     // Remove items from index 2 to (totalItems - 2)
     // This preserves header (0-1) and footer (totalItems-2 to totalItems-1)
@@ -390,13 +391,6 @@ void SubstatesDockWidget::onColorsChanged(const std::string& fieldName, const st
     }
 }
 
-void SubstatesDockWidget::onVisualizationRefreshRequested()
-{
-    // Emit signal to request visualization refresh
-    // This will be handled by MainWindow/SceneWidget which has access to the gridActor
-    emit visualizationRefreshRequested();
-}
-
 void SubstatesDockWidget::setActiveSubstate(const std::string& fieldName)
 {
     // Deactivate all widgets first
@@ -465,5 +459,140 @@ void SubstatesDockWidget::uncheckAllUse2DCheckboxes()
     for (auto& [name, widget] : m_substateWidgets)
     {
         widget->setUse2DChecked(false);
+    }
+}
+
+void SubstatesDockWidget::dragEnterEvent(QDragEnterEvent* event)
+{
+    // Accept the drag if it contains substate field data
+    if (event->mimeData()->hasFormat("application/x-substate-field"))
+    {
+        event->acceptProposedAction();
+    }
+}
+
+void SubstatesDockWidget::dropEvent(QDropEvent* event)
+{
+    // Get the dragged field name
+    QByteArray fieldData = event->mimeData()->data("application/x-substate-field");
+    std::string draggedField = QString::fromUtf8(fieldData).toStdString();
+    
+    // Reorder the widgets
+    reorderWidgets(draggedField, event->pos());
+    
+    event->acceptProposedAction();
+}
+
+void SubstatesDockWidget::reorderWidgets(const std::string& draggedField, const QPoint& dropPosition)
+{
+    // Find the dragged widget
+    auto draggedIt = m_substateWidgets.find(draggedField);
+    if (draggedIt == m_substateWidgets.end())
+        return;
+    
+    SubstateDisplayWidget* draggedWidget = draggedIt->second;
+    
+    // Find the widget at the drop position
+    QWidget* dropWidget = m_containerWidget->childAt(dropPosition);
+    if (!dropWidget)
+        return;
+    
+    // Find which substate widget was dropped on
+    std::string targetField;
+    for (const auto& [name, widget] : m_substateWidgets)
+    {
+        if (widget == dropWidget || widget->isAncestorOf(dropWidget))
+        {
+            targetField = name;
+            break;
+        }
+    }
+    
+    if (targetField.empty() || targetField == draggedField)
+        return;
+    
+    // Get current positions in layout
+    int draggedIndex = m_containerLayout->indexOf(draggedWidget);
+    int targetIndex = m_containerLayout->indexOf(m_substateWidgets[targetField]);
+    
+    if (draggedIndex == -1 || targetIndex == -1)
+        return;
+    
+    // Remove the dragged widget from its current position
+    m_containerLayout->removeWidget(draggedWidget);
+    
+    // Insert it at the new position
+    m_containerLayout->insertWidget(targetIndex, draggedWidget);
+    
+    // Update separators by finding and removing old ones, then adding new ones
+    // Remove all existing separators from the layout
+    for (int i = m_containerLayout->count() - 1; i >= 0; --i)
+    {
+        QLayoutItem* item = m_containerLayout->itemAt(i);
+        if (QFrame* frame = qobject_cast<QFrame*>(item->widget()))
+        {
+            if (frame->frameShape() == QFrame::HLine)
+            {
+                m_containerLayout->removeItem(item);
+                delete frame;
+            }
+        }
+    }
+    
+    // Add new separators between widgets
+    std::vector<SubstateDisplayWidget*> widgetList;
+    for (const auto& [name, widget] : m_substateWidgets)
+    {
+        widgetList.push_back(widget);
+    }
+    
+    // Re-add separators in the new order
+    for (size_t i = 0; i < widgetList.size(); ++i)
+    {
+        int widgetIndex = m_containerLayout->indexOf(widgetList[i]);
+        if (widgetIndex != -1 && i < widgetList.size() - 1)
+        {
+            m_containerLayout->insertWidget(widgetIndex + 1, createSeparator());
+        }
+    }
+    
+    // Save the new order to SettingParameter
+    saveFieldOrder();
+}
+
+void SubstatesDockWidget::saveFieldOrder()
+{
+    if (!m_currentSettingParameter)
+        return;
+    
+    // Get the current order of widgets from the layout
+    std::vector<std::string> orderedFields;
+    
+    // Iterate through the layout to find substate widgets in order
+    for (int i = 0; i < m_containerLayout->count(); ++i)
+    {
+        QLayoutItem* item = m_containerLayout->itemAt(i);
+        QWidget* widget = item->widget();
+        
+        // Check if this widget is a SubstateDisplayWidget
+        for (const auto& [name, substateWidget] : m_substateWidgets)
+        {
+            if (substateWidget == widget)
+            {
+                orderedFields.push_back(name);
+                break;
+            }
+        }
+    }
+    
+    // Update the order in SettingParameter's substateInfo
+    for (size_t i = 0; i < orderedFields.size(); ++i)
+    {
+        const std::string& fieldName = orderedFields[i];
+        auto it = m_currentSettingParameter->substateInfo.find(fieldName);
+        if (it != m_currentSettingParameter->substateInfo.end())
+        {
+            it->second.order = static_cast<int>(i);
+        }
     }
 }

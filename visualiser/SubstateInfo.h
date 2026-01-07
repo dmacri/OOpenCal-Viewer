@@ -18,4 +18,5 @@ struct SubstateInfo
     bool noValueEnabled = false;                                ///< Whether noValue filtering is enabled (checkbox state)
     std::string minColor = "";                                  ///< Hex color for minimum value (e.g., "#000011", empty if not set)
     std::string maxColor = "";                                  ///< Hex color for maximum value (e.g., "#0011ff", empty if not set)
+    int order = -1;                                             ///< Display order for the field (-1 means not set, use default order)
 };
