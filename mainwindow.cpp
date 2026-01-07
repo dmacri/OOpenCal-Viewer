@@ -163,7 +163,6 @@ MainWindow::MainWindow(QWidget* parent)
     updateRecentDirectoriesMenu();
 
     enterNoConfigurationFileMode();
-    updateSilentModeUi(isSilentModeEnabled());
 }
 
 void MainWindow::configureUIElements(const QString& configFileName)
@@ -210,54 +209,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
     connect(ui->actionFlatSceneBackground, &QAction::triggered, this, &MainWindow::onFlatSceneBackgroundToggled);
 
-    // Settings actions
-    connect(ui->actionSilentMode, &QAction::toggled, this, &MainWindow::onSilentModeToggled);
     /// Model selection actions are connected dynamically in createModelMenuActions()
-}
-
-void MainWindow::setSilentMode(bool newSilentMode)
-{
-    if (! ui->actionSilentMode)
-    {
-        return;
-    }
-
-    if (ui->actionSilentMode->isChecked() == newSilentMode)
-    {
-        updateSilentModeUi(newSilentMode);
-        return;
-    }
-
-    {
-        QSignalBlocker blocker(ui->actionSilentMode);
-        ui->actionSilentMode->setChecked(newSilentMode);
-    }
-
-    updateSilentModeUi(newSilentMode);
-}
-
-bool MainWindow::isSilentModeEnabled() const
-{
-    if (! ui->actionSilentMode)
-    {
-        return false;
-    }
-    return ui->actionSilentMode->isChecked();
-}
-
-void MainWindow::updateSilentModeUi(bool checked)
-{
-    if (!ui->actionSilentMode)
-    {
-        return;
-    }
-
-    const QString statusText = checked
-        ? tr("Silent mode enabled: confirmation dialogs are suppressed.")
-        : tr("Silent mode disabled: confirmation dialogs will be shown.");
-
-    ui->actionSilentMode->setStatusTip(statusText);
-    ui->actionSilentMode->setToolTip(statusText);
 }
 
 void MainWindow::configureButtons()
@@ -311,13 +263,11 @@ void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> avail
     changeWhichButtonsAreEnabled();
     
     const auto lastStepAvailableInAvailableSteps = std::ranges::contains(availableSteps, totalSteps());
-    if (! lastStepAvailableInAvailableSteps && ! isSilentModeEnabled())
+    if (! lastStepAvailableInAvailableSteps)
     {
-        QMessageBox::warning(this,
-                             tr("Number of steps mismatch"),
-                             tr("Total number of steps from config file is %1, but last step number from index file is %2")
-                                 .arg(totalSteps())
-                                 .arg(availableSteps.back()));
+        std::cerr << tr("[Warning] Number of steps mismatch: total number of steps from config file is %1, but last step number from index file is %2")
+                         .arg(totalSteps())
+                         .arg(availableSteps.back()).toStdString() << std::endl;
     }
 }
 
@@ -430,11 +380,7 @@ void MainWindow::exportVideoDialog()
     try
     {
         recordVideoToFile(outputFilePath, fps);
-        if (! isSilentModeEnabled())
-        {
-            QMessageBox::information(this, tr("Export Complete"),
-                                     tr("Video exported successfully to:\n%1").arg(outputFilePath));
-        }
+        QMessageBox::information(this, tr("Export Complete"), tr("Video exported successfully to:\n%1").arg(outputFilePath));
     }
     catch (const std::exception& e)
     {
@@ -614,38 +560,18 @@ bool MainWindow::handleMissingStepDuringPlayback(StepIndex targetStep, PlayingDi
         return false;
     }
     
-    // In silent mode, just skip to the next available step
-    if (isSilentModeEnabled())
-    {
-        currentStep = nextStep;
-        return true;
-    }
-    
     // In normal mode, ask user what to do
-    const QString nextStepText = (direction == PlayingDirection::Forward) 
-        ? tr("next available step is %1").arg(nextStep)
-        : tr("previous available step is %1").arg(nextStep);
-    
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this,
-        tr("Missing Step During Playback"),
-        tr("Step %1 is not available.\nThe %2.\n\nDo you want to continue playback skipping to the next available step, "
-           "or stop playback at the current step?")
-            .arg(targetStep)
-            .arg(nextStepText),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::Yes
-    );
-    
-    if (reply == QMessageBox::Yes)
-    {
-        currentStep = nextStep;
-        return true;
-    }
-    else
-    {
-        return false; // Stop playback
-    }
+    const QString nextStepText = (direction == PlayingDirection::Forward)
+                                     ? tr("next available step is %1").arg(nextStep)
+                                     : tr("previous available step is %1").arg(nextStep);
+
+    std::cerr << tr("Missing Step During Playback").toStdString()
+              << tr("Step %1 is not available.\nThe %2.\n\nDo you want to continue playback skipping to the next available step, "
+                    "or stop playback at the current step?")
+                     .arg(targetStep)
+                     .arg(nextStepText).toStdString() << endl;
+    currentStep = nextStep;
+    return true;
 }
 
 void MainWindow::onPlayButtonClicked()
@@ -785,12 +711,8 @@ bool MainWindow::setPositionOnWidgets(StepIndex stepPosition, bool updateSlider)
     }
     catch (const std::exception& e)
     {
-        if (! isSilentModeEnabled())
-        {
-            QMessageBox::warning(this,
-                                 "Changing position error",
-                                 tr("It was impossible to change position to %1, because:\n").arg(stepPosition) + e.what());
-        }
+        std::cerr << "Changing position error: " << tr("It was impossible to change position to %1, because: ").arg(stepPosition).toStdString() << e.what() << std::endl;
+
         currentStep = stepBeforeTrying2ChangePosition;
         changingPositionSuccess = false;
     }
@@ -883,16 +805,12 @@ void MainWindow::switchToModel(const QString& modelName)
 
         updateMenu2ShowTheSelectedModeAsActive(modelName, modelActionGroup);
 
-        if (! isSilentModeEnabled())
-        {
-            QMessageBox::
-                information(this,
-                            tr("Model Changed"),
-                            tr("Successfully switched to %1 model, but no data was reloaded from files.\n"
-                               "Use 'Reload Data' (F5), or open another configuration file to load data files.\n"
-                               "Notice: Model has to be compatible with configuration file, if not - the behaviour is undefined")
-                                .arg(modelName));
-        }
+        std::cout << "[DEBUG] Model Changed: " <<
+            tr("Successfully switched to %1 model, but no data was reloaded from files.\n"
+               "Use 'Reload Data' (F5), or open another configuration file to load data files.\n"
+               "Notice: Model has to be compatible with configuration file, if not - the behaviour is undefined")
+                .arg(modelName).toStdString() << std::endl;
+
     }
     catch (const std::exception& e)
     {
@@ -906,7 +824,7 @@ void MainWindow::switchToModel(const QString& modelName)
 void MainWindow::clearActiveSubstates()
 {
     // Clear active substates for both 2D and 3D visualization
-    ui->sceneWidget->setActiveSubstateFor2D("");
+    ui->sceneWidget->setActiveSubstatesForColorring({});
     ui->sceneWidget->setActiveSubstateFor3D("");
     activeSubstateFor3D = "";
 }
@@ -919,17 +837,12 @@ void MainWindow::updateSubstateDockeWidget()
         settingParam->initializeSubstateInfo();
         ui->substatesDockWidget->updateSubstates(settingParam);
 
+        // TODO: GB: Do we really need to send this to MainWindow? Maybe SubstatesDockWidget can directly control SceneWidget?
         // Connect signal for 3D visualization request
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3rdDimensionRequested,
-                this, &MainWindow::onUse3rdDimensionRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::use2DRequested,
-                this, &MainWindow::onUse2DRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::applyCustomColorsRequested,
-                this, &MainWindow::onApplyCustomColorsRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::deactivateRequested,
-                this, &MainWindow::onDeactivateRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::visualizationRefreshRequested,
-                ui->sceneWidget, &SceneWidget::refreshVisualization);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3rdDimensionRequested, this, &MainWindow::onUse3rdDimensionRequested);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::useSubstatesColorringRequested, this, &MainWindow::onUseSubstatesColorringRequested);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::deactivateRequested, this, &MainWindow::onDeactivateRequested);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::visualizationRefreshRequested, ui->sceneWidget, &SceneWidget::refreshVisualization);
     }
 }
 
@@ -945,12 +858,7 @@ void MainWindow::onReloadDataRequested()
         // Update substate dock widget after reload
         updateSubstateDockeWidget();
 
-        if (! isSilentModeEnabled())
-        {
-            QMessageBox::information(this, tr("Data Reloaded"),
-                                     tr("Data files successfully reloaded for model: %1")
-                                        .arg(QString::fromStdString(ui->sceneWidget->getCurrentModelName())));
-        }
+        std::cout << "[DEBUG] Data Reloaded: Data files successfully reloaded for model: " << ui->sceneWidget->getCurrentModelName() << std::endl;
     }
     catch (const std::exception& e)
     {
@@ -1023,12 +931,7 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Add to recent files
         addToRecentFiles(configFileName);
 
-        if (! isSilentModeEnabled())
-        {
-            QMessageBox::information(this,
-                                     tr("Configuration Loaded"),
-                                     tr("Successfully loaded configuration:\n%1").arg(configFileName));
-        }
+        std::cout << "[DEBUG] Configuration Loaded: Successfully loaded configuration: " << configFileName.toStdString() << std::endl;
     }
     catch (const std::exception& e)
     {
@@ -1041,11 +944,6 @@ void MainWindow::onColorSettingsRequested()
     auto* colorSettings = new ColorSettingsDialog(this);
 
     colorSettings->show();
-}
-
-void MainWindow::onSilentModeToggled(bool checked)
-{
-    setSilentMode(checked);
 }
 
 void MainWindow::enterNoConfigurationFileMode()
@@ -1163,10 +1061,6 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
 {
     // Show wait cursor during model loading
     WaitCursorGuard waitCursor("Loading model from directory...");
-    
-    // Enable silent mode temporarily to suppress dialogs during loading
-    const bool previousSilentMode = isSilentModeEnabled();
-    setSilentMode(true);
 
     try
     {
@@ -1192,7 +1086,6 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         if (! result.success)
         {
             progress.close();
-            setSilentMode(previousSilentMode);
 
             // If compilation was attempted and failed, show detailed error dialog
             if (result.compilationResult.has_value())
@@ -1217,7 +1110,6 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         if (! pluginLoader.loadPlugin(result.compiledModulePath, /*overridePlugin=*/true))
         {
             progress.close();
-            setSilentMode(previousSilentMode);
 
             QMessageBox::critical(this,
                                   tr("Module Load Failed"),
@@ -1253,7 +1145,6 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         if (!fs::exists(headerPath))
         {
             progress.close();
-            setSilentMode(previousSilentMode);
 
             QMessageBox::critical(this, tr("Configuration Load Failed"),
                 tr("Header.txt not found in model directory:\n%1").arg(QString::fromStdString(actualModelDir.string())));
@@ -1268,26 +1159,17 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
         addToRecentDirectories(QString::fromStdString(actualModelDir.string()));
 
         progress.close();
-        setSilentMode(previousSilentMode);
 
-        // Show success message only if not in silent mode
-        if (! isSilentModeEnabled())
-        {
-            QMessageBox::information(this,
-                                     tr("Model Changed"),
-                                     tr("Model '%1' loaded successfully from:\n%2\n\nConfiguration loaded and ready to use.")
-                                         .arg(QString::fromStdString(pluginModelName))
-                                         .arg(QString::fromStdString(actualModelDir.string())));
-        }
+        std::cout << "[DEBUG] " << tr("Model Changed").toStdString()
+                  << tr("Model '%1' loaded successfully from:\n%2\n\nConfiguration loaded and ready to use.")
+                         .arg(QString::fromStdString(pluginModelName))
+                         .arg(QString::fromStdString(actualModelDir.string())).toStdString() << std::endl;
     }
     catch (const std::exception& e)
     {
         QMessageBox::critical(this, tr("Error"),
             tr("An error occurred while loading the model:\n%1").arg(e.what()));
     }
-
-    // Restore silent mode (cursor restored automatically by WaitCursorGuard destructor)
-    setSilentMode(previousSilentMode);
 }
 
 void MainWindow::createViewModeActionGroup()
@@ -1317,12 +1199,7 @@ void MainWindow::on2DModeRequested()
     // Synchronize flat scene background checkbox (disabled in 2D mode)
     syncFlatSceneBackgroundCheckbox();
 
-    if (! isSilentModeEnabled())
-    {
-        QMessageBox::information(this,
-                                 tr("View Mode Changed"),
-                                 tr("Switched to 2D mode.\nCamera is now in top-down view with rotation disabled."));
-    }
+    std::cout << "[DEBUG] View Mode Changed: Switched to 2D mode.\nCamera is now in top-down view with rotation disabled." << std::endl;
 }
 
 void MainWindow::on3DModeRequested()
@@ -1342,12 +1219,7 @@ void MainWindow::on3DModeRequested()
     // Synchronize flat scene background checkbox (enabled in 3D mode)
     syncFlatSceneBackgroundCheckbox();
 
-    if (! isSilentModeEnabled())
-    {
-        QMessageBox::information(this,
-                                 tr("View Mode Changed"),
-                                 tr("Switched to 3D mode.\nYou can now rotate the camera using mouse or the sliders below."));
-    }
+    std::cout << "[DEBUG] View Mode Changed: Switched to 3D mode.\nYou can now rotate the camera using mouse or the sliders below." << std::endl;
 }
 
 void MainWindow::onGridLinesToggled(bool checked)
@@ -1758,9 +1630,6 @@ void MainWindow::setWidgetsEnabledState(bool enabled)
 
 void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
 {
-    // Store silent mode flag
-    setSilentMode(cmdParser.isSilentMode());
-
     // Set starting model if specified
     if (cmdParser.getStartingModel())
     {
@@ -1920,10 +1789,7 @@ void MainWindow::initializeReductionManager(const QString& configFileName, std::
     {
         reductionManager.reset();
         ui->actionShow_reduction->setEnabled(false);
-        if (ui->actionSilentMode->isChecked())
-            std::cerr << "Error initializing ReductionManager: " << e.what() << std::endl;
-        else
-            QMessageBox::warning(this, tr("Reduction initialization error"), tr("Details: ") + e.what());
+        std::cerr << "Error initializing ReductionManager: " << e.what() << std::endl;
     }
 }
 
@@ -2241,7 +2107,7 @@ void MainWindow::onUse3rdDimensionRequested(const std::string& fieldName)
     // Cursor restored automatically by WaitCursorGuard destructor
 }
 
-void MainWindow::onUse2DRequested(const std::string& fieldName)
+void MainWindow::onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames)
 {
     // Show wait cursor during visualization change
     WaitCursorGuard waitCursor("Updating substate coloring...");
@@ -2249,31 +2115,8 @@ void MainWindow::onUse2DRequested(const std::string& fieldName)
     // Set the active substate for 2D coloring (works in both 2D and 3D modes)
     // In 2D mode: controls the cell coloring
     // In 3D mode: controls the surface coloring (while 3D button controls height)
-    ui->sceneWidget->setActiveSubstateFor2D(fieldName);
-    
-    // Highlight the active substate in the dock widget
-    ui->substatesDockWidget->setActiveSubstate(fieldName);
-    
-    // Immediately refresh visualization to show the change
-    ui->sceneWidget->refreshVisualization();
-    
-    // Cursor restored automatically by WaitCursorGuard destructor
-}
+    ui->sceneWidget->setActiveSubstatesForColorring(fieldNames);
 
-void MainWindow::onApplyCustomColorsRequested(const std::string& fieldName)
-{
-    // Show wait cursor during color application
-    WaitCursorGuard waitCursor("Applying custom colors...");
-
-    // Set the active substate for 2D visualization with custom colors in SceneWidget
-    ui->sceneWidget->setActiveSubstateFor2D(fieldName);
-    
-    // Highlight the active substate in the dock widget
-    ui->substatesDockWidget->setActiveSubstate(fieldName);
-    
-    // Immediately refresh visualization to show the change with custom colors
-    ui->sceneWidget->refreshVisualization();
-    
     // Cursor restored automatically by WaitCursorGuard destructor
 }
 
@@ -2283,7 +2126,7 @@ void MainWindow::onDeactivateRequested()
     WaitCursorGuard waitCursor("Deactivating substate visualization...");
 
     // Clear the active substate for 2D visualization in SceneWidget
-    ui->sceneWidget->setActiveSubstateFor2D("");
+    ui->sceneWidget->setActiveSubstatesForColorring({});
     
     // Clear highlight from all substates in the dock widget
     ui->substatesDockWidget->setActiveSubstate("");

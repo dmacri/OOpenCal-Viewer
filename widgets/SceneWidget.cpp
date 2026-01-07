@@ -194,8 +194,9 @@ void SceneWidget::applyCameraAngles()
     // Apply roll rotation (around Y axis)
     camera->Roll(cameraRoll);
 
-    // Apply pitch rotation (around Z axis)
-    camera->Pitch(cameraPitch);
+    // Apply pitch rotation (around Z axis) with clamping to avoid gimbal lock
+    double clampedPitch = std::clamp(cameraPitch, -89.9, 89.9);
+    camera->Pitch(clampedPitch);
 
     // Apply yaw rotation (around X axis)
     camera->Yaw(cameraYaw);
@@ -247,7 +248,10 @@ void SceneWidget::applyCameraAnglesPreservingZoom()
     const double clampedElevation = std::clamp(cameraElevation, -89.9, 89.9);
     camera->Elevation(clampedElevation);
     camera->Roll(cameraRoll);
-    camera->Pitch(cameraPitch);
+    
+    // Clamp pitch to avoid gimbal lock and flipping at ±90 degrees
+    const double clampedPitch = std::clamp(cameraPitch, -89.9, 89.9);
+    camera->Pitch(clampedPitch);
     camera->Yaw(cameraYaw);
 
     double rotatedPosition[3];
@@ -365,12 +369,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
             }
 
             // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
-            const SubstateInfo* colorSubstateInfo = &substateInfo;
-            if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
-            {
-                colorSubstateInfo = &settingParameter->substateInfo[activeSubstateFor2D];
-            }
-            
+            const auto colorSubstateInfos = getColorSubstateInfos();            
             sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY,
                                                               settingParameter->numberOfColumnX,
                                                               renderer,
@@ -378,14 +377,15 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                               activeSubstateFor3D,
                                                               substateInfo.minValue,
                                                               substateInfo.maxValue,
-                                                              colorSubstateInfo);
+                                                              colorSubstateInfos);
 
-            // Hide 2D grid lines and draw 3D grid lines on surface instead
+            // Handle 2D grid lines visibility
             if (actorBuildLine)
             {
-                actorBuildLine->SetVisibility(false);
+                actorBuildLine->SetVisibility(false); // Always hide 2D lines in 3D mode
             }
             
+            // Draw 3D grid lines on surface with proper visibility
             sceneWidgetVisualizerProxy->drawGridLinesOn3DSurface(settingParameter->numberOfRowsY,
                                                                  settingParameter->numberOfColumnX,
                                                                  lines,
@@ -393,8 +393,13 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                                  gridLinesOnSurfaceActor,
                                                                  activeSubstateFor3D,
                                                                  substateInfo.minValue,
-                                                                 substateInfo.maxValue,
-                                                                 colorSubstateInfo);
+                                                                 substateInfo.maxValue);
+            
+            // Apply visibility setting to 3D grid lines
+            if (gridLinesOnSurfaceActor)
+            {
+                gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+            }
 
             updateCameraPivotFromBounds();
             return;
@@ -402,13 +407,25 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     }
 
     // Fallback to regular 2D visualization
-    const SubstateInfo* substateInfo2D = nullptr;
-    if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
-    {
-        substateInfo2D = &settingParameter->substateInfo[activeSubstateFor2D];
-    }
-    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, substateInfo2D);
+    const auto colorSubstateInfos = getColorSubstateInfos();
+    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, colorSubstateInfos);
     updateCameraPivotFromBounds();
+}
+
+std::vector<const SubstateInfo*> SceneWidget::getColorSubstateInfos()
+{
+    std::vector<const SubstateInfo*> colorSubstateInfos;
+    if (! activeSubstatesForColorring.empty())
+    {
+        for (const auto& fieldName : activeSubstatesForColorring)
+        {
+            if (settingParameter->substateInfo.count(fieldName) > 0)
+            {
+                colorSubstateInfos.push_back(&settingParameter->substateInfo[fieldName]);
+            }
+        }
+    }
+    return colorSubstateInfos;
 }
 
 void SceneWidget::refreshVisualizationWithOptional3DSubstate()
@@ -428,19 +445,14 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
             }
 
             // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
-            const SubstateInfo* colorSubstateInfo = &substateInfo;
-            if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
-            {
-                colorSubstateInfo = &settingParameter->substateInfo[activeSubstateFor2D];
-            }
-            
+            const auto colorSubstateInfos = getColorSubstateInfos();            
             sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY,
                                                                     settingParameter->numberOfColumnX,
                                                                     gridActor,
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
                                                                     substateInfo.maxValue,
-                                                                    colorSubstateInfo);
+                                                                    colorSubstateInfos);
 
             // Refresh 3D grid lines on surface
             sceneWidgetVisualizerProxy->refreshGridLinesOn3DSurface(settingParameter->numberOfRowsY,
@@ -449,8 +461,13 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
                                                                     gridLinesOnSurfaceActor,
                                                                     activeSubstateFor3D,
                                                                     substateInfo.minValue,
-                                                                    substateInfo.maxValue,
-                                                                    colorSubstateInfo);
+                                                                    substateInfo.maxValue);
+
+            // Apply visibility setting to 3D grid lines
+            if (gridLinesOnSurfaceActor)
+            {
+                gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+            }
 
             updateCameraPivotFromBounds();
             return;
@@ -458,12 +475,8 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
     }
     
     // Fallback to regular 2D visualization
-    const SubstateInfo* substateInfo2D = nullptr;
-    if (!activeSubstateFor2D.empty() && settingParameter->substateInfo.count(activeSubstateFor2D) > 0)
-    {
-        substateInfo2D = &settingParameter->substateInfo[activeSubstateFor2D];
-    }
-    sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor, substateInfo2D);
+    const auto colorSubstateInfos = getColorSubstateInfos();
+    sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, gridActor, colorSubstateInfos);
     updateCameraPivotFromBounds();
 }
 
@@ -498,8 +511,19 @@ void SceneWidget::refreshGridColorFromSettings()
 {
     const auto color = ColorSettings::instance().gridColor();
 
-    actorBuildLine->GetProperty()->SetColor(toVtkColor(color).GetData());
-    actorBuildLine->GetProperty()->Modified();
+    // Apply color to 2D grid lines
+    if (actorBuildLine)
+    {
+        actorBuildLine->GetProperty()->SetColor(toVtkColor(color).GetData());
+        actorBuildLine->GetProperty()->Modified();
+    }
+    
+    // Apply color to 3D grid lines
+    if (gridLinesOnSurfaceActor)
+    {
+        gridLinesOnSurfaceActor->GetProperty()->SetColor(toVtkColor(color).GetData());
+        gridLinesOnSurfaceActor->GetProperty()->Modified();
+    }
 
     triggerRenderUpdate();
 }
@@ -1198,6 +1222,7 @@ void SceneWidget::clearScene()
     gridActor = vtkSmartPointer<vtkActor>::New();
     backgroundActor = vtkSmartPointer<vtkActor>::New();
     actorBuildLine = vtkSmartPointer<vtkActor2D>::New();
+    gridLinesOnSurfaceActor = vtkSmartPointer<vtkActor>::New();
 }
 
 void SceneWidget::loadNewConfiguration(const std::string& configFileName, int stepNumber)
@@ -1385,11 +1410,10 @@ void SceneWidget::setAxesWidgetVisible(bool visible)
 void SceneWidget::setGridLinesVisible(bool visible)
 {
     gridLinesVisible = visible;
-    if (actorBuildLine)
-    {
-        actorBuildLine->SetVisibility(visible);
-        triggerRenderUpdate();
-    }
+    
+    applyGridLinesSettings();
+    
+    triggerRenderUpdate();
 }
 
 void SceneWidget::setFlatSceneBackgroundVisible(bool visible)
@@ -1409,14 +1433,11 @@ void SceneWidget::setActiveSubstateFor3D(const std::string& fieldName)
     activeSubstateFor3D = fieldName;
 }
 
-void SceneWidget::setActiveSubstateFor2D(const std::string& fieldName)
-{
-    activeSubstateFor2D = fieldName;
-    // Refresh visualization to apply the new 2D substate only if settingParameter is initialized
-    if (! fieldName.empty())
-    {
-        refreshVisualization();
-    }
+void SceneWidget::setActiveSubstatesForColorring(const std::vector<std::string>& fieldNames)
+{    
+    activeSubstatesForColorring = fieldNames;
+
+    refreshVisualization();
 }
 
 void SceneWidget::refreshVisualization()
@@ -1617,12 +1638,37 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
 
 void SceneWidget::applyGridLinesSettings()
 {
-    // Apply the remembered grid lines visibility state and set semi-transparency
-    if (actorBuildLine)
+    // Check if we're in 3D substate mode
+    bool isIn3DMode = !activeSubstateFor3D.empty() && settingParameter && 
+                     settingParameter->substateInfo.count(activeSubstateFor3D) > 0 &&
+                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].minValue) &&
+                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].maxValue);
+    
+    if (isIn3DMode)
     {
-        actorBuildLine->SetVisibility(gridLinesVisible);
-        // Set grid lines to semi-transparent (50% opacity)
-        actorBuildLine->GetProperty()->SetOpacity(0.5);
+        // In 3D mode: apply settings only to 3D lines, hide 2D lines
+        if (gridLinesOnSurfaceActor)
+        {
+            gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+        }
+        if (actorBuildLine)
+        {
+            actorBuildLine->SetVisibility(false);
+        }
+    }
+    else
+    {
+        // In 2D mode: apply settings only to 2D lines with semi-transparency, hide 3D lines
+        if (actorBuildLine)
+        {
+            actorBuildLine->SetVisibility(gridLinesVisible);
+            // Set grid lines to semi-transparent (50% opacity)
+            actorBuildLine->GetProperty()->SetOpacity(0.5);
+        }
+        if (gridLinesOnSurfaceActor)
+        {
+            gridLinesOnSurfaceActor->SetVisibility(false);
+        }
     }
 }
 

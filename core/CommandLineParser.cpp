@@ -48,10 +48,6 @@ bool CommandLineParser::parse(int argc, char* argv[])
             .help("Silent mode: Skip displaying information dialogs (default behaviour)")
             .flag();
 
-        program.add_argument(ARG_LOUD)
-            .help("Loud mode: show informational and confirmation dialogs")
-            .flag();
-
         try
         {
             program.parse_args(argc, argv);
@@ -101,20 +97,10 @@ bool CommandLineParser::parse(int argc, char* argv[])
 
         exitAfterLastStep = program.is_used(ARG_EXIT_AFTER_LAST);
 
-        const bool requestedSilent = program.is_used(ARG_SILENT);
-        const bool requestedLoud   = program.is_used(ARG_LOUD);
-
-        if (requestedSilent)
+        if (const bool requestedSilent = program.is_used(ARG_SILENT))
         {
-            std::cerr << "Warning: --silent is already the default mode. Use --loud to re-enable confirmation dialogs." << std::endl;
+            std::cerr << "Warning: --silent is already the default mode. Using the flag has no effect." << std::endl;
         }
-
-        if (requestedSilent && requestedLoud)
-        {
-            std::cerr << "Warning: both --silent and --loud were provided. Loud mode will take precedence." << std::endl;
-        }
-
-        silentMode = ! requestedLoud;
 
         return true;
     }
@@ -143,7 +129,6 @@ void CommandLineParser::printHelp() const
               << std::format("  {: <{}} Go to specific step directly\n", ARG_STEP, WIDTH)
               << std::format("  {: <{}} Exit after last step\n", ARG_EXIT_AFTER_LAST, WIDTH)
               << std::format("  {: <{}} Suppress error dialogs and messages (default)\n", ARG_SILENT, WIDTH)
-              << std::format("  {: <{}} Show informational dialogs (loud mode)\n", ARG_LOUD, WIDTH)
               << std::format("  {: <{}} Show this help message\n\n", "-h, --help", WIDTH)
               << "Examples:\n"
               << std::format("  {} config.txt\n", appName)

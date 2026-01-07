@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cctype>
 #include <ranges>
+#include <algorithm>
 #include "SettingParameter.h"
 
 
@@ -38,7 +39,7 @@ static std::tuple<int, int, int> parseHexColor(const std::string& hex)
     int g = std::stoi(hex.substr(3, 2), nullptr, 16);
     int b = std::stoi(hex.substr(5, 2), nullptr, 16);
     return {r, g, b};
-} // TODO: Use this and parse once, not for each cell as it is in Visualizer::calculateCellColorOptional
+} // TODO: GB: Use this and parse once, not for each cell as it is in Visualizer::calculateCellColorOptional
 
 
 std::map<std::string, SubstateInfo> SettingParameter::parseSubstates() const
@@ -185,8 +186,33 @@ std::map<std::string, SubstateInfo> SettingParameter::parseSubstates() const
 
 std::vector<std::string> SettingParameter::getSubstateFields() const
 {
-    auto substateFieldsRange = parseSubstates() | std::views::transform([](const auto& p) { return p.first; });
-    return {substateFieldsRange.begin(), substateFieldsRange.end()};
+    auto parsedFields = parseSubstates();
+    
+    // Create a vector of pairs (order, fieldName) for sorting
+    std::vector<std::pair<int, std::string>> orderedFields;
+    
+    for (const auto& [name, info] : parsedFields)
+    {
+        int order = info.order;
+        if (order == -1)
+        {
+            // If no order is set, use a large number to put it at the end
+            order = 1000000 + orderedFields.size();
+        }
+        orderedFields.emplace_back(order, name);
+    }
+    
+    // Sort by order
+    std::sort(orderedFields.begin(), orderedFields.end());
+    
+    // Extract just the field names in order
+    std::vector<std::string> result;
+    for (const auto& [order, name] : orderedFields)
+    {
+        result.push_back(name);
+    }
+    
+    return result;
 }
 
 void SettingParameter::initializeSubstateInfo()

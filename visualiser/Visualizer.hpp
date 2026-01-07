@@ -70,16 +70,16 @@ class Visualizer
 {
 public:
     template<class Matrix>
-    void drawWithVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const SubstateInfo* substateInfo = nullptr);
+    void drawWithVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos={});
     template<class Matrix>
-    void refreshWindowsVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const SubstateInfo* substateInfo = nullptr);
+    void refreshWindowsVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
-    void drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const SubstateInfo* substateInfo = nullptr);
+    void drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos);
     /// @brief Refresh 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
-    void refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const SubstateInfo* substateInfo = nullptr);
+    void refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
     /// @brief Draw node grid lines projected onto the 3D substate surface.
     template<class Matrix>
@@ -91,8 +91,7 @@ public:
                                   vtkSmartPointer<vtkActor> gridLinesActor,
                                   const std::string& substateFieldName,
                                   double minValue,
-                                  double maxValue,
-                                  const SubstateInfo* substateInfo = nullptr);
+                                  double maxValue);
 
     /// @brief Refresh node grid lines projected onto the 3D substate surface.
     template<class Matrix>
@@ -103,8 +102,7 @@ public:
                                      vtkSmartPointer<vtkActor> gridLinesActor,
                                      const std::string& substateFieldName,
                                      double minValue,
-                                     double maxValue,
-                                     const SubstateInfo* substateInfo = nullptr);
+                                     double maxValue);
 
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor);
@@ -122,18 +120,18 @@ private:
     void applyGridColorTo3DGridLinesActor(vtkSmartPointer<vtkActor> gridLinesActor);
 
     template<class Matrix>
-    void buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p, const struct SubstateInfo* substateInfo = nullptr);
+    void buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
     /// @brief The method is calculating color for specific cell with substateInfo considered
     template<class Matrix>
-    Color calculateCellColor(int row, int column, const Matrix &p, const SubstateInfo* substateInfo);
+    Color calculateCellColor(int row, int column, const Matrix &p, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
     /// @brief Calculate color for a specific cell, returning std::optional<Color>.
     /// Returns nullopt if the value is out of range, equals noValue, or parsing fails.
     /// Otherwise returns the calculated color.
     /// This method is useful for aggregating colors from multiple substates.
     template<class Matrix>
-    std::optional<Color> calculateCellColorOptional(int row, int column, const Matrix &p, const SubstateInfo* substateInfo);
+    std::optional<Color> calculateCellColorOptional(int row, int column, const Matrix &p, const SubstateInfo* substateInfo=nullptr);
 
     /** @brief Build 3D quad mesh surface for 3D substate visualization (healed quad approach).
      * 
@@ -153,7 +151,7 @@ private:
     vtkSmartPointer<vtkPolyData> build3DSubstateSurfaceQuadMesh(const Matrix& p, int nRows, int nCols,
                                                                 const std::string& substateFieldName,
                                                                 double minValue, double maxValue,
-                                                                const SubstateInfo* substateInfo = nullptr);
+                                                                const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
     template<class Matrix>
     vtkSmartPointer<vtkPolyData> buildGridLinesOnSurfacePolyData(const Matrix& p,
@@ -162,8 +160,7 @@ private:
                                                                  const std::vector<Line>& lines,
                                                                  const std::string& substateFieldName,
                                                                  double minValue,
-                                                                 double maxValue,
-                                                                 const SubstateInfo* substateInfo);
+                                                                 double maxValue);
 
     /** @brief Creates a vtkPolyData representing a set of 2D lines.
       * @param lines Vector of Line objects (each defines a line segment)
@@ -178,7 +175,7 @@ private:
 ////////////////////////////////////////////////////////////////////
 
 template <class Matrix>
-void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const SubstateInfo* substateInfo)
+void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
     const auto numberOfPoints = nRows * nCols;
     vtkNew<vtkDoubleArray> pointValues;
@@ -215,7 +212,7 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
     structuredGrid->SetPoints(points);
     structuredGrid->GetPointData()->SetScalars(pointValues);
 
-    buidColor(lut, nCols, nRows, p, substateInfo);
+    buidColor(lut, nCols, nRows, p, colorSubstateInfos);
 
     vtkNew<vtkDataSetMapper> gridMapper;
     gridMapper->UpdateDataObject();
@@ -228,11 +225,11 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
 }
 
 template<class Matrix>
-void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const SubstateInfo* substateInfo)
+void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
     if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(gridActor->GetMapper()->GetLookupTable()))
     {
-        buidColor(lut, nCols, nRows, p, substateInfo);
+        buidColor(lut, nCols, nRows, p, colorSubstateInfos);
         gridActor->GetMapper()->SetLookupTable(lut);
         gridActor->GetMapper()->Update();
     }
@@ -241,13 +238,13 @@ void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSma
 }
 
 template<class Matrix>
-void Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix &p, const SubstateInfo* substateInfo)
+void Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix &p, const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
     for (int r = 0; r < nRows; ++r)
     {
         for (int c = 0; c < nCols; ++c)
         {
-            const auto color = calculateCellColor(r, c, p, substateInfo);
+            const auto color = calculateCellColor(r, c, p, colorSubstateInfos);
             lut->SetTableValue(
                 (nRows - 1 - r) * nCols + c,
                 toUnitColor(color.getRed()),
@@ -267,8 +264,7 @@ void Visualizer::drawGridLinesOn3DSurface(const Matrix& p,
                                           vtkSmartPointer<vtkActor> gridLinesActor,
                                           const std::string& substateFieldName,
                                           double minValue,
-                                          double maxValue,
-                                          const SubstateInfo* substateInfo)
+                                          double maxValue)
 {
     if (!renderer || !gridLinesActor)
     {
@@ -281,8 +277,7 @@ void Visualizer::drawGridLinesOn3DSurface(const Matrix& p,
                                                                             lines,
                                                                             substateFieldName,
                                                                             minValue,
-                                                                            maxValue,
-                                                                            substateInfo);
+                                                                            maxValue);
 
     vtkNew<vtkPolyDataMapper> mapper;
     mapper->SetInputData(polyData);
@@ -303,8 +298,7 @@ void Visualizer::refreshGridLinesOn3DSurface(const Matrix& p,
                                              vtkSmartPointer<vtkActor> gridLinesActor,
                                              const std::string& substateFieldName,
                                              double minValue,
-                                             double maxValue,
-                                             const SubstateInfo* substateInfo)
+                                             double maxValue)
 {
     if (!gridLinesActor)
     {
@@ -323,8 +317,7 @@ void Visualizer::refreshGridLinesOn3DSurface(const Matrix& p,
                                                                             lines,
                                                                             substateFieldName,
                                                                             minValue,
-                                                                            maxValue,
-                                                                            substateInfo);
+                                                                            maxValue);
     mapper->SetInputData(polyData);
     mapper->Update();
 
@@ -333,19 +326,40 @@ void Visualizer::refreshGridLinesOn3DSurface(const Matrix& p,
 }
 
 template<class Matrix>
-Color Visualizer::calculateCellColor(int row, int column, const Matrix &p, const SubstateInfo* substateInfo)
+Color Visualizer::calculateCellColor(int row, int column, const Matrix &p, const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
-    // Try to get color from optional version
-    auto optionalColor = calculateCellColorOptional(row, column, p, substateInfo);
-    if (optionalColor.has_value())
+    if (colorSubstateInfos.empty())
     {
-        return optionalColor.value();
+        auto optionalColor = calculateCellColorOptional(row, column, p);
+        if (optionalColor.has_value())
+        {
+            return optionalColor.value();
+        }
+        else
+        {
+            // Return flat scene background color for noValue or out of range
+            return flatSceneBackgroundColor();
+        }
     }
-    else
+
+    auto orderCompare = [](const SubstateInfo* lhs, const SubstateInfo* rhs)
     {
-        // Return flat scene background color for noValue or out of range
-        return flatSceneBackgroundColor();
+        return lhs->order > rhs->order;
+    };
+    auto colorSubstateInfosSorted = colorSubstateInfos; // TODO: GB: It is better to sort once, not for each cell
+    std::ranges::sort(colorSubstateInfosSorted);
+
+    for (const auto colorSubstateInfo : colorSubstateInfosSorted)
+    {
+        auto optionalColor = calculateCellColorOptional(row, column, p, colorSubstateInfo);
+        if (optionalColor.has_value())
+        {
+            return optionalColor.value();
+        }
     }
+
+    // Return flat scene background color for noValue or out of range
+    return flatSceneBackgroundColor();
 }
 
 template<class Matrix>
@@ -428,7 +442,7 @@ template<class Matrix>
 vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Matrix& p, int nRows, int nCols,
                                                                         const std::string& substateFieldName,
                                                                         double minValue, double maxValue,
-                                                                        const SubstateInfo* substateInfo)
+                                                                        const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
     // Validate min/max values
     if (std::isnan(minValue) || std::isnan(maxValue) || minValue >= maxValue)
@@ -458,7 +472,7 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Ma
     auto getCellColor = [&](int row, int col) -> Color {
         if (row < 0 || row >= nRows || col < 0 || col >= nCols)
             return Color(0, 0, 0);
-        return calculateCellColor(row, col, p, substateInfo);
+        return calculateCellColor(row, col, p, colorSubstateInfos);
     };
 
     // Helper lambda to check if value is valid (not no-data)
@@ -599,8 +613,7 @@ vtkSmartPointer<vtkPolyData> Visualizer::buildGridLinesOnSurfacePolyData(const M
                                                                          const std::vector<Line>& lines,
                                                                          const std::string& substateFieldName,
                                                                          double minValue,
-                                                                         double maxValue,
-                                                                         const SubstateInfo* substateInfo)
+                                                                         double maxValue)
 {
     vtkNew<vtkPoints> points;
     vtkNew<vtkCellArray> polyLines;
@@ -712,7 +725,7 @@ void Visualizer::drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols,
                                        vtkSmartPointer<vtkActor> gridActor,
                                        const std::string& substateFieldName,
                                        double minValue, double maxValue,
-                                       const SubstateInfo* substateInfo)
+                                       const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
     // Validate min/max values
     if (std::isnan(minValue) || std::isnan(maxValue) || minValue >= maxValue)
@@ -729,7 +742,7 @@ void Visualizer::drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols,
     }
 
     // Build quad mesh surface
-    vtkSmartPointer<vtkPolyData> surfacePolyData = build3DSubstateSurfaceQuadMesh(p, nRows, nCols, substateFieldName, minValue, maxValue, substateInfo);
+    vtkSmartPointer<vtkPolyData> surfacePolyData = build3DSubstateSurfaceQuadMesh(p, nRows, nCols, substateFieldName, minValue, maxValue, colorSubstateInfos);
 
     // Create mapper
     vtkNew<vtkPolyDataMapper> mapper;
@@ -756,7 +769,7 @@ void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCo
                                              vtkSmartPointer<vtkActor> gridActor,
                                              const std::string& substateFieldName,
                                              double minValue, double maxValue,
-                                             const SubstateInfo* substateInfo)
+                                             const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
     if (! gridActor)
     {
@@ -775,7 +788,7 @@ void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCo
                                                                                   substateFieldName,
                                                                                   minValue,
                                                                                   maxValue,
-                                                                                  substateInfo);
+                                                                                  colorSubstateInfos);
 
     mapper->SetInputData(surfacePolyData);
     mapper->Update();

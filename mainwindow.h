@@ -38,9 +38,6 @@ public:
     void applyCommandLineOptions(const CommandLineParser& cmdParser);
     void loadModelFromDirectory(const QString& modelDirectory);
 
-    void setSilentMode(bool newSilentMode);
-    bool isSilentModeEnabled() const;
-
     /// @brief Get the name of the substate field currently used for 3D visualization
     /// @return Field name (e.g., "h", "z") or empty string if no 3D substate is active
     std::string getActiveSubstateFor3D() const
@@ -70,7 +67,6 @@ private slots: // menu actions
     void onReloadDataRequested();
 
     // Settings submenu
-    void onSilentModeToggled(bool checked);
     void onColorSettingsRequested();
 
     // Help submenu:
@@ -87,8 +83,7 @@ private slots: // menu actions
     void syncCameraSliders();
 
     void onUse3rdDimensionRequested(const std::string& fieldName);
-    void onUse2DRequested(const std::string& fieldName);
-    void onApplyCustomColorsRequested(const std::string& fieldName);
+    void onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
     void onDeactivateRequested();
 
     void onPlayButtonClicked();
@@ -189,8 +184,6 @@ private:
     /// @param outNextStep Output parameter: the found step (only valid if function returns true)
     /// @return true if a step was found in the given direction, false otherwise
     bool findNearestAvailableStep(StepIndex targetStep, PlayingDirection direction, StepIndex& outNextStep) const;
-
-    void updateSilentModeUi(bool checked);
 
 private:
     static constexpr int MAX_RECENT_FILES = 10;

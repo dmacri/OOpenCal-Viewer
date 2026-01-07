@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>273</width>
-    <height>312</height>
+    <height>267</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -84,25 +84,19 @@
           </property>
          </widget>
         </item>
-       </layout>
-      </item>
-      <item>
-       <layout class="QHBoxLayout" name="valueLayout">
-        <property name="spacing">
-         <number>2</number>
-        </property>
-        <property name="leftMargin">
-         <number>0</number>
-        </property>
-        <property name="topMargin">
-         <number>0</number>
-        </property>
-        <property name="rightMargin">
-         <number>0</number>
-        </property>
-        <property name="bottomMargin">
-         <number>0</number>
-        </property>
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
         <item>
          <widget class="QLabel" name="valueTextLabel">
           <property name="maximumSize">
@@ -361,22 +355,6 @@
           </property>
          </widget>
         </item>
-        <item>
-         <widget class="QCheckBox" name="use2dButton">
-          <property name="maximumSize">
-           <size>
-            <width>16777215</width>
-            <height>22</height>
-           </size>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QCheckBox { font-size: 8pt; padding: 2px; }</string>
-          </property>
-          <property name="text">
-           <string>Use as 2D</string>
-          </property>
-         </widget>
-        </item>
        </layout>
       </item>
       <item>
@@ -391,21 +369,26 @@
          <bool>true</bool>
         </property>
         <layout class="QGridLayout" name="gridLayout">
-         <item row="0" column="2">
-          <widget class="QLabel" name="maxColorLabel">
-           <property name="maximumSize">
-            <size>
-             <width>30</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="text">
-            <string>Max:</string>
-           </property>
-          </widget>
-         </item>
+         <property name="leftMargin">
+          <number>4</number>
+         </property>
+         <property name="topMargin">
+          <number>2</number>
+         </property>
+         <property name="rightMargin">
+          <number>4</number>
+         </property>
+         <property name="bottomMargin">
+          <number>2</number>
+         </property>
          <item row="0" column="4">
           <widget class="QPushButton" name="clearColorsButton">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="maximumSize">
             <size>
              <width>16777215</width>
@@ -420,8 +403,33 @@
            </property>
           </widget>
          </item>
+         <item row="0" column="2">
+          <widget class="QLabel" name="maxColorLabel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>30</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>Max:</string>
+           </property>
+          </widget>
+         </item>
          <item row="0" column="1">
           <widget class="QPushButton" name="minColorButton">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="maximumSize">
             <size>
              <width>40</width>
@@ -436,21 +444,14 @@
            </property>
           </widget>
          </item>
-         <item row="0" column="5">
-          <spacer name="colorsSpacer">
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>0</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
          <item row="0" column="0">
           <widget class="QLabel" name="minColorLabel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="maximumSize">
             <size>
              <width>30</width>
@@ -462,8 +463,39 @@
            </property>
           </widget>
          </item>
+         <item row="1" column="0" colspan="5">
+          <widget class="QCheckBox" name="useForColorringCheckbox">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>22</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;It is using the substate for colloring for both &lt;span style=&quot; font-weight:700;&quot;&gt;2D&lt;/span&gt; and &lt;span style=&quot; font-weight:700;&quot;&gt;3D&lt;/span&gt; mode.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;It uses default colorring from model (using the substate name).&lt;/p&gt;&lt;p&gt;Setting up: min, max, minColor and maxColor causes custom way of colorring&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QCheckBox { font-size: 8pt; padding: 2px; }</string>
+           </property>
+           <property name="text">
+            <string>Use substate for coloring</string>
+           </property>
+          </widget>
+         </item>
          <item row="0" column="3">
           <widget class="QPushButton" name="maxColorButton">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="maximumSize">
             <size>
              <width>40</width>
@@ -475,13 +507,6 @@
            </property>
            <property name="text">
             <string/>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0" colspan="5">
-          <widget class="QPushButton" name="applyCustomColorsPushButton">
-           <property name="text">
-            <string>Apply custom colors</string>
            </property>
           </widget>
          </item>
