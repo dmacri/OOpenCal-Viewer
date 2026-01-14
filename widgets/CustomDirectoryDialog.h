@@ -54,6 +54,7 @@ private:
     void setupUI();
     void setupIcons();
     DirectoryType analyzeDirectory(const QString &path) const;
+    bool directoryHasHeaderDirectly(const QString &path) const;
     void updateDirectoryAppearance(const QString &path);
     void updateVisibleDirectoriesAppearance();
     void updateDirectoriesRecursive(const QModelIndex &parentIndex);

@@ -98,7 +98,7 @@ void CustomDirectoryDialog::setupUI()
 {
     setWindowTitle(tr("Load Model from Directory"));
     setModal(true);
-    resize(600, 400);
+    resize(600, 800);
     
     // Setup layout
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -210,6 +210,17 @@ void CustomDirectoryDialog::setStartDirectory(const QString &path)
     }
 }
 
+bool CustomDirectoryDialog::directoryHasHeaderDirectly(const QString &path) const
+{
+    QDir dir(path);
+    if (! dir.exists())
+    {
+        return false;
+    }
+
+    return dir.exists(DirectoryConstants::HEADER_FILE_NAME);
+}
+
 CustomDirectoryDialog::DirectoryType CustomDirectoryDialog::analyzeDirectory(const QString &path) const
 {
     QDir dir(path);
@@ -218,30 +229,20 @@ CustomDirectoryDialog::DirectoryType CustomDirectoryDialog::analyzeDirectory(con
         return DirectoryType::Unknown;
     }
     
-    bool hasHeader = dir.exists(DirectoryConstants::HEADER_FILE_NAME);
-    bool hasSubdirs = false;
+    if (directoryHasHeaderDirectly(path))
+    {
+        return DirectoryType::WithHeader;
+    }
     
     // Check for subdirectories
     QDirIterator it(path, QDir::Dirs | QDir::NoDotAndDotDot);
     while (it.hasNext())
     {
         it.next();
-        hasSubdirs = true;
-        break;
-    }
-    
-    if (hasHeader)
-    {
-        return DirectoryType::WithHeader;
-    }
-    else if (hasSubdirs)
-    {
         return DirectoryType::WithSubdirs;
     }
-    else
-    {
-        return DirectoryType::Empty;
-    }
+    
+    return DirectoryType::Empty;
 }
 
 void CustomDirectoryDialog::updateDirectoryAppearance(const QString &path)
@@ -310,7 +311,7 @@ bool CustomDirectoryDialog::isDirectorySelectable(const QString &path) const
 
 void CustomDirectoryDialog::onTreeViewClicked(const QModelIndex &index)
 {
-    if (!index.isValid())
+    if (! index.isValid())
     {
         return;
     }
@@ -322,13 +323,22 @@ void CustomDirectoryDialog::onTreeViewClicked(const QModelIndex &index)
     {
         updateDirectoryAppearance(path);
         
-        bool selectable = isDirectorySelectable(path);
-        m_okButton->setEnabled(selectable);
+        const DirectoryType type = analyzeDirectory(path);
+        const bool hasHeader = (type == DirectoryType::WithHeader);
+        m_okButton->setEnabled(hasHeader);
         
-        if (selectable)
+        // Enable OK button only if directory has Header.txt OR has subdirectories        
+        if (isDirectorySelectable(path))
         {
             m_selectedDirectory = path;
-            m_pathLabel->setText(tr("Selected: %1").arg(path));
+            if (hasHeader)
+            {
+                m_pathLabel->setText(tr("Selected: %1 (contains Header.txt)").arg(path));
+            }
+            else
+            {
+                m_pathLabel->setText(tr("Selected: %1 (contains subdirectories)").arg(path));
+            }
         }
         else
         {
@@ -348,7 +358,7 @@ void CustomDirectoryDialog::onTreeViewDoubleClicked(const QModelIndex &index)
     QString path = m_fileSystemModel->filePath(index);
     QFileInfo fileInfo(path);
     
-    if (fileInfo.isDir() && isDirectorySelectable(path))
+    if (fileInfo.isDir() && directoryHasHeaderDirectly(path))
     {
         m_selectedDirectory = path;
         accept();
