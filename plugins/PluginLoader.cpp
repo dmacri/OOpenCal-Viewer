@@ -132,8 +132,6 @@ void PluginLoader::extractPluginMetadata(PluginInfo& info)
 
 void PluginLoader::removePlugin(const std::string &pluginPath)
 {
-    namespace fs = std::filesystem;
-
     auto it = std::find_if(loadedPlugins.begin(), loadedPlugins.end(),
                            [&](const PluginInfo& p) { return p.path == pluginPath; });
 
