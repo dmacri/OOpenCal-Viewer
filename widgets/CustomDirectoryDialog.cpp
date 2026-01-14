@@ -46,7 +46,7 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
     {
         if (m_enabledState.contains(path) && !m_enabledState[path])
         {
-            return QColor(150, 150, 150); // Gray color for disabled directories
+            return QColor(Qt::gray); // Gray color for disabled directories
         }
     }
     
