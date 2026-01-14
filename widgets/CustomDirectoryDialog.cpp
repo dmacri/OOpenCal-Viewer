@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <QDirIterator>
 #include <QPainter>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTreeView>
@@ -16,6 +17,7 @@
 
 #include "CustomDirectoryDialog.h"
 #include "core/directoryConstants.h"
+
 
 // CustomFileSystemModel implementation
 CustomDirectoryDialog::CustomFileSystemModel::CustomFileSystemModel(QObject *parent)
@@ -75,6 +77,9 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
 {
     setupUI();
     setupIcons();
+    
+    // Update directory icons after the UI is set up
+    QTimer::singleShot(100, this, &CustomDirectoryDialog::updateVisibleDirectoriesAppearance);
     
     // Set initial directory
     QString startPath = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
@@ -147,6 +152,20 @@ void CustomDirectoryDialog::setupUI()
             filters |= QDir::Hidden;
         }
         m_fileSystemModel->setFilter(filters);
+    });
+    
+    // Connect to expanded signal to update icons when directories are expanded
+    connect(m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &index) {
+        QString parentPath = m_fileSystemModel->filePath(index);
+
+        // Scan only immediate subdirectories (not recursive)
+        QDirIterator it(parentPath, QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::NoIteratorFlags);
+        while (it.hasNext())
+        {
+            it.next();
+            QString subDirPath = it.filePath();
+            updateDirectoryAppearance(subDirPath);
+        }
     });
 }
 
@@ -255,6 +274,32 @@ void CustomDirectoryDialog::updateDirectoryAppearance(const QString &path)
     
     m_fileSystemModel->setDirectoryIcon(path, icon);
     m_fileSystemModel->setDirectoryEnabled(path, enabled);
+}
+
+void CustomDirectoryDialog::updateVisibleDirectoriesAppearance()
+{
+    // Recursively update all visible directories in the tree
+    QModelIndex rootIndex = m_treeView->rootIndex();
+    updateDirectoriesRecursive(rootIndex);
+}
+
+void CustomDirectoryDialog::updateDirectoriesRecursive(const QModelIndex &parentIndex)
+{
+    for (int row = 0; row < m_fileSystemModel->rowCount(parentIndex); ++row)
+    {
+        QModelIndex childIndex = m_fileSystemModel->index(row, 0, parentIndex);
+        QString path = m_fileSystemModel->filePath(childIndex);
+        QFileInfo fileInfo(path);
+        
+        if (fileInfo.isDir())
+        {
+            updateDirectoryAppearance(path);
+            
+            // Always update children recursively when this function is called
+            // (not just when expanded)
+            updateDirectoriesRecursive(childIndex);
+        }
+    }
 }
 
 bool CustomDirectoryDialog::isDirectorySelectable(const QString &path) const

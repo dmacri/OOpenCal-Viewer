@@ -55,6 +55,8 @@ private:
     void setupIcons();
     DirectoryType analyzeDirectory(const QString &path) const;
     void updateDirectoryAppearance(const QString &path);
+    void updateVisibleDirectoriesAppearance();
+    void updateDirectoriesRecursive(const QModelIndex &parentIndex);
     bool isDirectorySelectable(const QString &path) const;
     
     QTreeView *m_treeView;
