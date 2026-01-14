@@ -3,7 +3,7 @@
 
 #include <filesystem>
 #include <iostream>
-#include <dlfcn.h>
+#include <QLibrary>
 
 #include "PluginLoader.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h" // SceneWidgetVisualizerFactory::unregisterModel
@@ -44,38 +44,38 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
         return false;
     }
 
-    // Load the shared library
-    // RTLD_GLOBAL allows plugin to use symbols from main app
-    void* handle = dlopen(pluginPath.c_str(), RTLD_LAZY | RTLD_GLOBAL);
-    if (! handle)
+    // Load the shared library using QLibrary for cross-platform compatibility
+    QLibrary* library = new QLibrary(QString::fromStdString(pluginPath));
+    library->setLoadHints(QLibrary::LoadHint::ResolveAllSymbolsHint);
+    
+    if (! library->load())
     {
-        lastError = std::string("Failed to load plugin: ") + dlerror();
+        lastError = std::string("Failed to load plugin: ") + library->errorString().toStdString();
         std::cerr << "Error: " << lastError << std::endl;
+        delete library;
         return false;
     }
 
-    dlerror(); // Clear any existing errors
-
-    // Find the registerPlugin function
+    // Find the registerPlugin function using QLibrary::resolve
     typedef void (*RegisterFunc)();
-    RegisterFunc registerPlugin = (RegisterFunc) dlsym(handle, "registerPlugin");
+    RegisterFunc registerPlugin = reinterpret_cast<RegisterFunc>(library->resolve("registerPlugin"));
 
-    const char* dlsym_error = dlerror();
-    if (dlsym_error || ! registerPlugin)
+    if (! registerPlugin)
     {
         lastError = "Plugin does not export registerPlugin() function";
-        if (dlsym_error)
-            lastError += std::string(": ") + dlsym_error;
+        if (! library->errorString().isEmpty())
+            lastError += std::string(": ") + library->errorString().toStdString();
 
         std::cerr << "Error: " << lastError << std::endl;
-        dlclose(handle);
+        library->unload();
+        delete library;
         return false;
     }
 
     // Create plugin info
     PluginInfo info;
     info.path = pluginPath;
-    info.handle = handle;
+    info.handle = library;
     info.isLoaded = false;
 
     // Call the registration function
@@ -89,7 +89,8 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
     {
         lastError = std::string("Exception while registering plugin: ") + e.what();
         std::cerr << "Error: " << lastError << std::endl;
-        dlclose(handle);
+        library->unload();
+        delete library;
         return false;
     }
 
@@ -107,7 +108,7 @@ void PluginLoader::extractPluginMetadata(PluginInfo& info)
 {
     // Get plugin info string
     typedef const char* (*InfoFunc)();
-    InfoFunc getPluginInfo = (InfoFunc) dlsym(info.handle, "getPluginInfo");
+    InfoFunc getPluginInfo = reinterpret_cast<InfoFunc>(info.handle->resolve("getPluginInfo"));
     if (getPluginInfo)
     {
         info.info = getPluginInfo();
@@ -116,14 +117,14 @@ void PluginLoader::extractPluginMetadata(PluginInfo& info)
 
     // Get plugin version
     typedef int (*VersionFunc)();
-    VersionFunc getPluginVersion = (VersionFunc) dlsym(info.handle, "getPluginVersion");
+    VersionFunc getPluginVersion = reinterpret_cast<VersionFunc>(info.handle->resolve("getPluginVersion"));
     if (getPluginVersion)
     {
         info.version = getPluginVersion();
     }
 
     // Get model name
-    InfoFunc getModelName = (InfoFunc) dlsym(info.handle, "getModelName");
+    InfoFunc getModelName = reinterpret_cast<InfoFunc>(info.handle->resolve("getModelName"));
     if (getModelName)
     {
         info.name = getModelName();
@@ -152,18 +153,19 @@ void PluginLoader::removePlugin(const std::string &pluginPath)
             std::cout << "✓ Unregistered model: " << plugin.name << std::endl;
     }
 
-    // Close the library .so
+    // Close the library using QLibrary::unload
     if (plugin.handle)
     {
-        if (dlclose(plugin.handle) != 0)
+        if (! plugin.handle->unload())
         {
-            lastError = std::string("Failed to close plugin handle: ") + dlerror();
+            lastError = std::string("Failed to close plugin handle: ") + plugin.handle->errorString().toStdString();
             std::cerr << "Error: " << lastError << std::endl;
         }
         else
         {
             std::cout << "✓ Closed plugin handle: " << pluginPath << std::endl;
         }
+        delete plugin.handle;
     }
 
     // Remove from list of loaded files
@@ -190,8 +192,9 @@ int PluginLoader::loadPluginsFromDirectory(const std::string& directory)
 
             const auto& path = entry.path();
 
-            // Check if it's a shared library
-            if (path.extension() != ".so")
+            // Check if it's a shared library (cross-platform support)
+            const auto& extension = path.extension().string();
+            if (extension != ".so" && extension != ".dll")
                 continue;
 
             if (loadPlugin(path.string()))
