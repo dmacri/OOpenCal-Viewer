@@ -566,8 +566,7 @@ bool MainWindow::handleMissingStepDuringPlayback(StepIndex targetStep, PlayingDi
                                      : tr("previous available step is %1").arg(nextStep);
 
     std::cerr << tr("Missing Step During Playback").toStdString()
-              << tr("Step %1 is not available.\nThe %2.\n\nDo you want to continue playback skipping to the next available step, "
-                    "or stop playback at the current step?")
+              << tr("Step %1 is not available.\nThe %2")
                      .arg(targetStep)
                      .arg(nextStepText).toStdString() << endl;
     currentStep = nextStep;
