@@ -181,6 +181,7 @@ list(APPEND Sources
     widgets/SubstateDisplayWidget.cpp
     widgets/SubstatesDockWidget.cpp
     widgets/CustomInteractorStyle.cpp
+    widgets/CustomDirectoryDialog.cpp
     plugins/PluginLoader.cpp
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp

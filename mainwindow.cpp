@@ -39,6 +39,7 @@
 #include "widgets/CompilationLogWidget.h"
 #include "widgets/ConfigDetailsDialog.h"
 #include "widgets/ReductionDialog.h"
+#include "widgets/CustomDirectoryDialog.h"
 
 
 namespace
@@ -1042,18 +1043,41 @@ void MainWindow::onLoadPluginRequested()
 
 void MainWindow::onLoadModelFromDirectoryRequested()
 {
-    QString modelDirectory = QFileDialog::getExistingDirectory(
-        this,
-        tr("Load Model from Directory"),
-        getOOpenCalStartPath(),
-        QFileDialog::ShowDirsOnly);
-
-    if (modelDirectory.isEmpty())
+    constexpr bool newDirectoryLoader = true;
+    if (newDirectoryLoader)
     {
-        return; // User cancelled
-    }
+        CustomDirectoryDialog dialog(this);
 
-    loadModelFromDirectory(modelDirectory);
+        // Set the starting directory using the same logic as the original dialog
+        QString startPath = getOOpenCalStartPath();
+        if (! startPath.isEmpty())
+        {
+            dialog.setStartDirectory(startPath);
+        }
+
+        if (dialog.exec() == QDialog::Accepted)
+        {
+            QString modelDirectory = dialog.getSelectedDirectory();
+            if (! modelDirectory.isEmpty())
+            {
+                loadModelFromDirectory(modelDirectory);
+            }
+        }
+    }
+    else
+    {
+        QString modelDirectory = QFileDialog::getExistingDirectory(
+            this,
+            tr("Load Model from Directory"),
+            getOOpenCalStartPath(),
+            QFileDialog::ShowDirsOnly);
+
+        if (modelDirectory.isEmpty())
+        {
+            return; // User cancelled
+        }
+        loadModelFromDirectory(modelDirectory);
+    }
 }
 
 void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
