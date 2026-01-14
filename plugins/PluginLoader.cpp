@@ -45,14 +45,13 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
     }
 
     // Load the shared library using QLibrary for cross-platform compatibility
-    QLibrary* library = new QLibrary(QString::fromStdString(pluginPath));
+    auto library = std::make_unique<QLibrary>(QString::fromStdString(pluginPath));
     library->setLoadHints(QLibrary::LoadHint::ResolveAllSymbolsHint);
     
     if (! library->load())
     {
         lastError = std::string("Failed to load plugin: ") + library->errorString().toStdString();
         std::cerr << "Error: " << lastError << std::endl;
-        delete library;
         return false;
     }
 
@@ -68,14 +67,13 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
 
         std::cerr << "Error: " << lastError << std::endl;
         library->unload();
-        delete library;
         return false;
     }
 
     // Create plugin info
     PluginInfo info;
     info.path = pluginPath;
-    info.handle = library;
+    info.handle = std::move(library);
     info.isLoaded = false;
 
     // Call the registration function
@@ -89,8 +87,7 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
     {
         lastError = std::string("Exception while registering plugin: ") + e.what();
         std::cerr << "Error: " << lastError << std::endl;
-        library->unload();
-        delete library;
+        info.handle->unload();
         return false;
     }
 
@@ -165,7 +162,7 @@ void PluginLoader::removePlugin(const std::string &pluginPath)
         {
             std::cout << "✓ Closed plugin handle: " << pluginPath << std::endl;
         }
-        delete plugin.handle;
+        // No need for delete - unique_ptr handles cleanup automatically
     }
 
     // Remove from list of loaded files

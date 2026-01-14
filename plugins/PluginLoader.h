@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <QLibrary>
+#include <memory>
 
 /** @brief Information about a loaded plugin */
 struct PluginInfo
@@ -17,7 +18,7 @@ struct PluginInfo
     std::string name; ///< Plugin name (from getModelName)
     std::string info; ///< Plugin description (from getPluginInfo)
     int version{};    ///< Plugin version (from getPluginVersion)
-    QLibrary* handle{}; ///< QLibrary handle for cross-platform plugin loading
+    std::unique_ptr<QLibrary> handle; ///< QLibrary handle for cross-platform plugin loading
     bool isLoaded{};  ///< Load status
 };
 
