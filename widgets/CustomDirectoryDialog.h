@@ -3,6 +3,7 @@
 #include <QDialog>
 #include <QFileSystemModel>
 #include <QIcon>
+#include <QSortFilterProxyModel>
 
 class QLabel;
 class QCheckBox;
@@ -41,6 +42,15 @@ private:
         Unknown          // Not yet checked
     };
 
+    class DirectorySortProxy : public QSortFilterProxyModel
+    {
+    public:
+        explicit DirectorySortProxy(QObject *parent = nullptr);
+        
+    protected:
+        bool lessThan(const QModelIndex &left, const QModelIndex &right) const override;
+    };
+
     void setupUI();
     void setupIcons();
     DirectoryType analyzeDirectory(const QString &path) const;
@@ -68,6 +78,7 @@ private:
     };
 
     CustomFileSystemModel *m_fileSystemModel;
+    DirectorySortProxy *m_sortProxy;
     QString m_selectedDirectory;
     
     // Icons for different directory types

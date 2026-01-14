@@ -67,10 +67,70 @@ void CustomDirectoryDialog::CustomFileSystemModel::setDirectoryEnabled(const QSt
     emit dataChanged(index, index, {Qt::ForegroundRole});
 }
 
+// DirectorySortProxy implementation
+CustomDirectoryDialog::DirectorySortProxy::DirectorySortProxy(QObject *parent)
+    : QSortFilterProxyModel(parent)
+{
+    setSortCaseSensitivity(Qt::CaseInsensitive);
+    setSortLocaleAware(true);
+}
+
+bool CustomDirectoryDialog::DirectorySortProxy::lessThan(const QModelIndex &left, const QModelIndex &right) const
+{
+    // Get the file system model
+    const QFileSystemModel *fsModel = qobject_cast<const QFileSystemModel*>(sourceModel());
+    if (! fsModel)
+        return QSortFilterProxyModel::lessThan(left, right);
+    
+    // Get file info for both indices
+    QFileInfo leftInfo = fsModel->fileInfo(left);
+    QFileInfo rightInfo = fsModel->fileInfo(right);
+    
+    // Only sort directories
+    if (! leftInfo.isDir() || ! rightInfo.isDir())
+        return QSortFilterProxyModel::lessThan(left, right);
+    
+    // Get directory paths
+    QString leftPath = leftInfo.absoluteFilePath();
+    QString rightPath = rightInfo.absoluteFilePath();
+    
+    // Analyze directory types
+    auto analyzeType = [](const QString &path) -> int {
+        QDir dir(path);
+        if (! dir.exists())
+            return 3; // Unknown - lowest priority
+        
+        // Check for Header.txt
+        if (dir.exists(DirectoryConstants::HEADER_FILE_NAME))
+            return 0; // WithHeader - highest priority
+        
+        // Check for subdirectories
+        QDirIterator it(path, QDir::Dirs | QDir::NoDotAndDotDot);
+        if (it.hasNext())
+            return 1; // WithSubdirs - medium priority
+        
+        return 2; // Empty - lowest priority
+    };
+    
+    int leftType = analyzeType(leftPath);
+    int rightType = analyzeType(rightPath);
+    
+    // If types are different, sort by type (0=WithHeader, 1=WithSubdirs, 2=Empty)
+    if (leftType != rightType)
+        return leftType < rightType;
+    
+    // If types are the same, sort by name case-insensitively
+    QString leftName = leftInfo.fileName();
+    QString rightName = rightInfo.fileName();
+    
+    return leftName.compare(rightName, Qt::CaseInsensitive) < 0;
+}
+
 CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::CustomDirectoryDialog)
     , m_fileSystemModel(new CustomFileSystemModel(this))
+    , m_sortProxy(new DirectorySortProxy(this))
 {
     ui->setupUi(this);
     
@@ -81,8 +141,12 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     m_fileSystemModel->setRootPath("");
     m_fileSystemModel->setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
     
-    ui->m_treeView->setModel(m_fileSystemModel);
-    ui->m_treeView->setRootIndex(m_fileSystemModel->index(QDir::rootPath()));
+    // Setup proxy model for sorting
+    m_sortProxy->setSourceModel(m_fileSystemModel);
+    m_sortProxy->setSortRole(QFileSystemModel::FileNameRole);
+    
+    ui->m_treeView->setModel(m_sortProxy);
+    ui->m_treeView->setRootIndex(m_sortProxy->mapFromSource(m_fileSystemModel->index(QDir::rootPath())));
     ui->m_treeView->setColumnHidden(1, true);  // Hide size column
     ui->m_treeView->setColumnHidden(2, true);  // Hide type column
     ui->m_treeView->setColumnHidden(3, true);  // Hide date column
@@ -90,10 +154,16 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     ui->m_treeView->setSortingEnabled(true);
     ui->m_treeView->sortByColumn(0, Qt::AscendingOrder);
     
+    // Connect to directoryLoaded signal to update sorting when directories are loaded
+    connect(m_fileSystemModel, &QFileSystemModel::directoryLoaded,
+            this, [this](const QString &) {
+                ui->m_treeView->sortByColumn(0, Qt::AscendingOrder);
+            });
+    
     // Expand the tree to show initial structure
-    for (int i = 0; i < m_fileSystemModel->rowCount(ui->m_treeView->rootIndex()); ++i)
+    for (int i = 0; i < m_sortProxy->rowCount(ui->m_treeView->rootIndex()); ++i)
     {
-        QModelIndex child = m_fileSystemModel->index(i, 0, ui->m_treeView->rootIndex());
+        QModelIndex child = m_sortProxy->index(i, 0, ui->m_treeView->rootIndex());
         ui->m_treeView->expand(child);
     }
     
@@ -106,8 +176,8 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     
     // Connect to expanded signal to update icons when directories are expanded
     connect(ui->m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &index) {
-        QString parentPath = m_fileSystemModel->filePath(index);
-
+        QString parentPath = m_fileSystemModel->filePath(m_sortProxy->mapToSource(index));
+        
         // Scan only immediate subdirectories (not recursive)
         QDirIterator it(parentPath, QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::NoIteratorFlags);
         while (it.hasNext())
@@ -163,12 +233,13 @@ void CustomDirectoryDialog::setStartDirectory(const QString &path)
 {
     if (QDir(path).exists())
     {
-        QModelIndex index = m_fileSystemModel->index(path);
-        if (index.isValid())
+        QModelIndex sourceIndex = m_fileSystemModel->index(path);
+        QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
+        if (proxyIndex.isValid())
         {
-            ui->m_treeView->setCurrentIndex(index);
-            ui->m_treeView->scrollTo(index, QTreeView::EnsureVisible);
-            onTreeViewClicked(index);
+            ui->m_treeView->setCurrentIndex(proxyIndex);
+            ui->m_treeView->scrollTo(proxyIndex, QTreeView::EnsureVisible);
+            onTreeViewClicked(proxyIndex);
         }
     }
 }
@@ -249,10 +320,11 @@ void CustomDirectoryDialog::updateVisibleDirectoriesAppearance()
 
 void CustomDirectoryDialog::updateDirectoriesRecursive(const QModelIndex &parentIndex)
 {
-    for (int row = 0; row < m_fileSystemModel->rowCount(parentIndex); ++row)
+    for (int row = 0; row < m_sortProxy->rowCount(parentIndex); ++row)
     {
-        QModelIndex childIndex = m_fileSystemModel->index(row, 0, parentIndex);
-        QString path = m_fileSystemModel->filePath(childIndex);
+        QModelIndex childIndex = m_sortProxy->index(row, 0, parentIndex);
+        QModelIndex sourceIndex = m_sortProxy->mapToSource(childIndex);
+        QString path = m_fileSystemModel->filePath(sourceIndex);
         QFileInfo fileInfo(path);
         
         if (fileInfo.isDir())
@@ -279,7 +351,7 @@ void CustomDirectoryDialog::onTreeViewClicked(const QModelIndex &index)
         return;
     }
     
-    QString path = m_fileSystemModel->filePath(index);
+    QString path = m_fileSystemModel->filePath(m_sortProxy->mapToSource(index));
     QFileInfo fileInfo(path);
     
     if (fileInfo.isDir())
@@ -318,7 +390,7 @@ void CustomDirectoryDialog::onTreeViewDoubleClicked(const QModelIndex &index)
         return;
     }
     
-    QString path = m_fileSystemModel->filePath(index);
+    QString path = m_fileSystemModel->filePath(m_sortProxy->mapToSource(index));
     QFileInfo fileInfo(path);
     
     if (fileInfo.isDir() && directoryHasHeaderDirectly(path))
