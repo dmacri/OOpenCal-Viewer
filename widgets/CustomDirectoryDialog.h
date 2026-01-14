@@ -8,7 +8,11 @@ class QLabel;
 class QCheckBox;
 class QPushButton;
 class QTreeView;
+class QTreeView;
 
+namespace Ui {
+class CustomDirectoryDialog;
+}
 
 class CustomDirectoryDialog : public QDialog
 {
@@ -24,6 +28,7 @@ public:
 private slots:
     void onTreeViewClicked(const QModelIndex &index);
     void onTreeViewDoubleClicked(const QModelIndex &index);
+    void onHiddenDirectoriesToggled(bool checked);
     void onOkButtonClicked();
     void onCancelButtonClicked();
 
@@ -36,6 +41,17 @@ private:
         Unknown          // Not yet checked
     };
 
+    void setupUI();
+    void setupIcons();
+    DirectoryType analyzeDirectory(const QString &path) const;
+    bool directoryHasHeaderDirectly(const QString &path) const;
+    void updateDirectoryAppearance(const QString &path);
+    void updateVisibleDirectoriesAppearance();
+    void updateDirectoriesRecursive(const QModelIndex &parentIndex);
+    bool isDirectorySelectable(const QString &path) const;
+    
+    Ui::CustomDirectoryDialog *ui;
+
     class CustomFileSystemModel : public QFileSystemModel
     {
     public:
@@ -47,26 +63,11 @@ private:
         void setDirectoryEnabled(const QString &path, bool enabled);
         
     private:
-        mutable QHash<QString, QIcon> m_customIcons;
-        mutable QHash<QString, bool> m_enabledState;
+        QMap<QString, QIcon> m_customIcons;
+        QMap<QString, bool> m_enabledState;
     };
 
-    void setupUI();
-    void setupIcons();
-    DirectoryType analyzeDirectory(const QString &path) const;
-    bool directoryHasHeaderDirectly(const QString &path) const;
-    void updateDirectoryAppearance(const QString &path);
-    void updateVisibleDirectoriesAppearance();
-    void updateDirectoriesRecursive(const QModelIndex &parentIndex);
-    bool isDirectorySelectable(const QString &path) const;
-    
-    QTreeView *m_treeView;
     CustomFileSystemModel *m_fileSystemModel;
-    QPushButton *m_okButton;
-    QPushButton *m_cancelButton;
-    QCheckBox *m_showHiddenCheckBox;
-    QLabel *m_pathLabel;
-    
     QString m_selectedDirectory;
     
     // Icons for different directory types

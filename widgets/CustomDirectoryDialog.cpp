@@ -16,6 +16,7 @@
 #include <QDir>
 
 #include "CustomDirectoryDialog.h"
+#include "ui_CustomDirectoryDialog.h"
 #include "core/directoryConstants.h"
 
 
@@ -68,94 +69,43 @@ void CustomDirectoryDialog::CustomFileSystemModel::setDirectoryEnabled(const QSt
 
 CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     : QDialog(parent)
-    , m_treeView(new QTreeView(this))
+    , ui(new Ui::CustomDirectoryDialog)
     , m_fileSystemModel(new CustomFileSystemModel(this))
-    , m_okButton(new QPushButton(tr("Open"), this))
-    , m_cancelButton(new QPushButton(tr("Cancel"), this))
-    , m_showHiddenCheckBox(new QCheckBox(tr("Show hidden directories"), this))
-    , m_pathLabel(new QLabel(this))
 {
-    setupUI();
+    ui->setupUi(this);
+    
+    // Setup icons
     setupIcons();
     
-    // Update directory icons after the UI is set up
-    QTimer::singleShot(100, this, &CustomDirectoryDialog::updateVisibleDirectoriesAppearance);
-    
-    // Set initial directory
-    QString startPath = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-    if (! startPath.isEmpty())
-    {
-        setStartDirectory(startPath);
-    }
-    
-    // Initially disable OK button until a valid directory is selected
-    m_okButton->setEnabled(false);
-}
-
-CustomDirectoryDialog::~CustomDirectoryDialog() = default;
-
-void CustomDirectoryDialog::setupUI()
-{
-    setWindowTitle(tr("Load Model from Directory"));
-    setModal(true);
-    resize(600, 800);
-    
-    // Setup layout
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    
-    // Path label
-    m_pathLabel->setText(tr("Selected: None"));
-    m_pathLabel->setStyleSheet("QLabel { font-weight: bold; color: #666; }");
-    mainLayout->addWidget(m_pathLabel);
-    
-    // Tree view
+    // Setup UI elements
     m_fileSystemModel->setRootPath("");
     m_fileSystemModel->setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
     
-    m_treeView->setModel(m_fileSystemModel);
-    m_treeView->setRootIndex(m_fileSystemModel->index(QDir::rootPath()));
-    m_treeView->setColumnHidden(1, true);  // Hide size column
-    m_treeView->setColumnHidden(2, true);  // Hide type column
-    m_treeView->setColumnHidden(3, true);  // Hide date column
-    m_treeView->setHeaderHidden(true);
-    m_treeView->setSortingEnabled(true);
-    m_treeView->sortByColumn(0, Qt::AscendingOrder);
+    ui->m_treeView->setModel(m_fileSystemModel);
+    ui->m_treeView->setRootIndex(m_fileSystemModel->index(QDir::rootPath()));
+    ui->m_treeView->setColumnHidden(1, true);  // Hide size column
+    ui->m_treeView->setColumnHidden(2, true);  // Hide type column
+    ui->m_treeView->setColumnHidden(3, true);  // Hide date column
+    ui->m_treeView->setHeaderHidden(true);
+    ui->m_treeView->setSortingEnabled(true);
+    ui->m_treeView->sortByColumn(0, Qt::AscendingOrder);
     
     // Expand the tree to show initial structure
-    for (int i = 0; i < m_fileSystemModel->rowCount(m_treeView->rootIndex()); ++i)
+    for (int i = 0; i < m_fileSystemModel->rowCount(ui->m_treeView->rootIndex()); ++i)
     {
-        QModelIndex child = m_fileSystemModel->index(i, 0, m_treeView->rootIndex());
-        m_treeView->expand(child);
+        QModelIndex child = m_fileSystemModel->index(i, 0, ui->m_treeView->rootIndex());
+        ui->m_treeView->expand(child);
     }
     
-    mainLayout->addWidget(m_treeView);
-    
-    // Checkbox for hidden directories
-    mainLayout->addWidget(m_showHiddenCheckBox);
-    
-    // Buttons
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-    buttonLayout->addStretch();
-    buttonLayout->addWidget(m_okButton);
-    buttonLayout->addWidget(m_cancelButton);
-    mainLayout->addLayout(buttonLayout);
-    
     // Connect signals
-    connect(m_treeView, &QTreeView::clicked, this, &CustomDirectoryDialog::onTreeViewClicked);
-    connect(m_treeView, &QTreeView::doubleClicked, this, &CustomDirectoryDialog::onTreeViewDoubleClicked);
-    connect(m_okButton, &QPushButton::clicked, this, &CustomDirectoryDialog::onOkButtonClicked);
-    connect(m_cancelButton, &QPushButton::clicked, this, &CustomDirectoryDialog::onCancelButtonClicked);
-    connect(m_showHiddenCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
-        QDir::Filters filters = QDir::Dirs | QDir::NoDotAndDotDot;
-        if (checked)
-        {
-            filters |= QDir::Hidden;
-        }
-        m_fileSystemModel->setFilter(filters);
-    });
+    connect(ui->m_treeView, &QTreeView::clicked, this, &CustomDirectoryDialog::onTreeViewClicked);
+    connect(ui->m_treeView, &QTreeView::doubleClicked, this, &CustomDirectoryDialog::onTreeViewDoubleClicked);
+    connect(ui->m_showHiddenCheckBox, &QCheckBox::toggled, this, &CustomDirectoryDialog::onHiddenDirectoriesToggled);
+    connect(ui->m_okButton, &QPushButton::clicked, this, &CustomDirectoryDialog::onOkButtonClicked);
+    connect(ui->m_cancelButton, &QPushButton::clicked, this, &CustomDirectoryDialog::onCancelButtonClicked);
     
     // Connect to expanded signal to update icons when directories are expanded
-    connect(m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &index) {
+    connect(ui->m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &index) {
         QString parentPath = m_fileSystemModel->filePath(index);
 
         // Scan only immediate subdirectories (not recursive)
@@ -167,6 +117,17 @@ void CustomDirectoryDialog::setupUI()
             updateDirectoryAppearance(subDirPath);
         }
     });
+    
+    // Initially disable OK button
+    ui->m_okButton->setEnabled(false);
+    
+    // Update visible directories appearance after UI is set up
+    QTimer::singleShot(100, this, &CustomDirectoryDialog::updateVisibleDirectoriesAppearance);
+}
+
+CustomDirectoryDialog::~CustomDirectoryDialog()
+{
+    delete ui;
 }
 
 void CustomDirectoryDialog::setupIcons()
@@ -200,11 +161,13 @@ QString CustomDirectoryDialog::getSelectedDirectory() const
 
 void CustomDirectoryDialog::setStartDirectory(const QString &path)
 {
-    if (QDir(path).exists()) {
+    if (QDir(path).exists())
+    {
         QModelIndex index = m_fileSystemModel->index(path);
-        if (index.isValid()) {
-            m_treeView->setCurrentIndex(index);
-            m_treeView->scrollTo(index, QTreeView::EnsureVisible);
+        if (index.isValid())
+        {
+            ui->m_treeView->setCurrentIndex(index);
+            ui->m_treeView->scrollTo(index, QTreeView::EnsureVisible);
             onTreeViewClicked(index);
         }
     }
@@ -280,7 +243,7 @@ void CustomDirectoryDialog::updateDirectoryAppearance(const QString &path)
 void CustomDirectoryDialog::updateVisibleDirectoriesAppearance()
 {
     // Recursively update all visible directories in the tree
-    QModelIndex rootIndex = m_treeView->rootIndex();
+    QModelIndex rootIndex = ui->m_treeView->rootIndex();
     updateDirectoriesRecursive(rootIndex);
 }
 
@@ -325,7 +288,7 @@ void CustomDirectoryDialog::onTreeViewClicked(const QModelIndex &index)
         
         const DirectoryType type = analyzeDirectory(path);
         const bool hasHeader = (type == DirectoryType::WithHeader);
-        m_okButton->setEnabled(hasHeader);
+        ui->m_okButton->setEnabled(hasHeader);
         
         // Enable OK button only if directory has Header.txt OR has subdirectories        
         if (isDirectorySelectable(path))
@@ -333,17 +296,17 @@ void CustomDirectoryDialog::onTreeViewClicked(const QModelIndex &index)
             m_selectedDirectory = path;
             if (hasHeader)
             {
-                m_pathLabel->setText(tr("Selected: %1 (contains Header.txt)").arg(path));
+                ui->m_pathLabel->setText(tr("Selected: %1 (contains Header.txt)").arg(path));
             }
             else
             {
-                m_pathLabel->setText(tr("Selected: %1 (contains subdirectories)").arg(path));
+                ui->m_pathLabel->setText(tr("Selected: %1 (contains subdirectories)").arg(path));
             }
         }
         else
         {
             m_selectedDirectory.clear();
-            m_pathLabel->setText(tr("Selected: None (directory not selectable)"));
+            ui->m_pathLabel->setText(tr("Selected: None (directory not selectable)"));
         }
     }
 }
@@ -381,4 +344,14 @@ void CustomDirectoryDialog::onOkButtonClicked()
 void CustomDirectoryDialog::onCancelButtonClicked()
 {
     reject();
+}
+
+void CustomDirectoryDialog::onHiddenDirectoriesToggled(bool checked)
+{
+    QDir::Filters filters = QDir::Dirs | QDir::NoDotAndDotDot;
+    if (checked)
+    {
+        filters |= QDir::Hidden;
+    }
+    m_fileSystemModel->setFilter(filters);
 }
