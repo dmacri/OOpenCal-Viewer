@@ -72,7 +72,7 @@ public:
     /** @brief Load a model from a directory
      * @param modelDirectory Path to directory containing Header.txt and model source
      * @return LoadResult with success status and details */
-    LoadResult loadModelFromDirectory(const std::string& modelDirectory);
+    LoadResult loadModelFromDirectory(const std::string& modelDirectory, bool forceCompilation=false);
 
     /** @brief Get the C++ module builder
      * @return Pointer to the CppModuleBuilder instance */

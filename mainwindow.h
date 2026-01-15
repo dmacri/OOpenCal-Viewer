@@ -36,7 +36,7 @@ public:
     /// @param config is optional, if not provided: data will be read from file
     void openConfigurationFile(const QString& configFileName, std::shared_ptr<Config> optionalConfig={});
     void applyCommandLineOptions(const CommandLineParser& cmdParser);
-    void loadModelFromDirectory(const QString& modelDirectory);
+    void loadModelFromDirectory(const QString& modelDirectory, bool forceCompilation=false);
 
     /// @brief Get the name of the substate field currently used for 3D visualization
     /// @return Field name (e.g., "h", "z") or empty string if no 3D substate is active

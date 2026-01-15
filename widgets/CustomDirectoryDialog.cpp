@@ -458,6 +458,11 @@ QString CustomDirectoryDialog::getSelectedDirectory() const
     return m_selectedDirectory;
 }
 
+bool CustomDirectoryDialog::compilationRequested() const
+{
+    return ui->compileModuleCheckBox->isChecked();
+}
+
 void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
 {
     // Find header file in the directory
@@ -876,10 +881,10 @@ void CustomDirectoryDialog::onOkButtonClicked()
     if (! m_selectedDirectory.isEmpty() && isDirectorySelectable(m_selectedDirectory))
     {
         // Check if compilation is needed but not done
-        if (ui->compileModuleCheckBox->isEnabled() && ui->compileModuleCheckBox->isChecked())
+        if (! m_hasCompiledLibrary && ! ui->compileModuleCheckBox->isChecked())
         {
             QMessageBox::warning(this, tr("Compilation Required"), 
-                                 tr("The module needs to be compiled before it can be used.\n"
+                                 tr("The module does not exist, please check \"Compile module\" before it can be used.\n"
                                     "Please check 'Compile module' and compile the module first."));
             return;
         }

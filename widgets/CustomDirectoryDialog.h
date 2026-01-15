@@ -55,6 +55,9 @@ public:
     /// Returns the currently selected directory path
     QString getSelectedDirectory() const;
 
+    /// Returns if the (re)compilation requested
+    bool compilationRequested() const;
+
     /// Sets the initial directory displayed and selected in the tree view
     void setStartDirectory(const QString &path);
 

@@ -92,7 +92,7 @@ ModelLoader::ModelLoader()
 ModelLoader::~ModelLoader() = default;
 
 
-ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& modelDirectory)
+ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& modelDirectory, bool forceCompilation)
 {
     LoadResult result;
 
@@ -138,26 +138,18 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             return result;
         }
 
-        std::cout << "Found header file: '" << sourceFile << "'\n";
+        std::cout << "[DEBUG] Found header file: '" << sourceFile << "'\n";
 
         // Determine output file path
         const std::string moduleFileName = generateModuleNameForSourceFile(sourceFile);
-        std::cout << "Trying to open: " << moduleFileName << "'\t, source never than compiled?: " << std::boolalpha << isFileNewer(sourceFile, moduleFileName) << std::endl;
 
         // Check if compilation is needed
-        if (moduleExists(moduleFileName))
-        {
-            std::cout << "Module '" << moduleFileName << "' already exists" << std::endl;
-            if (isFileNewer(sourceFile, moduleFileName))
-            {
-                std::cerr << "[WARNING] C++ source file '" << sourceFile << "' is never than module file '" << moduleFileName << "'" << std::endl;
-            }
-        }
-        else // if module does not exist
+        const bool compilationNecessarily = ! moduleExists(moduleFileName) || forceCompilation;
+        if (compilationNecessarily)
         {
             const std::string wrapperSource = modelDirectory + "/" + result.outputFileName + std::string(DirectoryConstants::WRAPPER_FILE_SUFFIX);
 
-            std::cout << "Compiling module: " << sourceFile << std::endl;
+            std::cout << "[DEBUG] Compiling module: " << sourceFile << std::endl;
 
             // Generate wrapper code
             const auto className = generateClassNameFromCppHeaderFileName(sourceFile);
@@ -199,6 +191,14 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
                     std::cerr << "Warning: Failed to remove wrapper file: " << e.what() << std::endl;
                     // Don't fail the build if wrapper removal fails
                 }
+            }
+        }
+        else
+        {
+            std::cout << "Module '" << moduleFileName << "' already exists" << std::endl;
+            if (isFileNewer(sourceFile, moduleFileName))
+            {
+                std::cerr << "[WARNING] C++ source file '" << sourceFile << "' is never than module file '" << moduleFileName << "'" << std::endl;
             }
         }
 

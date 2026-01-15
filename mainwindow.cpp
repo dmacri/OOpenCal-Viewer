@@ -1060,7 +1060,7 @@ void MainWindow::onLoadModelFromDirectoryRequested()
             QString modelDirectory = dialog.getSelectedDirectory();
             if (! modelDirectory.isEmpty())
             {
-                loadModelFromDirectory(modelDirectory);
+                loadModelFromDirectory(modelDirectory, dialog.compilationRequested());
             }
         }
     }
@@ -1080,7 +1080,7 @@ void MainWindow::onLoadModelFromDirectoryRequested()
     }
 }
 
-void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
+void MainWindow::loadModelFromDirectory(const QString& modelDirectory, bool forceCompilation)
 {
     // Show wait cursor during model loading
     WaitCursorGuard waitCursor("Loading model from directory...");
@@ -1104,7 +1104,7 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
 
         ModelLoader loader;
         loader.getBuilder()->setProjectRootPath(sourceFileParentDirectoryAbsolutePath());
-        const auto result = loader.loadModelFromDirectory(actualModelDir.string());
+        const auto result = loader.loadModelFromDirectory(actualModelDir.string(), forceCompilation);
 
         if (! result.success)
         {
