@@ -348,6 +348,7 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     , ui(new Ui::CustomDirectoryDialog)
     , m_fileSystemModel(new CustomFileSystemModel(this))
     , m_sortProxy(new DirectorySortProxy(this))
+    , m_hasCompiledLibrary(false)
 {
     ui->setupUi(this);
 
@@ -415,6 +416,9 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     connect(ui->m_showHiddenCheckBox, &QCheckBox::toggled, this, &CustomDirectoryDialog::onHiddenDirectoriesToggled);
     connect(ui->m_okButton, &QPushButton::clicked, this, &CustomDirectoryDialog::onOkButtonClicked);
     connect(ui->m_cancelButton, &QPushButton::clicked, this, &CustomDirectoryDialog::onCancelButtonClicked);
+    
+    // Connect compile module checkbox state change
+    connect(ui->compileModuleCheckBox, &QCheckBox::toggled, this, &CustomDirectoryDialog::onCompileModuleToggled);
     
     // Connect to expanded signal to update icons when directories are expanded
     connect(ui->m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &index) {
@@ -527,6 +531,9 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
         ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
                                            .arg(libraryPath, libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
 
+        // Set flag that compiled library exists
+        m_hasCompiledLibrary = true;
+        
         // Check if source file is newer than compiled library
         if (sourceModDate.isValid() && libraryModDate.isValid() && sourceModDate > libraryModDate)
         {
@@ -539,7 +546,7 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
         {
             // Up to date - no recompilation needed
             ui->compileModuleCheckBox->setChecked(false);
-            ui->compileModuleCheckBox->setEnabled(false);
+            ui->compileModuleCheckBox->setEnabled(true);
             ui->compileModuleCheckBox->setToolTip(tr("Module is up to date\nNo recompilation needed"));
         }
         
@@ -555,9 +562,14 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
                                             .arg(libraryPath));
         ui->compileModuleCheckBox->setChecked(true);
         ui->compileModuleCheckBox->setEnabled(true);
-        ui->compileModuleCheckBox->setToolTip(tr("Compiled module not found\nClick to compile the module"));
+        ui->compileModuleCheckBox->setToolTip(tr("Compiled module not found\nClick to compile module"));
         ui->compiledModuleLineEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
                                            .arg(libraryPath));
+
+        // Set flag that compiled library doesn't exist
+        m_hasCompiledLibrary = false;
+        
+        ui->m_okButton->setEnabled(ui->compileModuleCheckBox->isChecked());
     }
 }
 
@@ -586,6 +598,27 @@ void CustomDirectoryDialog::clearModuleInfo()
     // Clear tooltips
     ui->modelSourceLineEdit->setToolTip(tr("No source files found"));
     ui->compiledModuleLineEdit->setToolTip(tr("No compiled module found"));
+}
+
+void CustomDirectoryDialog::onCompileModuleToggled(bool checked)
+{
+    // Enable/disable OK button based on checkbox state and library existence
+    // If we have a compiled library (m_hasCompiledLibrary = true):
+    // - When checked (recompilation needed): enable OK button
+    // - When unchecked (no recompilation needed): enable OK button
+    // If we don't have a compiled library (m_hasCompiledLibrary = false):
+    // - When checked (compilation needed): enable OK button
+    // - When unchecked (no compilation): disable OK button
+    if (m_hasCompiledLibrary)
+    {
+        // Library exists - always enable OK button regardless of checkbox state
+        ui->m_okButton->setEnabled(true);
+    }
+    else
+    {
+        // No library - enable OK button only when checkbox is unchecked (no compilation)
+        ui->m_okButton->setEnabled(checked);
+    }
 }
 
 void CustomDirectoryDialog::setStartDirectory(const QString &path)

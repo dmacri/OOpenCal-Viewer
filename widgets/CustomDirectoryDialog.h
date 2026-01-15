@@ -123,6 +123,9 @@ private:
     /// Clears all module information widgets
     void clearModuleInfo();
 
+    /// Handles compile module checkbox state changes
+    void onCompileModuleToggled(bool checked);
+
     /// Recursively updates directory appearance starting from a given model index
     void updateDirectoriesRecursive(const QModelIndex &parentIndex);
 
@@ -132,6 +135,9 @@ private:
 private:
     /// Generated UI object
     Ui::CustomDirectoryDialog *ui;
+
+    /// Flag to remember if compiled library exists
+    bool m_hasCompiledLibrary;
 
     /// File system model providing directory data
     CustomFileSystemModel *m_fileSystemModel;
