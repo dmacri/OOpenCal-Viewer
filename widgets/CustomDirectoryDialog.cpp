@@ -24,6 +24,7 @@
 #include "config/ConfigParameter.h"
 #include "config/ConfigConstants.h"
 #include "core/directoryConstants.h"
+#include "plugins/ModelLoader.h"
 
 
 namespace
@@ -453,6 +454,70 @@ QString CustomDirectoryDialog::getSelectedDirectory() const
     return m_selectedDirectory;
 }
 
+void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
+{
+    // Find header file in the directory
+    auto cppHeaderFile = QString::fromStdString(ModelLoader::findHeaderFile(directoryPath.toStdString()));
+    
+    if (cppHeaderFile.isEmpty())
+    {
+        // No header file found - clear all fields
+        ui->modelSourceLineEdit->clear();
+        ui->modelSourceDateTimeEdit->setDateTime(QDateTime());
+        ui->compiledModuleLineEdit->clear();
+        ui->compiledModuleDateTimeEdit->setDateTime(QDateTime());
+        ui->compileModuleCheckBox->setChecked(false);
+        
+        // Set tooltips indicating no files found
+        ui->modelSourceLineEdit->setToolTip(tr("No source files found in this directory"));
+        ui->compiledModuleLineEdit->setToolTip(tr("No compiled module found"));
+        return;
+    }
+    
+    // Update source file information
+    ui->modelSourceLineEdit->setText(cppHeaderFile);
+    QDateTime sourceModDate = getFileModificationDate(cppHeaderFile);
+    ui->modelSourceDateTimeEdit->setDateTime(sourceModDate);
+    ui->modelSourceLineEdit->setToolTip(tr("Source file: %1\nModified: %2")
+                                            .arg(cppHeaderFile)
+                                            .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
+    
+    // Generate expected library name
+    auto libraryFile = QString::fromStdString(ModelLoader::generateModuleNameForSourceFile(cppHeaderFile.toStdString()));
+    ui->compiledModuleLineEdit->setText(libraryFile);
+    
+    // Check if compiled library exists
+    QString libraryPath = QDir(directoryPath).filePath(libraryFile);
+    QFileInfo libraryInfo(libraryPath);
+    
+    if (libraryInfo.exists())
+    {
+        QDateTime libraryModDate = getFileModificationDate(libraryPath);
+        ui->compiledModuleDateTimeEdit->setDateTime(libraryModDate);
+        ui->compileModuleCheckBox->setChecked(true);
+        ui->compiledModuleLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
+                                                   .arg(libraryPath)
+                                                   .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
+    }
+    else
+    {
+        ui->compiledModuleDateTimeEdit->setDateTime(QDateTime());
+        ui->compileModuleCheckBox->setChecked(false);
+        ui->compiledModuleLineEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
+                                                   .arg(libraryPath));
+    }
+}
+
+QDateTime CustomDirectoryDialog::getFileModificationDate(const QString &filePath) const
+{
+    QFileInfo fileInfo(filePath);
+    if (fileInfo.exists())
+    {
+        return fileInfo.lastModified();
+    }
+    return QDateTime();
+}
+
 void CustomDirectoryDialog::setStartDirectory(const QString &path)
 {
     if (QDir(path).exists())
@@ -667,6 +732,8 @@ void CustomDirectoryDialog::onTreeViewClicked(const QModelIndex &index)
             if (hasHeader)
             {
                 ui->m_pathLabel->setText(tr("Selected: %1 (contains Header.txt)").arg(path));
+
+                updateModuleInfo(path);
             }
             else
             {

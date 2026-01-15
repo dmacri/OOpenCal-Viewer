@@ -111,8 +111,14 @@ private:
     /// Updates the icon, enabled state, and metadata for a single directory
     void updateDirectoryAppearance(const QString &path);
 
-    /// Updates the appearance of all currently visible directories
+    /// Updates appearance of all currently visible directories
     void updateVisibleDirectoriesAppearance();
+    
+    /// Updates UI widgets with information about source and compiled files
+    void updateModuleInfo(const QString &directoryPath);
+    
+    /// Gets modification date of a file
+    QDateTime getFileModificationDate(const QString &filePath) const;
 
     /// Recursively updates directory appearance starting from a given model index
     void updateDirectoriesRecursive(const QModelIndex &parentIndex);

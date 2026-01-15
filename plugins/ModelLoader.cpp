@@ -7,6 +7,8 @@
 #include <memory>
 #include <format>
 #include <string>
+#include <QString>
+#include <QLibrary>
 
 #include "ModelLoader.h"
 #include "config/Config.h"
@@ -66,14 +68,6 @@ bool isFileNewer(const std::filesystem::path& a, const std::filesystem::path& b)
 
     // Compare modification times
     return fs::last_write_time(a) > fs::last_write_time(b);
-}
-
-std::string generateModuleNameForSourceFile(const std::string& cppHeaderFile)
-{
-    std::filesystem::path file(cppHeaderFile);
-    const std::string base = file.stem().string();  // e.g. "BallCell"
-    const auto sharedLibraryName = "lib" + base + "Plugin.so";
-    return file.parent_path() / sharedLibraryName;
 }
 
 std::string generateClassNameFromCppHeaderFileName(const std::string& cppHeaderFile)
@@ -258,6 +252,28 @@ std::string ModelLoader::findHeaderFile(const std::string& modelDirectory)
     }
     return {};
 }
+
+std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppHeaderFile)
+{
+    std::filesystem::path file(cppHeaderFile);
+    const std::string baseName = file.stem().string();  // e.g. "BallCell"
+    const auto sharedLibraryName = "lib" + baseName + "Plugin.so";
+    return file.parent_path() / sharedLibraryName;
+}
+// TODO: GB: Use QLibrary to make this multiplatform
+// std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppHeaderFile)
+// {
+//     std::filesystem::path file(cppHeaderFile);
+//     const auto baseName = QString::fromStdString(file.stem().string()) + "Plugin";
+
+//     // QLibrary handles platform-specific prefixes and suffixes
+//     QLibrary lib(baseName);
+
+//     // Force only filename generation, do not load
+//     const auto libFileName = lib.fileName();
+
+//     return file.parent_path() / libFileName.toStdString();
+// }
 
 bool ModelLoader::moduleExists(const std::string& outputPath)
 {

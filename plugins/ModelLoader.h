@@ -78,6 +78,14 @@ public:
      * @return Pointer to the CppModuleBuilder instance */
     viz::plugins::CppModuleBuilder* getBuilder() { return builder.get(); }
 
+    /** @brief Find C++ header file in directory
+     * @param modelDirectory Directory to search
+     * @return Path to first .h file found, or empty string if none found */
+    static std::string findHeaderFile(const std::string& modelDirectory);
+
+    /// @brief It generates name of compiled directory from cpp header file
+    static std::string generateModuleNameForSourceFile(const std::string& cppHeaderFile);
+
 private:
     std::unique_ptr<viz::plugins::CppModuleBuilder> builder;
 
@@ -85,11 +93,6 @@ private:
      * @param modelDirectory Directory to validate
      * @return true if directory contains Header.txt and at least one .h file */
     bool validateDirectory(const std::string& modelDirectory);
-
-    /** @brief Find C++ header file in directory
-     * @param modelDirectory Directory to search
-     * @return Path to first .h file found, or empty string if none found */
-    std::string findHeaderFile(const std::string& modelDirectory);
 
     /** @brief Check if compiled module exists and is up-to-date
      * @param outputPath Path to the .so file
