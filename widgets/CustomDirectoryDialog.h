@@ -1,10 +1,7 @@
 #pragma once
-
+// TODO: documeentation for doxygen
 #include <QDialog>
-#include <QFileSystemModel>
 #include <QIcon>
-#include <QSortFilterProxyModel>
-#include <QMap>
 
 class QLabel;
 class QCheckBox;
@@ -35,13 +32,10 @@ private slots:
     void onCancelButtonClicked();
 
 private:
-    struct HeaderInfo
-    {
-        int numberNodeX = -1;
-        int numberNodeY = -1;
-        QString mode; // "binary" or "text"
-        bool isValid = false;
-    };
+    class DirectorySortProxy;
+    class CustomFileSystemModel;
+
+    struct HeaderInfo;
 
     enum class DirectoryType
     {
@@ -49,15 +43,6 @@ private:
         WithSubdirs,     // Contains subdirectories but no Header.txt - default icon
         Empty,           // No subdirectories and no Header.txt - gray icon (disabled)
         Unknown          // Not yet checked
-    };
-
-    class DirectorySortProxy : public QSortFilterProxyModel
-    {
-    public:
-        explicit DirectorySortProxy(QObject *parent = nullptr);
-        
-    protected:
-        bool lessThan(const QModelIndex &left, const QModelIndex &right) const override;
     };
 
     void setupUI();
@@ -71,26 +56,6 @@ private:
     bool isDirectorySelectable(const QString &path) const;
     
     Ui::CustomDirectoryDialog *ui;
-
-    class CustomFileSystemModel : public QFileSystemModel
-    {
-    public:
-        explicit CustomFileSystemModel(QObject *parent = nullptr);
-        
-        QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
-        int columnCount(const QModelIndex &parent = QModelIndex()) const override;
-        QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
-        bool hasChildren(const QModelIndex &parent = QModelIndex()) const override;
-        
-        void setDirectoryIcon(const QString &path, const QIcon &icon);
-        void setDirectoryEnabled(const QString &path, bool enabled);
-        void setHeaderInfo(const QString &path, const HeaderInfo &info);
-        
-    private:
-        QMap<QString, QIcon> m_customIcons;
-        QMap<QString, bool> m_enabledState;
-        QMap<QString, HeaderInfo> m_headerInfo;
-    };
 
     CustomFileSystemModel *m_fileSystemModel;
     DirectorySortProxy *m_sortProxy;

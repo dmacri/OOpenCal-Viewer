@@ -15,6 +15,8 @@
 #include <QPushButton>
 #include <QCheckBox>
 #include <QDir>
+#include <QSortFilterProxyModel>
+#include <QMap>
 #include "CustomDirectoryDialog.h"
 #include "ui_CustomDirectoryDialog.h"
 #include "config/Config.h"
@@ -62,6 +64,34 @@ QIcon grayIcon()
 }
 } // namespace icons
 
+struct CustomDirectoryDialog::HeaderInfo
+{
+    int numberNodeX = -1;
+    int numberNodeY = -1;
+    QString mode; // "binary" or "text"
+    bool isValid = false;
+};
+
+
+class CustomDirectoryDialog::CustomFileSystemModel : public QFileSystemModel
+{
+public:
+    explicit CustomFileSystemModel(QObject *parent = nullptr);
+
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+    QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
+    bool hasChildren(const QModelIndex &parent = QModelIndex()) const override;
+
+    void setDirectoryIcon(const QString &path, const QIcon &icon);
+    void setDirectoryEnabled(const QString &path, bool enabled);
+    void setHeaderInfo(const QString &path, const HeaderInfo &info);
+
+private:
+    QMap<QString, QIcon> m_customIcons;
+    QMap<QString, bool> m_enabledState;
+    QMap<QString, CustomDirectoryDialog::HeaderInfo> m_headerInfo;
+};
 
 // CustomFileSystemModel implementation
 CustomDirectoryDialog::CustomFileSystemModel::CustomFileSystemModel(QObject *parent)
@@ -243,6 +273,15 @@ bool CustomDirectoryDialog::CustomFileSystemModel::hasChildren(const QModelIndex
 
     return dir.entryInfoList().size() > 0;
 }
+
+class CustomDirectoryDialog::DirectorySortProxy : public QSortFilterProxyModel
+{
+public:
+    explicit DirectorySortProxy(QObject *parent = nullptr);
+
+protected:
+    bool lessThan(const QModelIndex &left, const QModelIndex &right) const override;
+};
 
 // DirectorySortProxy implementation
 CustomDirectoryDialog::DirectorySortProxy::DirectorySortProxy(QObject *parent)
