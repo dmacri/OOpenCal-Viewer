@@ -531,10 +531,22 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
         QDateTime libraryModDate = getFileModificationDate(libraryPath);
 
         // Update compiled module date label (instead of QDateTimeEdit)
-        ui->compiledModuleTimeLineEdit->setText(tr("Modified: %1")
-                                                   .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
+        QString compiledModuleText = tr("Modified: %1").arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss"));
+        ui->compiledModuleTimeLineEdit->setText(compiledModuleText);
         ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
                                            .arg(libraryPath, libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
+        
+        // Set background color based on source vs compiled dates
+        if (sourceModDate.isValid() && libraryModDate.isValid() && sourceModDate > libraryModDate)
+        {
+            // Source is newer - red background for compiled module date
+            ui->compiledModuleTimeLineEdit->setStyleSheet("background-color: #ffcccc; color: black; padding: 2px; border: 1px solid #ff9999; border-radius: 3px;");
+        }
+        else
+        {
+            // Up to date - normal background
+            ui->compiledModuleTimeLineEdit->setStyleSheet("");
+        }
 
         // Set flag that compiled library exists
         m_hasCompiledLibrary = true;
@@ -571,6 +583,9 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
         ui->compiledModuleLineEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
                                            .arg(libraryPath));
 
+        // Red background for missing compiled module
+        ui->compiledModuleTimeLineEdit->setStyleSheet("background-color: #ffcccc; color: black; padding: 2px; border: 1px solid #ff9999; border-radius: 3px;");
+
         // Set flag that compiled library doesn't exist
         m_hasCompiledLibrary = false;
         
@@ -596,9 +611,11 @@ void CustomDirectoryDialog::clearModuleInfo()
     ui->compileModuleCheckBox->setEnabled(false);
     ui->compileModuleCheckBox->setToolTip(tr("No module selected"));
     
-    // Clear date labels
+    // Clear date labels and reset styles
     ui->modelSourceModificationTimeLineEdit->setText(tr("(not available)"));
     ui->compiledModuleTimeLineEdit->setText(tr("(not available)"));
+    ui->modelSourceModificationTimeLineEdit->setStyleSheet("");
+    ui->compiledModuleTimeLineEdit->setStyleSheet("");
     
     // Clear tooltips
     ui->modelSourceLineEdit->setToolTip(tr("No source files found"));
