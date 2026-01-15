@@ -143,6 +143,22 @@ void CustomDirectoryDialog::CustomFileSystemModel::setHeaderInfo(const QString &
     emit dataChanged(index, index, {Qt::DisplayRole});
 }
 
+bool CustomDirectoryDialog::CustomFileSystemModel::hasChildren(const QModelIndex &parent) const
+{
+    if (! parent.isValid())
+        return QFileSystemModel::hasChildren(parent);
+
+    QFileInfo info = fileInfo(parent);
+    if (! info.isDir())
+        return false;
+
+    // check if the directory has subdirectories
+    QDir dir(info.absoluteFilePath());
+    dir.setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
+
+    return dir.entryInfoList().size() > 0;
+}
+
 // DirectorySortProxy implementation
 CustomDirectoryDialog::DirectorySortProxy::DirectorySortProxy(QObject *parent)
     : QSortFilterProxyModel(parent)
