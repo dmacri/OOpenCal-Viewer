@@ -120,6 +120,9 @@ private:
     /// Gets modification date of a file
     QDateTime getFileModificationDate(const QString &filePath) const;
 
+    /// Clears all module information widgets
+    void clearModuleInfo();
+
     /// Recursively updates directory appearance starting from a given model index
     void updateDirectoriesRecursive(const QModelIndex &parentIndex);
 

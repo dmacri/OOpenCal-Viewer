@@ -474,17 +474,26 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
         return;
     }
     
+    // Extract only filename from full path
+    QFileInfo sourceFileInfo(cppHeaderFile);
+    QString sourceFileName = sourceFileInfo.fileName();
+    
     // Update source file information
-    ui->modelSourceLineEdit->setText(cppHeaderFile);
+    ui->modelSourceLineEdit->setText(sourceFileName);
     QDateTime sourceModDate = getFileModificationDate(cppHeaderFile);
     ui->modelSourceDateTimeEdit->setDateTime(sourceModDate);
     ui->modelSourceLineEdit->setToolTip(tr("Source file: %1\nModified: %2")
-                                            .arg(cppHeaderFile)
-                                            .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
+                                       .arg(cppHeaderFile)
+                                       .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
     
     // Generate expected library name
     auto libraryFile = QString::fromStdString(ModelLoader::generateModuleNameForSourceFile(cppHeaderFile.toStdString()));
-    ui->compiledModuleLineEdit->setText(libraryFile);
+    
+    // Extract only filename from library name
+    QFileInfo libraryFileInfo(libraryFile);
+    QString libraryFileName = libraryFileInfo.fileName();
+    
+    ui->compiledModuleLineEdit->setText(libraryFileName);
     
     // Check if compiled library exists
     QString libraryPath = QDir(directoryPath).filePath(libraryFile);
@@ -496,15 +505,15 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
         ui->compiledModuleDateTimeEdit->setDateTime(libraryModDate);
         ui->compileModuleCheckBox->setChecked(true);
         ui->compiledModuleLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
-                                                   .arg(libraryPath)
-                                                   .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
+                                           .arg(libraryPath)
+                                           .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
     }
     else
     {
         ui->compiledModuleDateTimeEdit->setDateTime(QDateTime());
         ui->compileModuleCheckBox->setChecked(false);
         ui->compiledModuleLineEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
-                                                   .arg(libraryPath));
+                                           .arg(libraryPath));
     }
 }
 
@@ -516,6 +525,19 @@ QDateTime CustomDirectoryDialog::getFileModificationDate(const QString &filePath
         return fileInfo.lastModified();
     }
     return QDateTime();
+}
+
+void CustomDirectoryDialog::clearModuleInfo()
+{
+    ui->modelSourceLineEdit->clear();
+    ui->modelSourceDateTimeEdit->setDateTime(QDateTime());
+    ui->compiledModuleLineEdit->clear();
+    ui->compiledModuleDateTimeEdit->setDateTime(QDateTime());
+    ui->compileModuleCheckBox->setChecked(false);
+    
+    // Clear tooltips
+    ui->modelSourceLineEdit->setToolTip(tr("No source files found"));
+    ui->compiledModuleLineEdit->setToolTip(tr("No compiled module found"));
 }
 
 void CustomDirectoryDialog::setStartDirectory(const QString &path)
@@ -732,18 +754,21 @@ void CustomDirectoryDialog::onTreeViewClicked(const QModelIndex &index)
             if (hasHeader)
             {
                 ui->m_pathLabel->setText(tr("Selected: %1 (contains Header.txt)").arg(path));
-
                 updateModuleInfo(path);
             }
             else
             {
                 ui->m_pathLabel->setText(tr("Selected: %1 (contains subdirectories)").arg(path));
+                // Clear module info for non-green directories
+                clearModuleInfo();
             }
         }
         else
         {
             m_selectedDirectory.clear();
             ui->m_pathLabel->setText(tr("Selected: None (directory not selectable)"));
+            // Clear module info for non-selectable directories
+            clearModuleInfo();
         }
     }
 }
