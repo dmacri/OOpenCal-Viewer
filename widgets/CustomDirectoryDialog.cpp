@@ -227,18 +227,30 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     // Show header and set custom column headers
     ui->m_treeView->setHeaderHidden(false);
     
-    // Configure column widths
-    ui->m_treeView->setColumnWidth(ColumnDirectory, 400);  // First column (directory tree) - wide
-    ui->m_treeView->setColumnWidth(ColumnX, 50);   // X column - small
-    ui->m_treeView->setColumnWidth(ColumnY, 50);   // Y column - small
-    ui->m_treeView->setColumnWidth(ColumnM, 40);   // M column - smallest
-    
-    // Set column resize modes
+    // Set column resize modes with fixed percentages
     QHeaderView* header = ui->m_treeView->header();
-    header->setSectionResizeMode(ColumnDirectory, QHeaderView::Stretch);  // First column stretches to fill
-    header->setSectionResizeMode(ColumnX, QHeaderView::ResizeToContents);  // X column - resize to content
-    header->setSectionResizeMode(ColumnY, QHeaderView::ResizeToContents);  // Y column - resize to content
-    header->setSectionResizeMode(ColumnM, QHeaderView::ResizeToContents);
+    header->setSectionResizeMode(ColumnDirectory, QHeaderView::Interactive);  // 70% for directory column
+    header->setSectionResizeMode(ColumnX, QHeaderView::Fixed);  // 10% for X column
+    header->setSectionResizeMode(ColumnY, QHeaderView::Fixed);  // 10% for Y column
+    header->setSectionResizeMode(ColumnM, QHeaderView::Fixed);  // 10% for M column
+    header->setStretchLastSection(false);
+    
+    // Set initial column widths (will be adjusted to percentages when widget is shown)
+    ui->m_treeView->setColumnWidth(ColumnDirectory, 400);  // Initial width for directory column
+    ui->m_treeView->setColumnWidth(ColumnX, 30);   // Initial width for X column
+    ui->m_treeView->setColumnWidth(ColumnY, 30);   // Initial width for Y column
+    ui->m_treeView->setColumnWidth(ColumnM, 30);   // Initial width for M column
+    
+    // Apply percentage-based widths after widget is shown
+    QTimer::singleShot(0, this, [this]() {
+        QHeaderView* header = ui->m_treeView->header();
+        int totalWidth = ui->m_treeView->header()->viewport()->width();
+        
+        header->resizeSection(ColumnDirectory, totalWidth * 0.7);  // 70% for directory
+        header->resizeSection(ColumnX, totalWidth * 0.1);         // 10% for X
+        header->resizeSection(ColumnY, totalWidth * 0.1);         // 10% for Y
+        header->resizeSection(ColumnM, totalWidth * 0.1);         // 10% for M
+    });
     
     ui->m_treeView->setSortingEnabled(true);
     ui->m_treeView->sortByColumn(ColumnDirectory, Qt::AscendingOrder);
