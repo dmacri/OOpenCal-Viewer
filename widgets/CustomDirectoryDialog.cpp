@@ -467,6 +467,8 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
         ui->compiledModuleLineEdit->clear();
         ui->compiledModuleTimeLineEdit->setText(tr("(not available)"));
         ui->compileModuleCheckBox->setChecked(false);
+        ui->compileModuleCheckBox->setEnabled(false);
+        ui->compileModuleCheckBox->setToolTip(tr("No source files found in this directory"));
         
         // Set tooltips indicating no files found
         ui->modelSourceLineEdit->setToolTip(tr("No source files found in this directory"));
@@ -524,17 +526,36 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
                                                    .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
         ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
                                            .arg(libraryPath, libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
-        ui->compileModuleCheckBox->setChecked(true);
+
+        // Check if source file is newer than compiled library
+        if (sourceModDate.isValid() && libraryModDate.isValid() && sourceModDate > libraryModDate)
+        {
+            // Source is newer - suggest recompilation
+            ui->compileModuleCheckBox->setChecked(true);
+            ui->compileModuleCheckBox->setEnabled(true);
+            ui->compileModuleCheckBox->setToolTip(tr("Source file is newer than compiled module\nClick to recompile"));
+        }
+        else
+        {
+            // Up to date - no recompilation needed
+            ui->compileModuleCheckBox->setChecked(false);
+            ui->compileModuleCheckBox->setEnabled(false);
+            ui->compileModuleCheckBox->setToolTip(tr("Module is up to date\nNo recompilation needed"));
+        }
+        
+        ui->compileModuleCheckBox->setEnabled(true);
         ui->compiledModuleLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
                                            .arg(libraryPath, libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
     }
     else
     {
-        // Clear compiled module date label
+        // No compiled library - suggest compilation
         ui->compiledModuleTimeLineEdit->setText(tr("(module not available)"));
         ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
-                                           .arg(libraryPath));
-        ui->compileModuleCheckBox->setChecked(false);
+                                            .arg(libraryPath));
+        ui->compileModuleCheckBox->setChecked(true);
+        ui->compileModuleCheckBox->setEnabled(true);
+        ui->compileModuleCheckBox->setToolTip(tr("Compiled module not found\nClick to compile the module"));
         ui->compiledModuleLineEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
                                            .arg(libraryPath));
     }
@@ -555,6 +576,8 @@ void CustomDirectoryDialog::clearModuleInfo()
     ui->modelSourceLineEdit->clear();
     ui->compiledModuleLineEdit->clear();
     ui->compileModuleCheckBox->setChecked(false);
+    ui->compileModuleCheckBox->setEnabled(false);
+    ui->compileModuleCheckBox->setToolTip(tr("No module selected"));
     
     // Clear date labels
     ui->modelSourceModificationTimeLineEdit->setText(tr("(not available)"));
@@ -819,6 +842,15 @@ void CustomDirectoryDialog::onOkButtonClicked()
 {
     if (! m_selectedDirectory.isEmpty() && isDirectorySelectable(m_selectedDirectory))
     {
+        // Check if compilation is needed but not done
+        if (ui->compileModuleCheckBox->isEnabled() && ui->compileModuleCheckBox->isChecked())
+        {
+            QMessageBox::warning(this, tr("Compilation Required"), 
+                                 tr("The module needs to be compiled before it can be used.\n"
+                                    "Please check 'Compile module' and compile the module first."));
+            return;
+        }
+
         accept();
     }
     else
