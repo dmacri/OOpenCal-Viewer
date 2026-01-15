@@ -14,7 +14,6 @@
 #include <QPushButton>
 #include <QCheckBox>
 #include <QDir>
-
 #include "CustomDirectoryDialog.h"
 #include "ui_CustomDirectoryDialog.h"
 #include "config/Config.h"
@@ -22,6 +21,21 @@
 #include "config/ConfigParameter.h"
 #include "config/ConfigConstants.h"
 #include "core/directoryConstants.h"
+
+
+namespace
+{
+// Column indices for the tree view
+enum ColumnIndex
+{
+    ColumnDirectory = 0,
+    ColumnX = 1,
+    ColumnY = 2,
+    ColumnM = 3,
+
+    ColumnCount
+};
+} // namespace
 
 
 // CustomFileSystemModel implementation
@@ -38,8 +52,8 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
     QString path = filePath(index);
     QFileInfo fileInfo(path);
     
-    // Handle custom columns (columns 1, 2, 3 for x, y, m)
-    if (role == Qt::DisplayRole && index.column() >= 1 && index.column() <= 3 && fileInfo.isDir())
+    // Handle custom columns (columns X, Y, M)
+    if (role == Qt::DisplayRole && index.column() >= ColumnX && index.column() <= ColumnM && fileInfo.isDir())
     {
         if (m_headerInfo.contains(path))
         {
@@ -48,11 +62,11 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
             {
                 switch (index.column())
                 {
-                case 1: // x column (number_node_x)
+                case ColumnX: // x column (number_node_x)
                     return info.numberNodeX > 0 ? QString::number(info.numberNodeX) : QString();
-                case 2: // y column (number_node_y)
+                case ColumnY: // y column (number_node_y)
                     return info.numberNodeY > 0 ? QString::number(info.numberNodeY) : QString();
-                case 3: // m column (mode)
+                case ColumnM: // m column (mode)
                     return info.mode;
                 }
             }
@@ -60,14 +74,14 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
         return QString(); // Empty string for directories without header info
     }
     
-    // Right-align text for columns 1, 2, 3
-    if (role == Qt::TextAlignmentRole && index.column() >= 1 && index.column() <= 3)
+    // Right-align text for columns X, Y, M
+    if (role == Qt::TextAlignmentRole && index.column() >= ColumnX && index.column() <= ColumnM)
     {
         return QVariant(Qt::AlignRight | Qt::AlignVCenter);
     }
 
-    // Only show icons in the first column (column 0)
-    if (role == Qt::DecorationRole && fileInfo.isDir() && index.column() == 0)
+    // Only show icons in first column (column Directory)
+    if (role == Qt::DecorationRole && fileInfo.isDir() && index.column() == ColumnDirectory)
     {
         if (m_customIcons.contains(path))
         {
@@ -75,8 +89,8 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
         }
     }
     
-    // Only show foreground color in the first column
-    if (role == Qt::ForegroundRole && fileInfo.isDir() && index.column() == 0)
+    // Only show foreground color in first column
+    if (role == Qt::ForegroundRole && fileInfo.isDir() && index.column() == ColumnDirectory)
     {
         if (m_enabledState.contains(path) && !m_enabledState[path])
         {
@@ -89,9 +103,8 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
 
 int CustomDirectoryDialog::CustomFileSystemModel::columnCount(const QModelIndex &parent) const
 {
-    // Return 4 columns: Name, X, Y, M
     Q_UNUSED(parent)
-    return 4;
+    return ColumnCount;
 }
 
 QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Qt::Orientation orientation, int role) const
@@ -100,10 +113,10 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Q
     {
         switch (section)
         {
-        case 0: return tr("Directory");
-        case 1: return tr("X");
-        case 2: return tr("Y");
-        case 3: return tr("M");
+        case ColumnDirectory: return tr("Directory");
+        case ColumnX: return tr("X");
+        case ColumnY: return tr("Y");
+        case ColumnM: return tr("M");
         }
     }
     return QFileSystemModel::headerData(section, orientation, role);
@@ -215,25 +228,25 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     ui->m_treeView->setHeaderHidden(false);
     
     // Configure column widths
-    ui->m_treeView->setColumnWidth(0, 400);  // First column (directory tree) - wide
-    ui->m_treeView->setColumnWidth(1, 50);   // X column - small
-    ui->m_treeView->setColumnWidth(2, 50);   // Y column - small
-    ui->m_treeView->setColumnWidth(3, 40);   // M column - smallest
+    ui->m_treeView->setColumnWidth(ColumnDirectory, 400);  // First column (directory tree) - wide
+    ui->m_treeView->setColumnWidth(ColumnX, 50);   // X column - small
+    ui->m_treeView->setColumnWidth(ColumnY, 50);   // Y column - small
+    ui->m_treeView->setColumnWidth(ColumnM, 40);   // M column - smallest
     
     // Set column resize modes
     QHeaderView* header = ui->m_treeView->header();
-    header->setSectionResizeMode(0, QHeaderView::Stretch);  // First column stretches to fill
-    header->setSectionResizeMode(1, QHeaderView::ResizeToContents);  // X column - resize to content
-    header->setSectionResizeMode(2, QHeaderView::ResizeToContents);  // Y column - resize to content
-    header->setSectionResizeMode(3, QHeaderView::ResizeToContents);  // M column - resize to content
+    header->setSectionResizeMode(ColumnDirectory, QHeaderView::Stretch);  // First column stretches to fill
+    header->setSectionResizeMode(ColumnX, QHeaderView::ResizeToContents);  // X column - resize to content
+    header->setSectionResizeMode(ColumnY, QHeaderView::ResizeToContents);  // Y column - resize to content
+    header->setSectionResizeMode(ColumnM, QHeaderView::ResizeToContents);
     
     ui->m_treeView->setSortingEnabled(true);
-    ui->m_treeView->sortByColumn(0, Qt::AscendingOrder);
+    ui->m_treeView->sortByColumn(ColumnDirectory, Qt::AscendingOrder);
     
     // Connect to directoryLoaded signal to update sorting when directories are loaded
     connect(m_fileSystemModel, &QFileSystemModel::directoryLoaded,
             this, [this](const QString &) {
-                ui->m_treeView->sortByColumn(0, Qt::AscendingOrder);
+                ui->m_treeView->sortByColumn(ColumnDirectory, Qt::AscendingOrder);
             });
     
     // Expand the tree to show initial structure
