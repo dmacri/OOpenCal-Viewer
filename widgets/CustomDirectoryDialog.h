@@ -4,6 +4,7 @@
 #include <QFileSystemModel>
 #include <QIcon>
 #include <QSortFilterProxyModel>
+#include <QMap>
 
 class QLabel;
 class QCheckBox;
@@ -34,6 +35,14 @@ private slots:
     void onCancelButtonClicked();
 
 private:
+    struct HeaderInfo
+    {
+        int numberNodeX = -1;
+        int numberNodeY = -1;
+        QString mode; // "binary" or "text"
+        bool isValid = false;
+    };
+
     enum class DirectoryType
     {
         WithHeader,      // Contains Header.txt - green icon
@@ -55,6 +64,7 @@ private:
     void setupIcons();
     DirectoryType analyzeDirectory(const QString &path) const;
     bool directoryHasHeaderDirectly(const QString &path) const;
+    HeaderInfo parseHeaderFile(const QString &headerPath) const;
     void updateDirectoryAppearance(const QString &path);
     void updateVisibleDirectoriesAppearance();
     void updateDirectoriesRecursive(const QModelIndex &parentIndex);
@@ -68,13 +78,17 @@ private:
         explicit CustomFileSystemModel(QObject *parent = nullptr);
         
         QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+        int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+        QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
         
         void setDirectoryIcon(const QString &path, const QIcon &icon);
         void setDirectoryEnabled(const QString &path, bool enabled);
+        void setHeaderInfo(const QString &path, const HeaderInfo &info);
         
     private:
         QMap<QString, QIcon> m_customIcons;
         QMap<QString, bool> m_enabledState;
+        QMap<QString, HeaderInfo> m_headerInfo;
     };
 
     CustomFileSystemModel *m_fileSystemModel;

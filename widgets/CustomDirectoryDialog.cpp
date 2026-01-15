@@ -17,6 +17,10 @@
 
 #include "CustomDirectoryDialog.h"
 #include "ui_CustomDirectoryDialog.h"
+#include "config/Config.h"
+#include "config/ConfigCategory.h"
+#include "config/ConfigParameter.h"
+#include "config/ConfigConstants.h"
 #include "core/directoryConstants.h"
 
 
@@ -34,7 +38,30 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
     QString path = filePath(index);
     QFileInfo fileInfo(path);
     
-    if (role == Qt::DecorationRole && fileInfo.isDir())
+    // Handle custom columns (columns 1, 2, 3 for x, y, m)
+    if (role == Qt::DisplayRole && index.column() >= 1 && index.column() <= 3 && fileInfo.isDir())
+    {
+        if (m_headerInfo.contains(path))
+        {
+            const HeaderInfo &info = m_headerInfo[path];
+            if (info.isValid)
+            {
+                switch (index.column())
+                {
+                case 1: // x column (number_node_x)
+                    return info.numberNodeX > 0 ? QString::number(info.numberNodeX) : QString();
+                case 2: // y column (number_node_y)
+                    return info.numberNodeY > 0 ? QString::number(info.numberNodeY) : QString();
+                case 3: // m column (mode)
+                    return info.mode;
+                }
+            }
+        }
+        return QString(); // Empty string for directories without header info
+    }
+    
+    // Only show icons in the first column (column 0)
+    if (role == Qt::DecorationRole && fileInfo.isDir() && index.column() == 0)
     {
         if (m_customIcons.contains(path))
         {
@@ -42,7 +69,8 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
         }
     }
     
-    if (role == Qt::ForegroundRole && fileInfo.isDir())
+    // Only show foreground color in the first column
+    if (role == Qt::ForegroundRole && fileInfo.isDir() && index.column() == 0)
     {
         if (m_enabledState.contains(path) && !m_enabledState[path])
         {
@@ -51,6 +79,28 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
     }
     
     return QFileSystemModel::data(index, role);
+}
+
+int CustomDirectoryDialog::CustomFileSystemModel::columnCount(const QModelIndex &parent) const
+{
+    // Return 4 columns: Name, X, Y, M
+    Q_UNUSED(parent)
+    return 4;
+}
+
+QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if (orientation == Qt::Horizontal && role == Qt::DisplayRole)
+    {
+        switch (section)
+        {
+        case 0: return tr("Directory");
+        case 1: return tr("X");
+        case 2: return tr("Y");
+        case 3: return tr("M");
+        }
+    }
+    return QFileSystemModel::headerData(section, orientation, role);
 }
 
 void CustomDirectoryDialog::CustomFileSystemModel::setDirectoryIcon(const QString &path, const QIcon &icon)
@@ -65,6 +115,13 @@ void CustomDirectoryDialog::CustomFileSystemModel::setDirectoryEnabled(const QSt
     m_enabledState[path] = enabled;
     QModelIndex index = this->index(path);
     emit dataChanged(index, index, {Qt::ForegroundRole});
+}
+
+void CustomDirectoryDialog::CustomFileSystemModel::setHeaderInfo(const QString &path, const HeaderInfo &info)
+{
+    m_headerInfo[path] = info;
+    QModelIndex index = this->index(path);
+    emit dataChanged(index, index, {Qt::DisplayRole});
 }
 
 // DirectorySortProxy implementation
@@ -133,24 +190,37 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     , m_sortProxy(new DirectorySortProxy(this))
 {
     ui->setupUi(this);
-    
+
     // Setup icons
     setupIcons();
-    
+
     // Setup UI elements
     m_fileSystemModel->setRootPath("");
     m_fileSystemModel->setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
-    
+
     // Setup proxy model for sorting
     m_sortProxy->setSourceModel(m_fileSystemModel);
     m_sortProxy->setSortRole(QFileSystemModel::FileNameRole);
-    
+
     ui->m_treeView->setModel(m_sortProxy);
     ui->m_treeView->setRootIndex(m_sortProxy->mapFromSource(m_fileSystemModel->index(QDir::rootPath())));
-    ui->m_treeView->setColumnHidden(1, true);  // Hide size column
-    ui->m_treeView->setColumnHidden(2, true);  // Hide type column
-    ui->m_treeView->setColumnHidden(3, true);  // Hide date column
-    ui->m_treeView->setHeaderHidden(true);
+    
+    // Show header and set custom column headers
+    ui->m_treeView->setHeaderHidden(false);
+    
+    // Configure column widths
+    ui->m_treeView->setColumnWidth(0, 400);  // First column (directory tree) - wide
+    ui->m_treeView->setColumnWidth(1, 50);   // X column - small
+    ui->m_treeView->setColumnWidth(2, 50);   // Y column - small
+    ui->m_treeView->setColumnWidth(3, 40);   // M column - smallest
+    
+    // Set column resize modes
+    QHeaderView* header = ui->m_treeView->header();
+    header->setSectionResizeMode(0, QHeaderView::Stretch);  // First column stretches to fill
+    header->setSectionResizeMode(1, QHeaderView::ResizeToContents);  // X column - resize to content
+    header->setSectionResizeMode(2, QHeaderView::ResizeToContents);  // Y column - resize to content
+    header->setSectionResizeMode(3, QHeaderView::ResizeToContents);  // M column - resize to content
+    
     ui->m_treeView->setSortingEnabled(true);
     ui->m_treeView->sortByColumn(0, Qt::AscendingOrder);
     
@@ -255,6 +325,66 @@ bool CustomDirectoryDialog::directoryHasHeaderDirectly(const QString &path) cons
     return dir.exists(DirectoryConstants::HEADER_FILE_NAME);
 }
 
+CustomDirectoryDialog::HeaderInfo CustomDirectoryDialog::parseHeaderFile(const QString &headerPath) const
+{
+    HeaderInfo info;
+    
+    QFileInfo fileInfo(headerPath);
+    if (!fileInfo.exists() || !fileInfo.isFile())
+    {
+        return info; // Return invalid info
+    }
+    
+    try
+    {
+        Config config(headerPath.toStdString(), /*printWarnings=*/false);
+        
+        // Get number_node_x from DISTRIBUTED category
+        ConfigCategory* distributedCat = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED, /*ignoreCase=*/true);
+        if (distributedCat)
+        {
+            const ConfigParameter* paramX = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_X);
+            if (paramX)
+            {
+                info.numberNodeX = std::stoi(paramX->getDefaultValue());
+            }
+            
+            const ConfigParameter* paramY = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Y);
+            if (paramY)
+            {
+                info.numberNodeY = std::stoi(paramY->getDefaultValue());
+            }
+        }
+        
+        // Get mode from VISUALIZATION category
+        ConfigCategory* visualizationCat = config.getConfigCategory(ConfigConstants::CATEGORY_VISUALIZATION, /*ignoreCase=*/true);
+        if (visualizationCat)
+        {
+            const ConfigParameter* paramMode = visualizationCat->getConfigParameter(ConfigConstants::PARAM_MODE);
+            if (paramMode)
+            {
+                info.mode = QString::fromStdString(paramMode->getDefaultValue()).toLower();
+                if (info.mode == "binary")
+                    info.mode = "b";
+                else if (info.mode == "text")
+                    info.mode = "t";
+                else
+                    info.mode = info.mode.left(1); // Take first letter as fallback
+            }
+        }
+        
+        // Mark as valid if we got at least some data
+        info.isValid = (info.numberNodeX > 0 || info.numberNodeY > 0 || !info.mode.isEmpty());
+    }
+    catch (const std::exception& e)
+    {
+        // Return invalid info on exception
+        info.isValid = false;
+    }
+    
+    return info;
+}
+
 CustomDirectoryDialog::DirectoryType CustomDirectoryDialog::analyzeDirectory(const QString &path) const
 {
     QDir dir(path);
@@ -309,6 +439,20 @@ void CustomDirectoryDialog::updateDirectoryAppearance(const QString &path)
     
     m_fileSystemModel->setDirectoryIcon(path, icon);
     m_fileSystemModel->setDirectoryEnabled(path, enabled);
+    
+    // Parse header file if directory has one
+    if (type == DirectoryType::WithHeader)
+    {
+        QString headerPath = QDir(path).filePath(DirectoryConstants::HEADER_FILE_NAME);
+        HeaderInfo info = parseHeaderFile(headerPath);
+        m_fileSystemModel->setHeaderInfo(path, info);
+    }
+    else
+    {
+        // Clear header info for directories without header
+        HeaderInfo emptyInfo;
+        m_fileSystemModel->setHeaderInfo(path, emptyInfo);
+    }
 }
 
 void CustomDirectoryDialog::updateVisibleDirectoriesAppearance()
