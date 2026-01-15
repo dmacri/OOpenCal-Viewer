@@ -60,10 +60,10 @@
        <string>Compile model</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout">
-       <item row="1" column="1">
-        <widget class="QLineEdit" name="compiledModuleLineEdit">
-         <property name="enabled">
-          <bool>false</bool>
+       <item row="0" column="0">
+        <widget class="QLabel" name="modelSourceLabel">
+         <property name="text">
+          <string>Model source file:</string>
          </property>
         </widget>
        </item>
@@ -74,10 +74,10 @@
          </property>
         </widget>
        </item>
-       <item row="0" column="0">
-        <widget class="QLabel" name="modelSourceLabel">
-         <property name="text">
-          <string>Model source file:</string>
+       <item row="1" column="1">
+        <widget class="QLineEdit" name="compiledModuleLineEdit">
+         <property name="enabled">
+          <bool>false</bool>
          </property>
         </widget>
        </item>
@@ -95,17 +95,17 @@
          </property>
         </widget>
        </item>
-       <item row="0" column="2">
-        <widget class="QLabel" name="modelSourceDateTimeEdit">
-         <property name="text">
-          <string notr="true"/>
+       <item row="1" column="2">
+        <widget class="QLineEdit" name="compiledModuleTimeLineEdit">
+         <property name="enabled">
+          <bool>false</bool>
          </property>
         </widget>
        </item>
-       <item row="1" column="2">
-        <widget class="QLabel" name="compiledModuleDateTimeEdit">
-         <property name="text">
-          <string notr="true"/>
+       <item row="0" column="2">
+        <widget class="QLineEdit" name="modelSourceModificationTimeLineEdit">
+         <property name="enabled">
+          <bool>false</bool>
          </property>
         </widget>
        </item>

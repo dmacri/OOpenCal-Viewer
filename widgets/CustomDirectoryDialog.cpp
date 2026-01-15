@@ -463,9 +463,9 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
     {
         // No header file found - clear all fields
         ui->modelSourceLineEdit->clear();
-        ui->modelSourceDateTimeEdit->setText(tr("(not available)"));
+        ui->modelSourceModificationTimeLineEdit->setText(tr("(not available)"));
         ui->compiledModuleLineEdit->clear();
-        ui->compiledModuleDateTimeEdit->setText(tr("(not available)"));
+        ui->compiledModuleTimeLineEdit->setText(tr("(not available)"));
         ui->compileModuleCheckBox->setChecked(false);
         
         // Set tooltips indicating no files found
@@ -485,17 +485,17 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
     // Update source date label (instead of QDateTimeEdit)
     if (sourceModDate.isValid())
     {
-        ui->modelSourceDateTimeEdit->setText(tr("Modified: %1")
-                                                   .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
-        ui->modelSourceDateTimeEdit->setToolTip(tr("Source file: %1\nModified: %2")
-                                                   .arg(cppHeaderFile)
-                                                   .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
+        ui->modelSourceModificationTimeLineEdit->setText(tr("Modified: %1")
+                                                             .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
+        ui->modelSourceModificationTimeLineEdit->setToolTip(tr("Source file: %1\nModified: %2")
+                                                                .arg(cppHeaderFile)
+                                                                .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
     }
     else
     {
-        ui->modelSourceDateTimeEdit->setText(tr("(file not available)"));
-        ui->modelSourceDateTimeEdit->setToolTip(tr("Source file: %1\nFile not available")
-                                                   .arg(cppHeaderFile));
+        ui->modelSourceModificationTimeLineEdit->setText(tr("(file not available)"));
+        ui->modelSourceModificationTimeLineEdit->setToolTip(tr("Source file: %1\nFile not available")
+                                                                .arg(cppHeaderFile));
     }
 
     ui->modelSourceLineEdit->setToolTip(tr("Source file: %1\nModified: %2")
@@ -520,21 +520,19 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
         QDateTime libraryModDate = getFileModificationDate(libraryPath);
 
         // Update compiled module date label (instead of QDateTimeEdit)
-        ui->compiledModuleDateTimeEdit->setText(tr("Modified: %1")
+        ui->compiledModuleTimeLineEdit->setText(tr("Modified: %1")
                                                    .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
-        ui->compiledModuleDateTimeEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
-                                           .arg(libraryPath)
-                                           .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
+        ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
+                                           .arg(libraryPath, libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
         ui->compileModuleCheckBox->setChecked(true);
         ui->compiledModuleLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
-                                           .arg(libraryPath)
-                                           .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
+                                           .arg(libraryPath, libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
     }
     else
     {
         // Clear compiled module date label
-        ui->compiledModuleDateTimeEdit->setText(tr("(module not available)"));
-        ui->compiledModuleDateTimeEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
+        ui->compiledModuleTimeLineEdit->setText(tr("(module not available)"));
+        ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
                                            .arg(libraryPath));
         ui->compileModuleCheckBox->setChecked(false);
         ui->compiledModuleLineEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
@@ -559,8 +557,8 @@ void CustomDirectoryDialog::clearModuleInfo()
     ui->compileModuleCheckBox->setChecked(false);
     
     // Clear date labels
-    ui->modelSourceDateTimeEdit->setText(tr("(not available)"));
-    ui->compiledModuleDateTimeEdit->setText(tr("(not available)"));
+    ui->modelSourceModificationTimeLineEdit->setText(tr("(not available)"));
+    ui->compiledModuleTimeLineEdit->setText(tr("(not available)"));
     
     // Clear tooltips
     ui->modelSourceLineEdit->setToolTip(tr("No source files found"));
