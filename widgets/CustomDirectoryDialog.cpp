@@ -60,6 +60,12 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
         return QString(); // Empty string for directories without header info
     }
     
+    // Right-align text for columns 1, 2, 3
+    if (role == Qt::TextAlignmentRole && index.column() >= 1 && index.column() <= 3)
+    {
+        return QVariant(Qt::AlignRight | Qt::AlignVCenter);
+    }
+
     // Only show icons in the first column (column 0)
     if (role == Qt::DecorationRole && fileInfo.isDir() && index.column() == 0)
     {
