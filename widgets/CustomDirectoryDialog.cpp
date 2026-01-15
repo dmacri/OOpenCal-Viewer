@@ -113,12 +113,47 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Q
     {
         switch (section)
         {
-        case ColumnDirectory: return tr("Directory");
-        case ColumnX: return tr("X");
-        case ColumnY: return tr("Y");
-        case ColumnM: return tr("M");
+        case ColumnDirectory: 
+            return tr("Directory");
+        case ColumnX: 
+            return tr("X");
+        case ColumnY: 
+            return tr("Y");
+        case ColumnM: 
+            return tr("M");
         }
     }
+    
+    if (orientation == Qt::Horizontal && role == Qt::ToolTipRole)
+    {
+        switch (section)
+        {
+        case ColumnDirectory:
+            return tr("<html><b>Directory</b><br/>"
+                      "Shows directory names with icons:<br/>"
+                      "• <img src=':icons/folder-green.png' width='16' height='16'/> Green folder - contains Header.txt file<br/>"
+                      "• <img src=':icons/folder-default.png' width='16' height='16'/> Default folder - contains subdirectories<br/>"
+                      "• <img src=':icons/folder-gray.png' width='16' height='16'/> Gray folder - empty directory</html>");
+        case ColumnX:
+            return tr("<html><b>X</b><br/>"
+                      "Number of nodes in X direction<br/>"
+                      "Extracted from Header.txt file<br/>"
+                      "Only shown for directories with Header.txt</html>");
+        case ColumnY:
+            return tr("<html><b>Y</b><br/>"
+                      "Number of nodes in Y direction<br/>"
+                      "Extracted from Header.txt file<br/>"
+                      "Only shown for directories with Header.txt</html>");
+        case ColumnM:
+            return tr("<html><b>M</b><br/>"
+                      "Processing mode<br/>"
+                      "<b>b</b> - binary mode<br/>"
+                      "<b>t</b> - text mode<br/>"
+                      "Extracted from Header.txt file<br/>"
+                      "Only shown for directories with Header.txt</html>");
+        }
+    }
+    
     return QFileSystemModel::headerData(section, orientation, role);
 }
 
@@ -253,9 +288,9 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     
     // Set initial column widths (will be adjusted to percentages when widget is shown)
     ui->m_treeView->setColumnWidth(ColumnDirectory, 400);  // Initial width for directory column
-    ui->m_treeView->setColumnWidth(ColumnX, 30);   // Initial width for X column
-    ui->m_treeView->setColumnWidth(ColumnY, 30);   // Initial width for Y column
-    ui->m_treeView->setColumnWidth(ColumnM, 30);   // Initial width for M column
+    ui->m_treeView->setColumnWidth(ColumnX, 20);   // Initial width for X column
+    ui->m_treeView->setColumnWidth(ColumnY, 20);   // Initial width for Y column
+    ui->m_treeView->setColumnWidth(ColumnM, 20);   // Initial width for M column
     
     // Apply percentage-based widths after widget is shown
     QTimer::singleShot(0, this, [this]() {
