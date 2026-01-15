@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QBuffer>
 #include <QHBoxLayout>
 #include <QTreeView>
 #include <QLabel>
@@ -129,11 +130,36 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Q
         switch (section)
         {
         case ColumnDirectory:
-            return tr("<html><b>Directory</b><br/>"
-                      "Shows directory names with icons:<br/>"
-                      "• <img src=':icons/folder-green.png' width='16' height='16'/> Green folder - contains Header.txt file<br/>"
-                      "• <img src=':icons/folder-default.png' width='16' height='16'/> Default folder - contains subdirectories<br/>"
-                      "• <img src=':icons/folder-gray.png' width='16' height='16'/> Gray folder - empty directory</html>");
+            {
+                // Use static method to convert icon to base64 for embedding in HTML
+                QPixmap greenPixmap = QIcon::fromTheme("folder-green").pixmap(16, 16);
+                QPixmap defaultPixmap = QIcon::fromTheme("folder").pixmap(16, 16);
+                QPixmap grayPixmap = QIcon::fromTheme("folder-gray").pixmap(16, 16);
+                
+                QByteArray greenIconData;
+                QBuffer greenBuffer(&greenIconData);
+                greenPixmap.save(&greenBuffer, "PNG", 100);
+                QString greenIconBase64 = greenIconData.toBase64();
+                
+                QByteArray defaultIconData;
+                QBuffer defaultBuffer(&defaultIconData);
+                defaultPixmap.save(&defaultBuffer, "PNG", 100);
+                QString defaultIconBase64 = defaultIconData.toBase64();
+                
+                QByteArray grayIconData;
+                QBuffer grayBuffer(&grayIconData);
+                grayPixmap.save(&grayBuffer, "PNG", 100);
+                QString grayIconBase64 = grayIconData.toBase64();
+                
+                return tr("<html><b>Directory</b><br/>"
+                          "Shows directory names with icons:<br/>"
+                          "• <img src='data:image/png;base64,%1' width='16' height='16'/> Green folder - contains Header.txt file<br/>"
+                          "• <img src='data:image/png;base64,%2' width='16' height='16'/> Default folder - contains subdirectories<br/>"
+                          "• <img src='data:image/png;base64,%3' width='16' height='16'/> Gray folder - empty directory</html>")
+                          .arg(greenIconBase64)
+                          .arg(defaultIconBase64)
+                          .arg(grayIconBase64);
+            }
         case ColumnX:
             return tr("<html><b>X</b><br/>"
                       "Number of nodes in X direction<br/>"
