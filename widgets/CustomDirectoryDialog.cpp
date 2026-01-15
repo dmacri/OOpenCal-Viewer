@@ -38,6 +38,30 @@ enum ColumnIndex
 };
 } // namespace
 
+namespace Icons
+{
+QIcon standardDirectoryIcon()
+{
+    return QCommonStyle{}.standardIcon(QStyle::SP_DirIcon);
+}
+
+QIcon greenIcon()
+{
+    return QIcon::fromTheme("folder-green");
+}
+
+QIcon grayIcon()
+{
+    // Create gray folder icon (modify default to be gray)
+    QPixmap grayPixmap = standardDirectoryIcon().pixmap(32, 32);
+    QPainter grayPainter(&grayPixmap);
+    grayPainter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    grayPainter.fillRect(grayPixmap.rect(), QColor(150, 150, 150, 255));
+    grayPainter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+    return QIcon(grayPixmap);
+}
+} // namespace icons
+
 
 // CustomFileSystemModel implementation
 CustomDirectoryDialog::CustomFileSystemModel::CustomFileSystemModel(QObject *parent)
@@ -132,9 +156,9 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Q
         case ColumnDirectory:
             {
                 // Use static method to convert icon to base64 for embedding in HTML
-                QPixmap greenPixmap = QIcon::fromTheme("folder-green").pixmap(16, 16);
-                QPixmap defaultPixmap = QIcon::fromTheme("folder").pixmap(16, 16);
-                QPixmap grayPixmap = QIcon::fromTheme("folder-gray").pixmap(16, 16);
+                QPixmap greenPixmap = Icons::greenIcon().pixmap(16, 16);
+                QPixmap defaultPixmap = Icons::standardDirectoryIcon().pixmap(16, 16);
+                QPixmap grayPixmap = Icons::grayIcon().pixmap(16, 16);
                 
                 QByteArray greenIconData;
                 QBuffer greenBuffer(&greenIconData);
@@ -380,26 +404,9 @@ CustomDirectoryDialog::~CustomDirectoryDialog()
 
 void CustomDirectoryDialog::setupIcons()
 {
-    QCommonStyle style;
-    
-    // Get default folder icon
-    m_defaultFolderIcon = style.standardIcon(QStyle::SP_DirIcon);
-    
-    // Create green folder icon (modify default to be green)
-    QPixmap greenPixmap = m_defaultFolderIcon.pixmap(32, 32);
-    QPainter painter(&greenPixmap);
-    painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-    painter.fillRect(greenPixmap.rect(), QColor(0, 200, 0, 255));
-    painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
-    m_greenFolderIcon = QIcon(greenPixmap);
-    
-    // Create gray folder icon (modify default to be gray)
-    QPixmap grayPixmap = m_defaultFolderIcon.pixmap(32, 32);
-    QPainter grayPainter(&grayPixmap);
-    grayPainter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-    grayPainter.fillRect(grayPixmap.rect(), QColor(150, 150, 150, 255));
-    grayPainter.setCompositionMode(QPainter::CompositionMode_SourceOver);
-    m_grayFolderIcon = QIcon(grayPixmap);
+    m_defaultFolderIcon = Icons::standardDirectoryIcon();
+    m_greenFolderIcon = Icons::greenIcon();
+    m_grayFolderIcon = Icons::grayIcon();
 }
 
 QString CustomDirectoryDialog::getSelectedDirectory() const
