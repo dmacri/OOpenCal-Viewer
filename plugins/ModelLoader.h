@@ -65,7 +65,7 @@ public:
         std::optional<viz::plugins::CompilationResult> compilationResult; ///< Compilation details if compilation was attempted
     };
 
-    /** @brief Create a new ModelLoader instance */
+    /// @brief Create a new ModelLoader instance
     ModelLoader();
     ~ModelLoader();
 

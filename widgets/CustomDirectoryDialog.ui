@@ -96,16 +96,16 @@
         </widget>
        </item>
        <item row="0" column="2">
-        <widget class="QDateTimeEdit" name="modelSourceDateTimeEdit">
-         <property name="enabled">
-          <bool>false</bool>
+        <widget class="QLabel" name="modelSourceDateTimeEdit">
+         <property name="text">
+          <string notr="true"/>
          </property>
         </widget>
        </item>
        <item row="1" column="2">
-        <widget class="QDateTimeEdit" name="compiledModuleDateTimeEdit">
-         <property name="enabled">
-          <bool>false</bool>
+        <widget class="QLabel" name="compiledModuleDateTimeEdit">
+         <property name="text">
+          <string notr="true"/>
          </property>
         </widget>
        </item>

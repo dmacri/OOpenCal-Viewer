@@ -234,8 +234,8 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
 }
 
 int CppModuleBuilder::executeCommand(const std::string& command,
-                                      std::function<void(const std::string&)> stdout_callback,
-                                      std::function<void(const std::string&)> stderr_callback)
+                                     std::function<void(const std::string&)> stdout_callback,
+                                     std::function<void(const std::string&)> stderr_callback)
 {
     try
     {
