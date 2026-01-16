@@ -478,9 +478,10 @@ QString CustomDirectoryDialog::getSelectedExistingModel() const
     return ui->availableModulesComboBox->currentText();
 }
 
-QTabWidget* CustomDirectoryDialog::getLoadingModuleOptionsTabWidget() const
+CustomDirectoryDialog::LoadingMode CustomDirectoryDialog::getLoadingMode() const
 {
-    return ui->loadingModuleOptionsTabWidget;
+    int currentIndex = ui->loadingModuleOptionsTabWidget->currentIndex();
+    return (currentIndex == 1) ? LoadingMode::UseExistingModel : LoadingMode::CompileModule;
 }
 
 void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)

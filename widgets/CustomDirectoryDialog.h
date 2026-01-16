@@ -47,7 +47,12 @@ class CustomDirectoryDialog : public QDialog
     Q_OBJECT
 
 public:
-    /// Constructs the directory selection dialog
+    enum class LoadingMode
+    {
+        CompileModule,    ///< Compile and load a new module
+        UseExistingModel  ///< Use an existing model from the system
+    };
+
     explicit CustomDirectoryDialog(QWidget *parent = nullptr);
 
     /// Destroys the dialog and releases all associated resources
@@ -62,8 +67,8 @@ public:
     /// Returns the selected existing model name
     QString getSelectedExistingModel() const;
     
-    /// Returns the loading module options tab widget
-    QTabWidget* getLoadingModuleOptionsTabWidget() const; // TODO: GB: I just need index, not entire tab
+    /// Returns the current loading mode (compile module vs use existing model)
+    LoadingMode getLoadingMode() const;
 
     /// Sets the initial directory displayed and selected in the tree view
     void setStartDirectory(const QString &path);
