@@ -657,6 +657,7 @@ if(CLANG_FORMAT_EXE)
             COMMAND ${CLANG_FORMAT_EXE} -i -style=file ${FORMAT_SOURCES_SAFE}
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             COMMENT "Running clang-format on project sources"
+            COMMAND_EXPAND_LISTS
         )
 
         add_custom_target(clang-format-check
@@ -664,6 +665,7 @@ if(CLANG_FORMAT_EXE)
                 | grep -q "replacement offset"
                 && (echo \"Files need reformatting\" && exit 1) || echo \"Everything is properly formatted\"
             COMMENT "Checking formatting with clang-format (no changes applied)"
+            COMMAND_EXPAND_LISTS
         )
     else()
         message(WARNING "No source files found to format.")
