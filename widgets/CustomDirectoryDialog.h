@@ -57,6 +57,9 @@ public:
 
     /// Returns if the (re)compilation requested
     bool compilationRequested() const;
+    
+    /// Returns the selected existing model name
+    QString getSelectedExistingModel() const;
 
     /// Sets the initial directory displayed and selected in the tree view
     void setStartDirectory(const QString &path);
@@ -128,6 +131,18 @@ private:
 
     /// Handles compile module checkbox state changes
     void onCompileModuleToggled(bool checked);
+    
+    /// Handles tab widget current page change
+    void onLoadingModuleOptionsTabChanged(int index);
+    
+    /// Handles available modules combo box current index change
+    void onAvailableModulesChanged(int index);
+    
+    /// Updates OK button state based on current tab and selection
+    void updateOkButtonState();
+    
+    /// Loads available models into the combo box
+    void loadAvailableModels();
 
     /// Recursively updates directory appearance starting from a given model index
     void updateDirectoriesRecursive(const QModelIndex &parentIndex);

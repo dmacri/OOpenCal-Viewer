@@ -1,10 +1,16 @@
-#include <QStandardPaths>
-#include <QCommonStyle>
+#include <iostream>
 #include <QFileSystemModel>
+#include <QSortFilterProxyModel>
 #include <QHeaderView>
-#include <QMessageBox>
-#include <QDebug>
 #include <QDirIterator>
+#include <QMessageBox>
+#include <QDateTime>
+#include <QFileInfo>
+#include <QDir>
+#include <QStandardPaths>
+#include <QApplication>
+#include <QStyle>
+#include <QCommonStyle>
 #include <QPainter>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -14,8 +20,6 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QCheckBox>
-#include <QDir>
-#include <QSortFilterProxyModel>
 #include <QMap>
 #include "CustomDirectoryDialog.h"
 #include "ui_CustomDirectoryDialog.h"
@@ -24,6 +28,8 @@
 #include "config/ConfigParameter.h"
 #include "config/ConfigConstants.h"
 #include "core/directoryConstants.h"
+#include "plugins/ModelLoader.h"
+#include "visualiserProxy/SceneWidgetVisualizerFactory.h"
 #include "plugins/ModelLoader.h"
 
 
@@ -420,6 +426,10 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     // Connect compile module checkbox state change
     connect(ui->compileModuleCheckBox, &QCheckBox::toggled, this, &CustomDirectoryDialog::onCompileModuleToggled);
     
+    // Connect tab widget and combo box signals
+    connect(ui->loadingModuleOptionsTabWidget, &QTabWidget::currentChanged, this, &CustomDirectoryDialog::onLoadingModuleOptionsTabChanged);
+    connect(ui->availableModulesComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CustomDirectoryDialog::onAvailableModulesChanged);
+    
     // Connect to expanded signal to update icons when directories are expanded
     connect(ui->m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &index) {
         QString parentPath = m_fileSystemModel->filePath(m_sortProxy->mapToSource(index));
@@ -463,6 +473,11 @@ bool CustomDirectoryDialog::compilationRequested() const
     return ui->compileModuleCheckBox->isChecked();
 }
 
+QString CustomDirectoryDialog::getSelectedExistingModel() const
+{
+    return ui->availableModulesComboBox->currentText();
+}
+
 void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
 {
     // Find header file in the directory
@@ -471,19 +486,24 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
     if (cppHeaderFile.isEmpty())
     {
         // No header file found - clear all fields
-        ui->modelSourceLineEdit->clear();
-        ui->modelSourceModificationTimeLineEdit->setText(tr("(not available)"));
-        ui->compiledModuleLineEdit->clear();
-        ui->compiledModuleTimeLineEdit->setText(tr("(not available)"));
-        ui->compileModuleCheckBox->setChecked(false);
-        ui->compileModuleCheckBox->setEnabled(false);
-        ui->compileModuleCheckBox->setToolTip(tr("No source files found in this directory"));
+        clearModuleInfo();
         
-        // Set tooltips indicating no files found
-        ui->modelSourceLineEdit->setToolTip(tr("No source files found in this directory"));
-        ui->compiledModuleLineEdit->setToolTip(tr("No compiled module found"));
+        // Disable available modules combo box for non-green directories
+        ui->availableModulesComboBox->setEnabled(false);
+        ui->availableModulesComboBox->clear();
+        ui->availableModulesLabel->setEnabled(false);
+        
+        // Update OK button state
+        updateOkButtonState();
         return;
     }
+    
+    // Enable available modules combo box for green directories
+    ui->availableModulesComboBox->setEnabled(true);
+    ui->availableModulesLabel->setEnabled(true);
+    
+    // Load available models
+    loadAvailableModels();
     
     // Extract only filename from full path
     QFileInfo sourceFileInfo(cppHeaderFile);
@@ -617,6 +637,11 @@ void CustomDirectoryDialog::clearModuleInfo()
     ui->modelSourceModificationTimeLineEdit->setStyleSheet("");
     ui->compiledModuleTimeLineEdit->setStyleSheet("");
     
+    // Clear available modules combo box and disable it
+    ui->availableModulesComboBox->clear();
+    ui->availableModulesComboBox->setEnabled(false);
+    ui->availableModulesLabel->setEnabled(false);
+    
     // Clear tooltips
     ui->modelSourceLineEdit->setToolTip(tr("No source files found"));
     ui->compiledModuleLineEdit->setToolTip(tr("No compiled module found"));
@@ -641,6 +666,82 @@ void CustomDirectoryDialog::onCompileModuleToggled(bool checked)
         // No library - enable OK button only when checkbox is unchecked (no compilation)
         ui->m_okButton->setEnabled(checked);
     }
+}
+
+void CustomDirectoryDialog::onLoadingModuleOptionsTabChanged(int index)
+{
+    // Update OK button state based on current tab
+    updateOkButtonState();
+}
+
+void CustomDirectoryDialog::onAvailableModulesChanged(int index)
+{
+    // Update OK button state based on available modules selection
+    updateOkButtonState();
+}
+
+void CustomDirectoryDialog::updateOkButtonState()
+{
+    // Check if we have a valid directory selected
+    if (m_selectedDirectory.isEmpty() || !isDirectorySelectable(m_selectedDirectory))
+    {
+        ui->m_okButton->setEnabled(false);
+        return;
+    }
+    
+    // Get current tab index
+    int currentTab = ui->loadingModuleOptionsTabWidget->currentIndex();
+    
+    if (currentTab == 0) // compileModuleTab
+    {
+        // Use existing logic for compile module tab
+        if (m_hasCompiledLibrary)
+        {
+            // Library exists - always enable OK button regardless of checkbox state
+            ui->m_okButton->setEnabled(true);
+        }
+        else
+        {
+            // No library - enable OK button only when checkbox is checked (compilation needed)
+            ui->m_okButton->setEnabled(ui->compileModuleCheckBox->isChecked());
+        }
+    }
+    else if (currentTab == 1) // useExistingModuleTab
+    {
+        // Enable OK button only if we have available models selected
+        bool hasModels = ui->availableModulesComboBox->count() > 0;
+        bool hasSelection = ui->availableModulesComboBox->currentIndex() >= 0;
+        ui->m_okButton->setEnabled(hasModels && hasSelection);
+    }
+}
+
+void CustomDirectoryDialog::loadAvailableModels()
+{
+    // Clear current items
+    ui->availableModulesComboBox->clear();
+    
+    // Get available models from factory
+    const auto availableModels = SceneWidgetVisualizerFactory::getAvailableModels();
+    
+    if (availableModels.empty())
+    {
+        std::cerr << "Warning: No models available from factory!" << std::endl;
+        return;
+    }
+    
+    // Add models to combo box
+    for (const auto& modelName : availableModels)
+    {
+        ui->availableModulesComboBox->addItem(QString::fromStdString(modelName));
+    }
+    
+    // Select first model by default
+    if (ui->availableModulesComboBox->count() > 0)
+    {
+        ui->availableModulesComboBox->setCurrentIndex(0);
+    }
+    
+    std::cout << "[DEBUG] Loaded " << availableModels.size() << " available models" << std::endl;
 }
 
 void CustomDirectoryDialog::setStartDirectory(const QString &path)
