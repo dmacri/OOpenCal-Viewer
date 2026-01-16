@@ -505,163 +505,19 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
     // Load available models
     loadAvailableModels();
     
-    // Try to read output file name from Header.txt to match with available models
-    QString expectedModelName;
-    try
-    {
-        QString headerPath = QDir(directoryPath).filePath(DirectoryConstants::HEADER_FILE_NAME);
-        if (QFileInfo::exists(headerPath))
-        {
-            Config config(headerPath.toStdString(), /*printWarnings=*/false);
-            expectedModelName = QString::fromStdString(ModelLoader::readOutputFileName(&config));
-        }
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Warning: Could not read output file name from Header.txt: " << e.what() << std::endl;
-    }
-    
-    // Find matching model in available models
-    int matchingModelIndex = -1;
-    if (!expectedModelName.isEmpty())
-    {
-        for (int i = 0; i < ui->availableModulesComboBox->count(); ++i)
-        {
-            QString availableModel = ui->availableModulesComboBox->itemText(i);
-            // Check for exact match or case-insensitive match
-            if (availableModel.compare(expectedModelName, Qt::CaseInsensitive) == 0 ||
-                availableModel.contains(expectedModelName, Qt::CaseInsensitive) ||
-                expectedModelName.contains(availableModel, Qt::CaseInsensitive))
-            {
-                matchingModelIndex = i;
-                break;
-            }
-        }
-    }
-    
-    // Set the matching model if found, otherwise clear selection
-    if (matchingModelIndex >= 0)
-    {
-        ui->availableModulesComboBox->setCurrentIndex(matchingModelIndex);
-        std::cout << "[DEBUG] Found matching model: '" << ui->availableModulesComboBox->itemText(matchingModelIndex).toStdString() 
-                  << "' for expected: '" << expectedModelName.toStdString() << "'" << std::endl;
-    }
-    else
-    {
-        // No matching model found - clear combo box and disable OK button
-        ui->availableModulesComboBox->setCurrentIndex(-1);
-        if (!expectedModelName.isEmpty())
-        {
-            std::cout << "[DEBUG] No matching model found for expected: '" << expectedModelName.toStdString() << "'" << std::endl;
-        }
-    }
-    
-    // Extract only filename from full path
-    QFileInfo sourceFileInfo(cppHeaderFile);
-    QString sourceFileName = sourceFileInfo.fileName();
+    // Read expected model name from Header.txt and select matching model
+    QString expectedModelName = readExpectedModelName(directoryPath);
+    selectMatchingModel(expectedModelName);
     
     // Update source file information
-    ui->modelSourceLineEdit->setText(sourceFileName);
-    QDateTime sourceModDate = getFileModificationDate(cppHeaderFile);
-
-    // Update source date label (instead of QDateTimeEdit)
-    if (sourceModDate.isValid())
-    {
-        ui->modelSourceModificationTimeLineEdit->setText(tr("Modified: %1")
-                                                             .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
-        ui->modelSourceModificationTimeLineEdit->setToolTip(tr("Source file: %1\nModified: %2")
-                                                                .arg(cppHeaderFile)
-                                                                .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
-    }
-    else
-    {
-        ui->modelSourceModificationTimeLineEdit->setText(tr("(file not available)"));
-        ui->modelSourceModificationTimeLineEdit->setToolTip(tr("Source file: %1\nFile not available")
-                                                                .arg(cppHeaderFile));
-    }
-
-    ui->modelSourceLineEdit->setToolTip(tr("Source file: %1\nModified: %2")
-                                       .arg(cppHeaderFile)
-                                       .arg(sourceModDate.isValid() ? sourceModDate.toString("yyyy-MM-dd hh:mm:ss") : tr("(file not available)")));
+    updateSourceFileInfo(cppHeaderFile);
     
-    // Generate expected library name
+    // Generate expected library name and update compiled module info
     auto libraryFile = QString::fromStdString(ModelLoader::generateModuleNameForSourceFile(cppHeaderFile.toStdString()));
+    updateCompiledModuleInfo(directoryPath, libraryFile);
     
-    // Extract only filename from library name
-    QFileInfo libraryFileInfo(libraryFile);
-    QString libraryFileName = libraryFileInfo.fileName();
-    
-    ui->compiledModuleLineEdit->setText(libraryFileName);
-    
-    // Check if compiled library exists
-    QString libraryPath = QDir(directoryPath).filePath(libraryFile);
-    QFileInfo libraryInfo(libraryPath);
-    
-    if (libraryInfo.exists())
-    {
-        QDateTime libraryModDate = getFileModificationDate(libraryPath);
-
-        // Update compiled module date label (instead of QDateTimeEdit)
-        QString compiledModuleText = tr("Modified: %1").arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss"));
-        ui->compiledModuleTimeLineEdit->setText(compiledModuleText);
-        ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
-                                           .arg(libraryPath, libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
-        
-        // Set background color based on source vs compiled dates
-        if (sourceModDate.isValid() && libraryModDate.isValid() && sourceModDate > libraryModDate)
-        {
-            // Source is newer - red background for compiled module date
-            ui->compiledModuleTimeLineEdit->setStyleSheet("background-color: #ffcccc; color: black; padding: 2px; border: 1px solid #ff9999; border-radius: 3px;");
-        }
-        else
-        {
-            // Up to date - normal background
-            ui->compiledModuleTimeLineEdit->setStyleSheet("");
-        }
-
-        // Set flag that compiled library exists
-        m_hasCompiledLibrary = true;
-        
-        // Check if source file is newer than compiled library
-        if (sourceModDate.isValid() && libraryModDate.isValid() && sourceModDate > libraryModDate)
-        {
-            // Source is newer - suggest recompilation
-            ui->compileModuleCheckBox->setChecked(true);
-            ui->compileModuleCheckBox->setEnabled(true);
-            ui->compileModuleCheckBox->setToolTip(tr("Source file is newer than compiled module\nClick to recompile"));
-        }
-        else
-        {
-            // Up to date - no recompilation needed
-            ui->compileModuleCheckBox->setChecked(false);
-            ui->compileModuleCheckBox->setEnabled(true);
-            ui->compileModuleCheckBox->setToolTip(tr("Module is up to date\nNo recompilation needed"));
-        }
-        
-        ui->compileModuleCheckBox->setEnabled(true);
-        ui->compiledModuleLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
-                                           .arg(libraryPath, libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
-    }
-    else
-    {
-        // No compiled library - suggest compilation
-        ui->compiledModuleTimeLineEdit->setText(tr("(module not available)"));
-        ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
-                                            .arg(libraryPath));
-        ui->compileModuleCheckBox->setChecked(true);
-        ui->compileModuleCheckBox->setEnabled(true);
-        ui->compileModuleCheckBox->setToolTip(tr("Compiled module not found\nClick to compile module"));
-        ui->compiledModuleLineEdit->setToolTip(tr("Compiled module not found\nExpected: %1\nClick 'Compile module' to create it")
-                                           .arg(libraryPath));
-
-        // Red background for missing compiled module
-        ui->compiledModuleTimeLineEdit->setStyleSheet("background-color: #ffcccc; color: black; padding: 2px; border: 1px solid #ff9999; border-radius: 3px;");
-
-        // Set flag that compiled library doesn't exist
-        m_hasCompiledLibrary = false;
-        
-        ui->m_okButton->setEnabled(ui->compileModuleCheckBox->isChecked());
-    }
+    // Update OK button state
+    updateOkButtonState();
 }
 
 QDateTime CustomDirectoryDialog::getFileModificationDate(const QString &filePath) const
@@ -1024,6 +880,187 @@ void CustomDirectoryDialog::onTreeViewClicked(const QModelIndex &index)
             ui->m_pathLabel->setText(tr("Selected: None (directory not selectable)"));
             // Clear module info for non-selectable directories
             clearModuleInfo();
+        }
+    }
+}
+
+void CustomDirectoryDialog::updateSourceFileInfo(const QString &cppHeaderFile)
+{
+    // Extract only filename from full path
+    QFileInfo sourceFileInfo(cppHeaderFile);
+    QString sourceFileName = sourceFileInfo.fileName();
+    
+    // Update source file information
+    ui->modelSourceLineEdit->setText(sourceFileName);
+    QDateTime sourceModDate = getFileModificationDate(cppHeaderFile);
+
+    // Update source date label (instead of QDateTimeEdit)
+    if (sourceModDate.isValid())
+    {
+        ui->modelSourceModificationTimeLineEdit->setText(tr("Modified: %1")
+                                                             .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
+        ui->modelSourceModificationTimeLineEdit->setToolTip(tr("Source file: %1\nModified: %2")
+                                                                .arg(cppHeaderFile)
+                                                                .arg(sourceModDate.toString("yyyy-MM-dd hh:mm:ss")));
+    }
+    else
+    {
+        ui->modelSourceModificationTimeLineEdit->setText(tr("(file not available)"));
+        ui->modelSourceModificationTimeLineEdit->setToolTip(tr("Source file: %1\nFile not available")
+                                                                .arg(cppHeaderFile));
+    }
+
+    ui->modelSourceLineEdit->setToolTip(tr("Source file: %1\nModified: %2")
+                                       .arg(cppHeaderFile)
+                                       .arg(sourceModDate.isValid() ? sourceModDate.toString("yyyy-MM-dd hh:mm:ss") : tr("(file not available)")));
+}
+
+void CustomDirectoryDialog::updateCompiledModuleInfo(const QString &directoryPath, const QString &libraryFile)
+{
+    // Extract only filename from library name
+    QFileInfo libraryFileInfo(libraryFile);
+    QString libraryFileName = libraryFileInfo.fileName();
+    
+    ui->compiledModuleLineEdit->setText(libraryFileName);
+    
+    // Check if compiled library exists
+    QString libraryPath = QDir(directoryPath).filePath(libraryFile);
+    QFileInfo libraryInfo(libraryPath);
+    
+    m_hasCompiledLibrary = libraryInfo.exists();
+    
+    if (libraryInfo.exists())
+    {
+        QDateTime libraryModDate = getFileModificationDate(libraryPath);
+
+        // Update compiled module date label (instead of QDateTimeEdit)
+        QString compiledModuleText = tr("Modified: %1").arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss"));
+        ui->compiledModuleTimeLineEdit->setText(compiledModuleText);
+        ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
+                                                      .arg(libraryPath)
+                                                      .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
+
+        // Get source file modification date for comparison
+        QString cppHeaderFile = QString::fromStdString(ModelLoader::findHeaderFile(directoryPath.toStdString()));
+        QDateTime sourceModDate = getFileModificationDate(cppHeaderFile);
+
+        // Compare dates to determine if recompilation is needed
+        if (sourceModDate.isValid() && libraryModDate.isValid())
+        {
+            if (sourceModDate > libraryModDate)
+            {
+                // Source is newer than compiled module
+                ui->compiledModuleTimeLineEdit->setStyleSheet("background-color: #ffcccc; color: black;");
+                ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2\n\n⚠️ Source file is newer - recompilation recommended!")
+                                                              .arg(libraryPath)
+                                                              .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
+                
+                // Check the checkbox by default when source is newer
+                ui->compileModuleCheckBox->setChecked(true);
+            }
+            else
+            {
+                // Compiled module is up-to-date
+                ui->compiledModuleTimeLineEdit->setStyleSheet("");
+                ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2\n✅ Up to date")
+                                                              .arg(libraryPath)
+                                                              .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
+                
+                // Uncheck the checkbox when library is up-to-date
+                ui->compileModuleCheckBox->setChecked(false);
+            }
+        }
+        else
+        {
+            ui->compiledModuleTimeLineEdit->setStyleSheet("");
+        }
+        
+        // Enable checkbox when library exists
+        ui->compileModuleCheckBox->setEnabled(true);
+        ui->compileModuleCheckBox->setToolTip(tr("Module compiled successfully. Check to force recompilation."));
+    }
+    else
+    {
+        // No compiled library found
+        ui->compiledModuleTimeLineEdit->setText(tr("(not compiled)"));
+        ui->compiledModuleTimeLineEdit->setStyleSheet("background-color: #ffcccc; color: black;");
+        ui->compiledModuleTimeLineEdit->setToolTip(tr("Compiled module not found. Compilation required."));
+        
+        // Check the checkbox by default when no library exists
+        ui->compileModuleCheckBox->setChecked(true);
+        
+        // Enable checkbox when no library exists (user can uncheck to prevent compilation)
+        ui->compileModuleCheckBox->setEnabled(true);
+        ui->compileModuleCheckBox->setToolTip(tr("No compiled module found. Check to compile."));
+    }
+    
+    // Update tooltip for compiled module line edit
+    if (libraryInfo.exists())
+    {
+        QDateTime libraryModDate = getFileModificationDate(libraryPath);
+        ui->compiledModuleLineEdit->setToolTip(tr("Compiled module: %1\nModified: %2")
+                                                   .arg(libraryPath)
+                                                   .arg(libraryModDate.toString("yyyy-MM-dd hh:mm:ss")));
+    }
+    else
+    {
+        ui->compiledModuleLineEdit->setToolTip(tr("Compiled module not found: %1\nCompilation required.")
+                                                   .arg(libraryPath));
+    }
+}
+
+QString CustomDirectoryDialog::readExpectedModelName(const QString &directoryPath) const
+{
+    try
+    {
+        QString headerPath = QDir(directoryPath).filePath(DirectoryConstants::HEADER_FILE_NAME);
+        if (QFileInfo::exists(headerPath))
+        {
+            Config config(headerPath.toStdString(), /*printWarnings=*/false);
+            return QString::fromStdString(ModelLoader::readOutputFileName(&config));
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Warning: Could not read output file name from Header.txt: " << e.what() << std::endl;
+    }
+    return QString();
+}
+
+void CustomDirectoryDialog::selectMatchingModel(const QString &expectedModelName)
+{
+    // Find matching model in available models
+    int matchingModelIndex = -1;
+    if (!expectedModelName.isEmpty())
+    {
+        for (int i = 0; i < ui->availableModulesComboBox->count(); ++i)
+        {
+            QString availableModel = ui->availableModulesComboBox->itemText(i);
+            // Check for exact match or case-insensitive match
+            if (availableModel.compare(expectedModelName, Qt::CaseInsensitive) == 0 ||
+                availableModel.contains(expectedModelName, Qt::CaseInsensitive) ||
+                expectedModelName.contains(availableModel, Qt::CaseInsensitive))
+            {
+                matchingModelIndex = i;
+                break;
+            }
+        }
+    }
+    
+    // Set the matching model if found, otherwise clear selection
+    if (matchingModelIndex >= 0)
+    {
+        ui->availableModulesComboBox->setCurrentIndex(matchingModelIndex);
+        std::cout << "[DEBUG] Found matching model: '" << ui->availableModulesComboBox->itemText(matchingModelIndex).toStdString() 
+                  << "' for expected: '" << expectedModelName.toStdString() << "'" << std::endl;
+    }
+    else
+    {
+        // No matching model found - clear combo box and disable OK button
+        ui->availableModulesComboBox->setCurrentIndex(-1);
+        if (!expectedModelName.isEmpty())
+        {
+            std::cout << "[DEBUG] No matching model found for expected: '" << expectedModelName.toStdString() << "'" << std::endl;
         }
     }
 }

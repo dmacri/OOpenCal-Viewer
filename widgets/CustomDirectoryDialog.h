@@ -151,6 +151,18 @@ private:
     /// Determines whether a directory can be selected by the user
     bool isDirectorySelectable(const QString &path) const;
 
+    /// Updates source file information in the UI
+    void updateSourceFileInfo(const QString &cppHeaderFile);
+
+    /// Updates compiled module information in the UI
+    void updateCompiledModuleInfo(const QString &directoryPath, const QString &libraryFile);
+
+    /// Reads expected model name from Header.txt configuration
+    QString readExpectedModelName(const QString &directoryPath) const;
+
+    /// Finds and selects matching model in the available modules combo box
+    void selectMatchingModel(const QString &expectedModelName);
+
 private:
     /// Generated UI object
     Ui::CustomDirectoryDialog *ui;
