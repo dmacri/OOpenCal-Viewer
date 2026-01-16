@@ -21,36 +21,6 @@ namespace
 {
 namespace fs = std::filesystem;
 
-/// Get the directory containing this executable (project root)
-static std::string getProjectRootPath()
-{
-    // 1. Prefer environment variable first
-    if (const char* envPath = std::getenv("OOPENCAL_VIEWER_ROOT"))
-    {
-        if (! std::string(envPath).empty())
-        {
-            return envPath;
-        }
-    }
-
-// 2. Use compile-time define provided by CMake (if exists and directory is valid)
-#ifdef OOPENCAL_VIEWER_ROOT
-    {
-        const std::string viewerPath = OOPENCAL_VIEWER_ROOT;
-
-        // Only use it if it points to an existing directory
-        std::error_code ec; // this is used to use version which does not throw
-        if (std::filesystem::exists(viewerPath, ec) && std::filesystem::is_directory(viewerPath, ec))
-        {
-            return viewerPath;
-        }
-    }
-#endif
-
-    // 3. Fallback: nothing available → return empty string
-    return "";
-}
-
 /** Check if file `a` is newer than file `b`.
  *  Returns:
  *   true  - if `a` exists and its last modification time is more recent than `b`
@@ -82,11 +52,6 @@ std::string generateClassNameFromCppHeaderFileName(const std::string& cppHeaderF
 ModelLoader::ModelLoader()
     : builder(std::make_unique<viz::plugins::CppModuleBuilder>())
 {
-    std::string projectRoot = getProjectRootPath();
-    if (! projectRoot.empty())
-    {
-        builder->setProjectRootPath(projectRoot);
-    }
 }
 
 ModelLoader::~ModelLoader() = default;

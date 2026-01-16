@@ -74,6 +74,56 @@ std::string findAvailableCompiler(const std::string& preferredCompiler)
 
     return ""; // No compiler found
 }
+
+/// Resolve directory path using environment variable and CMake define
+static std::string resolveDirectoryPath(const char* envVarName, const char* cmakeDefineValue)
+{
+    // 1. Prefer environment variable
+    if (envVarName)
+    {
+        if (const char* envPath = std::getenv(envVarName))
+        {
+            if (*envPath != '\0')
+            {
+                return envPath;
+            }
+        }
+    }
+
+    // 2. Use CMake-provided define if available and valid
+    if (cmakeDefineValue && *cmakeDefineValue != '\0')
+    {
+        const std::string path = cmakeDefineValue;
+
+        std::error_code ec;
+        if (std::filesystem::exists(path, ec) && std::filesystem::is_directory(path, ec))
+        {
+            return path;
+        }
+    }
+
+    // 3. Nothing available
+    return "";
+}
+
+static std::string getOopencalDir()
+{
+#ifdef OOPENCAL_DIR
+    return resolveDirectoryPath("OOPENCAL_DIR", OOPENCAL_DIR);
+#else
+    return resolveDirectoryPath("OOPENCAL_DIR", nullptr);
+#endif
+}
+
+/// Get the directory containing this executable (project root)
+static std::string getProjectRootPath()
+{
+#ifdef OOPENCAL_VIEWER_ROOT
+    return resolveDirectoryPath("OOPENCAL_VIEWER_ROOT", OOPENCAL_VIEWER_ROOT);
+#else
+    return resolveDirectoryPath("OOPENCAL_VIEWER_ROOT", nullptr);
+#endif
+}
 } // namespace
 
 
@@ -82,22 +132,10 @@ namespace viz::plugins
 CppModuleBuilder::CppModuleBuilder(const std::string& compilerPath,
                                    const std::string& oopencalDir)
     : compilerPath(compilerPath)
-    , oopencalDir(oopencalDir)
+    , oopencalDir(oopencalDir.empty() ? getOopencalDir() : oopencalDir)
+    , projectRootPath(getProjectRootPath())
     , progressCallback(nullptr)
 {
-    // If oopencalDir is empty, try to get it from environment variable
-    if (this->oopencalDir.empty())
-    {
-        const char* envDir = std::getenv("OOPENCAL_DIR");
-        if (envDir)
-        {
-            this->oopencalDir = envDir;
-        }
-        else
-        {
-            this->oopencalDir = OOPENCAL_DIR; // defined in CMake
-        }
-    }
 }
 
 bool CppModuleBuilder::moduleExists(const std::string& outputPath)
