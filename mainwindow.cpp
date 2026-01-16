@@ -1043,40 +1043,22 @@ void MainWindow::onLoadPluginRequested()
 
 void MainWindow::onLoadModelFromDirectoryRequested()
 {
-    constexpr bool newDirectoryLoader = true;
-    if (newDirectoryLoader)
+    CustomDirectoryDialog dialog(this);
+
+    // Set the starting directory using the same logic as the original dialog
+    QString startPath = getOOpenCalStartPath();
+    if (! startPath.isEmpty())
     {
-        CustomDirectoryDialog dialog(this);
-
-        // Set the starting directory using the same logic as the original dialog
-        QString startPath = getOOpenCalStartPath();
-        if (! startPath.isEmpty())
-        {
-            dialog.setStartDirectory(startPath);
-        }
-
-        if (dialog.exec() == QDialog::Accepted)
-        {
-            QString modelDirectory = dialog.getSelectedDirectory();
-            if (! modelDirectory.isEmpty())
-            {
-                loadModelFromDirectory(modelDirectory, dialog.compilationRequested());
-            }
-        }
+        dialog.setStartDirectory(startPath);
     }
-    else
-    {
-        QString modelDirectory = QFileDialog::getExistingDirectory(
-            this,
-            tr("Load Model from Directory"),
-            getOOpenCalStartPath(),
-            QFileDialog::ShowDirsOnly);
 
-        if (modelDirectory.isEmpty())
+    if (QDialog::Accepted == dialog.exec())
+    {
+        QString modelDirectory = dialog.getSelectedDirectory();
+        if (! modelDirectory.isEmpty())
         {
-            return; // User cancelled
+            loadModelFromDirectory(modelDirectory, dialog.compilationRequested());
         }
-        loadModelFromDirectory(modelDirectory);
     }
 }
 
