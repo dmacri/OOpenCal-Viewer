@@ -37,6 +37,11 @@ public:
     void openConfigurationFile(const QString& configFileName, std::shared_ptr<Config> optionalConfig={});
     void applyCommandLineOptions(const CommandLineParser& cmdParser);
     void loadModelFromDirectory(const QString& modelDirectory, bool forceCompilation=false);
+    
+    /// @brief Load model data using an existing model from the system
+    /// @param modelDirectory Directory containing Header.txt and data files
+    /// @param existingModelName Name of the existing model to use for visualization
+    void loadModelDataWithExistingModel(const QString& modelDirectory, const QString& existingModelName);
 
     /// @brief Get the name of the substate field currently used for 3D visualization
     /// @return Field name (e.g., "h", "z") or empty string if no 3D substate is active

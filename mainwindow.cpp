@@ -1057,7 +1057,28 @@ void MainWindow::onLoadModelFromDirectoryRequested()
         QString modelDirectory = dialog.getSelectedDirectory();
         if (! modelDirectory.isEmpty())
         {
-            loadModelFromDirectory(modelDirectory, dialog.compilationRequested());
+            // Check which tab is active
+            int currentTab = dialog.getLoadingModuleOptionsTabWidget()->currentIndex();
+            
+            if (currentTab == 1) // "Use existing module" tab
+            {
+                // Load data using existing model
+                QString existingModelName = dialog.getSelectedExistingModel();
+                if (! existingModelName.isEmpty())
+                {
+                    loadModelDataWithExistingModel(modelDirectory, existingModelName);
+                }
+                else
+                {
+                    QMessageBox::warning(this, tr("No Model Selected"),
+                        tr("Please select a model from the available models list."));
+                }
+            }
+            else // "Compile module" tab (default behavior)
+            {
+                // Load model with compilation as before
+                loadModelFromDirectory(modelDirectory, dialog.compilationRequested());
+            }
         }
     }
 }
@@ -1140,6 +1161,8 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory, bool forc
         
         switchToModel(QString::fromStdString(pluginModelName));
 
+        // TODO: GB: the method loadModelDataWithExistingModel should be used from here (cod duplication)
+
         // Step 4: Load configuration from Header.txt
         progress.setLabelText(tr("Loading configuration..."));
         QApplication::processEvents();
@@ -1174,6 +1197,73 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory, bool forc
     {
         QMessageBox::critical(this, tr("Error"),
             tr("An error occurred while loading the model:\n%1").arg(e.what()));
+    }
+}
+
+void MainWindow::loadModelDataWithExistingModel(const QString& modelDirectory, const QString& existingModelName)
+{
+    try
+    {
+        // The model directory should contain Header.txt and data files
+        namespace fs = std::filesystem;
+        fs::path actualModelDir = fs::path(modelDirectory.toStdString());
+
+        // Show progress dialog
+        QProgressDialog progress(tr("Loading model data with existing model: ") + existingModelName, tr("Cancel"), 0, 0, this);
+        progress.setWindowModality(Qt::WindowModal);
+        progress.setMinimumDuration(/*ms=*/500);
+
+        QApplication::processEvents();
+
+        // Step 1: Verify that the requested model is available
+        progress.setLabelText(tr("Verifying model availability..."));
+        QApplication::processEvents();
+
+        if (! SceneWidgetVisualizerFactory::isModelRegistered(existingModelName.toStdString()))
+        {
+            progress.close();
+            QMessageBox::critical(this, tr("Model Not Available"),
+                tr("The requested model '%1' is not available in the system.").arg(existingModelName));
+            return;
+        }
+
+        // Step 2: Switch to the existing model
+        progress.setLabelText(tr("Switching to model..."));
+        QApplication::processEvents();
+
+        switchToModel(existingModelName);
+
+        // Step 3: Load configuration from Header.txt
+        progress.setLabelText(tr("Loading configuration..."));
+        QApplication::processEvents();
+
+        // Build path to Header.txt in the model directory
+        fs::path headerPath = actualModelDir / DirectoryConstants::HEADER_FILE_NAME;
+        
+        if (!fs::exists(headerPath))
+        {
+            progress.close();
+            QMessageBox::critical(this, tr("Configuration Load Failed"),
+                tr("Header.txt not found in model directory:\n%1").arg(QString::fromStdString(actualModelDir.string())));
+            return;
+        }
+
+        // Load configuration from Header.txt
+        openConfigurationFile(QString::fromStdString(headerPath.string()));
+
+        // Add directory to recent directories list
+        addToRecentDirectories(QString::fromStdString(actualModelDir.string()));
+
+        progress.close();
+
+        std::cout << "[DEBUG] " << tr("Model Data Loaded").toStdString()
+                  << tr("Model data loaded successfully using existing model '%1' from:\n%2\n\nConfiguration loaded and ready to use.")
+                         .arg(existingModelName)
+                         .arg(actualModelDir.string()).toStdString() << std::endl;
+    }
+    catch (const std::exception& e)
+    {
+        QMessageBox::critical(this, tr("Error"), tr("An error occurred while loading model data:\n%1").arg(e.what()));
     }
 }
 

@@ -61,6 +61,9 @@ public:
 
     /// Returns the selected existing model name
     QString getSelectedExistingModel() const;
+    
+    /// Returns the loading module options tab widget
+    QTabWidget* getLoadingModuleOptionsTabWidget() const; // TODO: GB: I just need index, not entire tab
 
     /// Sets the initial directory displayed and selected in the tree view
     void setStartDirectory(const QString &path);

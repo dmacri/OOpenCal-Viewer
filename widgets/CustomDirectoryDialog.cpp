@@ -478,6 +478,11 @@ QString CustomDirectoryDialog::getSelectedExistingModel() const
     return ui->availableModulesComboBox->currentText();
 }
 
+QTabWidget* CustomDirectoryDialog::getLoadingModuleOptionsTabWidget() const
+{
+    return ui->loadingModuleOptionsTabWidget;
+}
+
 void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
 {
     // Find header file in the directory
