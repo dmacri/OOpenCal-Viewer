@@ -53,36 +53,8 @@
       <set>Qt::AlignmentFlag::AlignCenter</set>
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
-      <item row="1" column="2">
-       <widget class="QLineEdit" name="compiledModuleTimeLineEdit">
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0">
-       <widget class="QLabel" name="modelSourceLabel">
-        <property name="text">
-         <string>Model source file:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="compiledModuleLabel">
-        <property name="text">
-         <string>Compiled module name</string>
-        </property>
-       </widget>
-      </item>
       <item row="0" column="1">
        <widget class="QLineEdit" name="modelSourceLineEdit">
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="2">
-       <widget class="QLineEdit" name="modelSourceModificationTimeLineEdit">
         <property name="enabled">
          <bool>false</bool>
         </property>
@@ -96,38 +68,6 @@
        </widget>
       </item>
       <item row="2" column="0" colspan="3">
-       <widget class="QGroupBox" name="groupBox">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="title">
-         <string>Module loading options</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignmentFlag::AlignCenter</set>
-        </property>
-        <layout class="QHBoxLayout" name="horizontalLayout">
-         <item>
-          <widget class="QRadioButton" name="radioButton">
-           <property name="text">
-            <string>Compile  module before loading</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QRadioButton" name="radioButton_2">
-           <property name="text">
-            <string>Use existing module</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-      </item>
-      <item row="3" column="0" colspan="3">
        <widget class="QTabWidget" name="loadingModuleOptionsTabWidget">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
@@ -190,6 +130,34 @@
           </item>
          </layout>
         </widget>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="compiledModuleLabel">
+        <property name="text">
+         <string>Compiled module name</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="modelSourceLabel">
+        <property name="text">
+         <string>Model source file:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLineEdit" name="compiledModuleTimeLineEdit">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QLineEdit" name="modelSourceModificationTimeLineEdit">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
        </widget>
       </item>
      </layout>
