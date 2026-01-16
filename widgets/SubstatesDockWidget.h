@@ -149,25 +149,25 @@ public slots:
     void uncheckAllUse2DCheckboxes();
 
     /// @brief Informs about changes in substat colloring
-    void onUseSubstateColorringRequested(const std::string &fieldName);
+    void onUseSubstateColorringRequested(const std::string& fieldName);
 
 protected:
     /// @brief Override drag enter event for drag-and-drop support
     void dragEnterEvent(QDragEnterEvent* event) override;
-    
-    /// @brief Override drop event for drag-and-drop support  
+
+    /// @brief Override drop event for drag-and-drop support
     void dropEvent(QDropEvent* event) override;
 
 private:
     /// @brief Clear all substate widgets.
     void clearWidgets();
-    
+
     /** @brief Reorder widgets based on drag and drop operation.
      * 
      * @param draggedField The field name being dragged
      * @param dropPosition The position where the widget was dropped */
     void reorderWidgets(const std::string& draggedField, const QPoint& dropPosition);
-    
+
     /** @brief Save the current field order to SettingParameter.
      * 
      * Updates the order field in SubstateInfo based on current widget layout. */

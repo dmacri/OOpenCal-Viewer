@@ -92,14 +92,14 @@ public:
     /** @brief Get the project root path */
     const std::string& getProjectRootPath() const
     {
-         return projectRootPath; 
+        return projectRootPath;
     }
 
     /** @brief Set progress callback for compilation updates
      * @param callback Function to call with progress messages */
     void setProgressCallback(ProgressCallback callback)
     {
-        progressCallback = callback; 
+        progressCallback = callback;
     }
 
 private:

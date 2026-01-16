@@ -20,15 +20,15 @@ class CppModuleBuilder;
  * @brief Result of a compilation attempt. */
 struct CompilationResult
 {
-    bool success = false;           ///< Whether compilation succeeded
-    int exitCode = -1;              ///< Compiler exit code
-    std::string stdout;             ///< Compiler standard output
-    std::string stderr;             ///< Compiler error output
-    std::string sourceFile;         ///< Source file that was compiled
-    std::string outputFile;         ///< Output .so file path
-    std::string compileCommand;     ///< The actual compile command used
+    bool success = false;       ///< Whether compilation succeeded
+    int exitCode = -1;          ///< Compiler exit code
+    std::string stdout;         ///< Compiler standard output
+    std::string stderr;         ///< Compiler error output
+    std::string sourceFile;     ///< Source file that was compiled
+    std::string outputFile;     ///< Output .so file path
+    std::string compileCommand; ///< The actual compile command used
 };
-}
+} // namespace viz::plugins
 
 /** @class ModelLoader
  * @brief Loads OOpenCAL models from directories with automatic compilation.
@@ -57,11 +57,11 @@ public:
      * @brief Result of model loading attempt. */
     struct LoadResult
     {
-        bool success = false;                    ///< Whether loading succeeded
-        std::string compiledModulePath;          ///< Path to compiled .so file
-        std::string outputFileName;              ///< Output file name from Header.txt (e.g., "ball")
-        std::string pluginModelName;             ///< Model name from plugin's getModelName() (e.g., "Ball Model")
-        std::shared_ptr<Config> config;          ///< Parsed configuration
+        bool success = false;           ///< Whether loading succeeded
+        std::string compiledModulePath; ///< Path to compiled .so file
+        std::string outputFileName;     ///< Output file name from Header.txt (e.g., "ball")
+        std::string pluginModelName;    ///< Model name from plugin's getModelName() (e.g., "Ball Model")
+        std::shared_ptr<Config> config; ///< Parsed configuration
         std::optional<viz::plugins::CompilationResult> compilationResult; ///< Compilation details if compilation was attempted
     };
 
@@ -72,11 +72,14 @@ public:
     /** @brief Load a model from a directory
      * @param modelDirectory Path to directory containing Header.txt and model source
      * @return LoadResult with success status and details */
-    LoadResult loadModelFromDirectory(const std::string& modelDirectory, bool forceCompilation=false);
+    LoadResult loadModelFromDirectory(const std::string& modelDirectory, bool forceCompilation = false);
 
     /** @brief Get the C++ module builder
      * @return Pointer to the CppModuleBuilder instance */
-    viz::plugins::CppModuleBuilder* getBuilder() { return builder.get(); }
+    viz::plugins::CppModuleBuilder* getBuilder()
+    {
+        return builder.get();
+    }
 
     /** @brief Find C++ header file in directory
      * @param modelDirectory Directory to search

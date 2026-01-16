@@ -23,7 +23,8 @@ class QPushButton;
 class QTreeView;
 class QTreeView;
 
-namespace Ui {
+namespace Ui
+{
 class CustomDirectoryDialog;
 }
 
@@ -57,7 +58,7 @@ public:
 
     /// Returns if the (re)compilation requested
     bool compilationRequested() const;
-    
+
     /// Returns the selected existing model name
     QString getSelectedExistingModel() const;
 
@@ -119,10 +120,10 @@ private:
 
     /// Updates appearance of all currently visible directories
     void updateVisibleDirectoriesAppearance();
-    
+
     /// Updates UI widgets with information about source and compiled files
     void updateModuleInfo(const QString &directoryPath);
-    
+
     /// Gets modification date of a file
     QDateTime getFileModificationDate(const QString &filePath) const;
 
@@ -131,16 +132,16 @@ private:
 
     /// Handles compile module checkbox state changes
     void onCompileModuleToggled(bool checked);
-    
+
     /// Handles tab widget current page change
     void onLoadingModuleOptionsTabChanged(int index);
-    
+
     /// Handles available modules combo box current index change
     void onAvailableModulesChanged(int index);
-    
+
     /// Updates OK button state based on current tab and selection
     void updateOkButtonState();
-    
+
     /// Loads available models into the combo box
     void loadAvailableModels();
 
