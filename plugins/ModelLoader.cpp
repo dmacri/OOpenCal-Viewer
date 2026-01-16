@@ -110,24 +110,16 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
         result.config = std::make_shared<Config>(headerPath);
         result.config->readConfigFile();
 
-        // Get model name from output_file_name parameter
-        ConfigCategory* generalCat = result.config->getConfigCategory(ConfigConstants::CATEGORY_GENERAL, true);
-        if (!generalCat)
+        try
         {
-            std::cerr << "Error: GENERAL section not found in Header.txt" << std::endl;
+            result.outputFileName = readOutputFileName(result.config.get());
+        }
+        catch(const std::invalid_argument& e)
+        {
+            std::cerr << "Error: " << e.what() << std::endl;
             result.success = false;
             return result;
         }
-
-        ConfigParameter* outputParam = generalCat->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME);
-        if (!outputParam)
-        {
-            std::cerr << "Error: output_file_name not found in GENERAL section" << std::endl;
-            result.success = false;
-            return result;
-        }
-
-        result.outputFileName = outputParam->getValue<std::string>();
 
         // Find C++ header file
         std::string sourceFile = findHeaderFile(modelDirectory);
@@ -251,6 +243,24 @@ std::string ModelLoader::findHeaderFile(const std::string& modelDirectory)
         return it->path().string();
     }
     return {};
+}
+
+std::string ModelLoader::readOutputFileName(Config* config)
+{
+    // Get model name from output_file_name parameter
+    ConfigCategory* generalCat = config->getConfigCategory(ConfigConstants::CATEGORY_GENERAL, /*ignoreCase=*/true);
+    if (! generalCat)
+    {
+        throw std::invalid_argument(std::string("Error: GENERAL section not found in ") + DirectoryConstants::HEADER_FILE_NAME);
+    }
+
+    const ConfigParameter* outputParam = generalCat->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME);
+    if (! outputParam)
+    {
+        throw std::invalid_argument("Error: output_file_name not found in GENERAL section");
+    }
+
+    return outputParam->getValue<std::string>();
 }
 
 std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppHeaderFile)

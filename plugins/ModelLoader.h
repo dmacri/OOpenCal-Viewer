@@ -74,6 +74,9 @@ public:
      * @return LoadResult with success status and details */
     LoadResult loadModelFromDirectory(const std::string& modelDirectory, bool forceCompilation = false);
 
+    /// @brief The method reads outputFileName from Config, if not found throws exception
+    static std::string readOutputFileName(Config* config);
+
     /** @brief Get the C++ module builder
      * @return Pointer to the CppModuleBuilder instance */
     viz::plugins::CppModuleBuilder* getBuilder()

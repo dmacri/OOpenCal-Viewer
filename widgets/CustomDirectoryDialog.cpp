@@ -505,6 +505,57 @@ void CustomDirectoryDialog::updateModuleInfo(const QString &directoryPath)
     // Load available models
     loadAvailableModels();
     
+    // Try to read output file name from Header.txt to match with available models
+    QString expectedModelName;
+    try
+    {
+        QString headerPath = QDir(directoryPath).filePath(DirectoryConstants::HEADER_FILE_NAME);
+        if (QFileInfo::exists(headerPath))
+        {
+            Config config(headerPath.toStdString(), /*printWarnings=*/false);
+            expectedModelName = QString::fromStdString(ModelLoader::readOutputFileName(&config));
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Warning: Could not read output file name from Header.txt: " << e.what() << std::endl;
+    }
+    
+    // Find matching model in available models
+    int matchingModelIndex = -1;
+    if (!expectedModelName.isEmpty())
+    {
+        for (int i = 0; i < ui->availableModulesComboBox->count(); ++i)
+        {
+            QString availableModel = ui->availableModulesComboBox->itemText(i);
+            // Check for exact match or case-insensitive match
+            if (availableModel.compare(expectedModelName, Qt::CaseInsensitive) == 0 ||
+                availableModel.contains(expectedModelName, Qt::CaseInsensitive) ||
+                expectedModelName.contains(availableModel, Qt::CaseInsensitive))
+            {
+                matchingModelIndex = i;
+                break;
+            }
+        }
+    }
+    
+    // Set the matching model if found, otherwise clear selection
+    if (matchingModelIndex >= 0)
+    {
+        ui->availableModulesComboBox->setCurrentIndex(matchingModelIndex);
+        std::cout << "[DEBUG] Found matching model: '" << ui->availableModulesComboBox->itemText(matchingModelIndex).toStdString() 
+                  << "' for expected: '" << expectedModelName.toStdString() << "'" << std::endl;
+    }
+    else
+    {
+        // No matching model found - clear combo box and disable OK button
+        ui->availableModulesComboBox->setCurrentIndex(-1);
+        if (!expectedModelName.isEmpty())
+        {
+            std::cout << "[DEBUG] No matching model found for expected: '" << expectedModelName.toStdString() << "'" << std::endl;
+        }
+    }
+    
     // Extract only filename from full path
     QFileInfo sourceFileInfo(cppHeaderFile);
     QString sourceFileName = sourceFileInfo.fileName();
