@@ -702,6 +702,7 @@
     </property>
     <addaction name="separator"/>
     <addaction name="actionColor_settings"/>
+    <addaction name="actionCompilation_settings"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuModel"/>
@@ -821,6 +822,17 @@
    </property>
    <property name="text">
     <string>Color settings</string>
+   </property>
+  </action>
+  <action name="actionCompilation_settings">
+   <property name="icon">
+    <iconset theme="QIcon::ThemeIcon::DocumentProperties"/>
+   </property>
+   <property name="text">
+    <string>Compilation settings</string>
+   </property>
+   <property name="toolTip">
+    <string>Show C++ module compilation settings and environment variables</string>
    </property>
   </action>
   <action name="action2DMode">

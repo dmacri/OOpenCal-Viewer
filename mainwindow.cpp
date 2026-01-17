@@ -37,6 +37,7 @@
 #include "widgets/AboutDialog.h"
 #include "widgets/ColorSettingsDialog.h"
 #include "widgets/CompilationLogWidget.h"
+#include "widgets/CompilationSettingsWidget.h"
 #include "widgets/ConfigDetailsDialog.h"
 #include "widgets/ReductionDialog.h"
 #include "widgets/CustomDirectoryDialog.h"
@@ -202,6 +203,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionLoadPlugin, &QAction::triggered, this, &MainWindow::onLoadPluginRequested);
     connect(ui->actionLoadModelFromDirectory, &QAction::triggered, this, &MainWindow::onLoadModelFromDirectoryRequested);
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
+    connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
     connect(ui->actionShow_reduction, &QAction::triggered, this, &MainWindow::onShowReductionRequested);
 
     // View mode actions
@@ -944,6 +946,22 @@ void MainWindow::onColorSettingsRequested()
     auto* colorSettings = new ColorSettingsDialog(this);
 
     colorSettings->show();
+}
+
+void MainWindow::onCompilationSettingsRequested()
+{
+    auto* compilationSettings = new CompilationSettingsWidget(this);
+    
+    // Set up the widget as a window
+    compilationSettings->setWindowFlags(Qt::Window);
+    compilationSettings->setWindowTitle("Compilation Settings");
+    compilationSettings->resize(800, 600);
+    
+    // Create a default module builder for now
+    auto moduleBuilder = std::make_shared<viz::plugins::CppModuleBuilder>();
+    compilationSettings->setModuleBuilder(moduleBuilder);
+    
+    compilationSettings->show();
 }
 
 void MainWindow::enterNoConfigurationFileMode()

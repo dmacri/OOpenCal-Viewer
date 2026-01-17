@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CompilationSettingsWidget</class>
+ <widget class="QWidget" name="CompilationSettingsWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Compilation Settings</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="titleLabel">
+     <property name="text">
+      <string>&lt;h2&gt;C++ Module Compilation Settings&lt;/h2&gt;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QScrollArea" name="scrollArea">
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <widget class="QWidget" name="scrollAreaWidgetContents">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>780</width>
+        <height>540</height>
+       </rect>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <item>
+        <widget class="QGroupBox" name="compilerGroupBox">
+         <property name="title">
+          <string>Compiler Configuration</string>
+         </property>
+         <layout class="QFormLayout" name="formLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="compilerLabel">
+            <property name="text">
+             <string>Compiler:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLabel" name="compilerValueLabel">
+            <property name="text">
+             <string>Not set</string>
+            </property>
+            <property name="textInteractionFlags">
+             <set>Qt::TextSelectableByMouse</set>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="statusLabel">
+            <property name="text">
+             <string>Status:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLabel" name="statusValueLabel">
+            <property name="text">
+             <string>Unknown</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="cppStandardLabel">
+            <property name="text">
+             <string>C++ Standard:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLabel" name="cppStandardValueLabel">
+            <property name="text">
+             <string>Auto-detect</string>
+            </property>
+            <property name="textInteractionFlags">
+             <set>Qt::TextSelectableByMouse</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="flagsGroupBox">
+         <property name="title">
+          <string>Compilation Flags</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_3">
+          <item>
+           <widget class="QLabel" name="flagsLabel">
+            <property name="text">
+             <string>-shared -fPIC -std=&lt;standard&gt;</string>
+            </property>
+            <property name="textInteractionFlags">
+             <set>Qt::TextSelectableByMouse</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="pathsGroupBox">
+         <property name="title">
+          <string>Include Paths</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_4">
+          <item>
+           <widget class="QLabel" name="oopencalPathLabel">
+            <property name="text">
+             <string>OOpenCAL:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="oopencalPathValueLabel">
+            <property name="text">
+             <string>Not set</string>
+            </property>
+            <property name="textInteractionFlags">
+             <set>Qt::TextSelectableByMouse</set>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="projectPathLabel">
+            <property name="text">
+             <string>Project Root:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="projectPathValueLabel">
+            <property name="text">
+             <string>Not set</string>
+            </property>
+            <property name="textInteractionFlags">
+             <set>Qt::TextSelectableByMouse</set>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="additionalPathsLabel">
+            <property name="text">
+             <string>Additional Include Paths:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="additionalPathsValueLabel">
+            <property name="text">
+             <string>-I&quot;&lt;project_root&gt;/visualiserProxy&quot; -I&quot;&lt;project_root&gt;/config&quot;</string>
+            </property>
+            <property name="textInteractionFlags">
+             <set>Qt::TextSelectableByMouse</set>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="environmentGroupBox">
+         <property name="title">
+          <string>Environment Variables</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_5">
+          <item>
+           <widget class="QTableWidget" name="environmentTableWidget">
+            <property name="alternatingRowColors">
+             <bool>true</bool>
+            </property>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::SingleSelection</enum>
+            </property>
+            <property name="selectionBehavior">
+             <enum>QAbstractItemView::SelectRows</enum>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+            <column>
+             <property name="text">
+              <string>Variable</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Value</string>
+             </property>
+            </column>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="commandGroupBox">
+         <property name="title">
+          <string>Example Compilation Command</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_6">
+          <item>
+           <widget class="QTextEdit" name="commandTextEdit">
+            <property name="maximumHeight">
+             <number>100</number>
+            </property>
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+            <property name="plainText">
+             <string>&lt;compiler&gt; -shared -fPIC -std=&lt;standard&gt; -I"&lt;oopencal_path&gt;" -I"&lt;project_root&gt;" -I"&lt;project_root&gt;/visualiserProxy" -I"&lt;project_root&gt;/config" &lt;vtk_flags&gt; "&lt;source_file&gt;" -o "&lt;output_file&gt;"</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <spacer name="horizontalSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="refreshButton">
+           <property name="text">
+            <string>Refresh Settings</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -133,7 +133,7 @@ CppModuleBuilder::CppModuleBuilder(const std::string& compilerPath,
                                    const std::string& oopencalDir)
     : compilerPath(compilerPath)
     , oopencalDir(oopencalDir.empty() ? getOopencalDir() : oopencalDir)
-    , projectRootPath(getProjectRootPath())
+    , projectRootPath(::getProjectRootPath())
     , progressCallback(nullptr)
 {
 }

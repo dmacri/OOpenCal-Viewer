@@ -73,6 +73,7 @@ private slots: // menu actions
 
     // Settings submenu
     void onColorSettingsRequested();
+    void onCompilationSettingsRequested();
 
     // Help submenu:
     void showAboutThisApplicationDialog();
