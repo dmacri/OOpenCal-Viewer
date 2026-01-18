@@ -64,33 +64,17 @@ void CompilationSettingsWidget::loadCompilationSettings()
     QString compilerPath = QString::fromStdString(m_moduleBuilder ? m_moduleBuilder->getCompilerPath() : "clang++");
     ui->compilerValueLabel->setText(compilerPath.isEmpty() ? "Default (clang++)" : compilerPath);
 
-    // Load OOpenCAL directory configuration
-    auto oopencalConfig = getOopencalDirConfig();
-    ui->oopencalCmakeValueLabel->setText(oopencalConfig.cmakeValue);
-    ui->oopencalEnvValueLabel->setText(oopencalConfig.envValue);
-    ui->oopencalPathValueLabel->setText(oopencalConfig.currentValue);
-    validatePath(oopencalConfig.currentValue, ui->oopencalPathValueLabel, "OOpenCAL Directory");
-
-    // Load viewer root directory configuration
-    auto viewerRootConfig = getViewerRootConfig();
-    ui->projectCmakeValueLabel->setText(viewerRootConfig.cmakeValue);
-    ui->projectEnvValueLabel->setText(viewerRootConfig.envValue);
-    ui->projectPathValueLabel->setText(viewerRootConfig.currentValue);
-    validatePath(viewerRootConfig.currentValue, ui->projectPathValueLabel, "OOpenCal Viewer Root");
+    // Setup configuration table with 3 rows
+    setupConfigTable(ui->configTableWidget);
 
     // Update additional paths based on project root
+    auto viewerRootConfig = getViewerRootConfig();
     if (!viewerRootConfig.currentValue.isEmpty()) {
         QString additionalPaths = QString("-I\"%1/visualiserProxy\" -I\"%1/config\"").arg(viewerRootConfig.currentValue);
         ui->additionalPathsValueLabel->setText(additionalPaths);
     } else {
         ui->additionalPathsValueLabel->setText("-I\"<project_root>/visualiserProxy\" -I\"<project_root>/config\"");
     }
-
-    // Load VTK flags configuration
-    auto vtkConfig = getVtkFlagsConfig();
-    ui->vtkCmakeValueLabel->setText(vtkConfig.cmakeValue);
-    ui->vtkEnvValueLabel->setText(vtkConfig.envValue);
-    ui->vtkCurrentValueLabel->setText(vtkConfig.currentValue);
 
     // Load compilation flags from singleton
     QString flags = QString::fromStdString(config.getCompilationFlags());
@@ -99,6 +83,60 @@ void CompilationSettingsWidget::loadCompilationSettings()
     // Generate example command
     QString command = generateExampleCommand();
     ui->commandTextEdit->setPlainText(command);
+}
+
+void CompilationSettingsWidget::setupConfigTable(QTableWidget* table)
+{
+    table->setRowCount(3);
+    table->setColumnCount(4);
+    
+    // Set headers
+    QStringList headers;
+    headers << "Variable" << "Compilation Value" << "Environment Variable" << "Current Value";
+    table->setHorizontalHeaderLabels(headers);
+    
+    // Get configuration values
+    auto oopencalConfig = getOopencalDirConfig();
+    auto viewerRootConfig = getViewerRootConfig();
+    auto vtkConfig = getVtkFlagsConfig();
+    
+    // Row 0: OOPENCAL_DIR
+    table->setItem(0, 0, new QTableWidgetItem("OOPENCAL_DIR"));
+    table->setItem(0, 1, new QTableWidgetItem(oopencalConfig.cmakeValue));
+    table->setItem(0, 2, new QTableWidgetItem(oopencalConfig.envValue));
+    auto* oopencalCurrentItem = new QTableWidgetItem(oopencalConfig.currentValue);
+    table->setItem(0, 3, oopencalCurrentItem);
+    validatePath(oopencalConfig.currentValue, oopencalCurrentItem, "OOPENCAL_DIR");
+    
+    // Row 1: OOPENCAL_VIEWER_ROOT
+    table->setItem(1, 0, new QTableWidgetItem("OOPENCAL_VIEWER_ROOT"));
+    table->setItem(1, 1, new QTableWidgetItem(viewerRootConfig.cmakeValue));
+    table->setItem(1, 2, new QTableWidgetItem(viewerRootConfig.envValue));
+    auto* viewerRootItem = new QTableWidgetItem(viewerRootConfig.currentValue);
+    table->setItem(1, 3, viewerRootItem);
+    validatePath(viewerRootConfig.currentValue, viewerRootItem, "OOPENCAL_VIEWER_ROOT");
+    
+    // Row 2: VTK_COMPILE_FLAGS
+    table->setItem(2, 0, new QTableWidgetItem("VTK_COMPILE_FLAGS"));
+    table->setItem(2, 1, new QTableWidgetItem(vtkConfig.cmakeValue));
+    table->setItem(2, 2, new QTableWidgetItem(vtkConfig.envValue));
+    auto* vtkItem = new QTableWidgetItem(vtkConfig.currentValue);
+    table->setItem(2, 3, vtkItem);
+    
+    // Make first two columns read-only
+    for (int row = 0; row < 3; ++row)
+    {
+        for (int col = 0; col < 2; ++col)
+        {
+            if (auto* item = table->item(row, col))
+            {
+                item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+            }
+        }
+    }
+    
+    // Resize columns to content
+    table->resizeColumnsToContents();
 }
 
 QString CompilationSettingsWidget::generateExampleCommand()
@@ -117,8 +155,16 @@ QString CompilationSettingsWidget::generateExampleCommand()
         standard = QString::fromStdString(viz::plugins::detectCppStandard());
     }
 
-    QString oopencalPath = ui->oopencalPathValueLabel->text();
-    QString projectRoot = ui->projectPathValueLabel->text();
+    QString oopencalPath = "";
+    QString projectRoot = "";
+    
+    // Get current values from the unified config table
+    if (ui->configTableWidget->item(0, 3)) {
+        oopencalPath = ui->configTableWidget->item(0, 3)->text();
+    }
+    if (ui->configTableWidget->item(1, 3)) {
+        projectRoot = ui->configTableWidget->item(1, 3)->text();
+    }
 
     // Use flags from singleton
     QString flags = QString::fromStdString(config.getCompilationFlags());
@@ -315,20 +361,27 @@ CompilationSettingsWidget::ConfigValues CompilationSettingsWidget::getVtkFlagsCo
     return values;
 }
 
-void CompilationSettingsWidget::validatePath(const QString& path, QLabel* label, const QString& fieldName)
+void CompilationSettingsWidget::validatePath(const QString& path, QTableWidgetItem* item, const QString& fieldName)
 {
+    if (!item) return;
+    
     if (path.isEmpty() || path == "Not set") {
-        label->setStyleSheet("");
-        label->setToolTip("");
+        item->setBackground(QBrush());
+        item->setToolTip("");
         return;
     }
     
     QDir dir(path);
-    if (!dir.exists()) {
-        label->setStyleSheet("color: red; background-color: #ffe6e6;");
-        label->setToolTip(QString("Path does not exist: %1").arg(path));
-    } else {
-        label->setStyleSheet("color: green;");
-        label->setToolTip(QString("Path exists: %1").arg(path));
+    bool exists = dir.exists();
+    
+    if (!exists)
+    {
+        item->setBackground(QColor("#ffe6e6")); // Light red
+        item->setToolTip(QString("Path does not exist: %1").arg(path));
+    }
+    else
+    {
+        item->setBackground(QColor("#e6ffe6")); // Light green
+        item->setToolTip(QString("Path exists: %1").arg(path));
     }
 }

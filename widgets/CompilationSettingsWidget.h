@@ -15,13 +15,13 @@
 
 #pragma once
 
-#include <QWidget>
 #include <memory>
+#include <QWidget>
 
-// Forward declarations
 class QLabel;
 class QString;
 class QTableWidget;
+class QTableWidgetItem;
 
 namespace Ui
 {
@@ -78,6 +78,14 @@ private slots:
     void onEnvironmentVariableSelectionChanged();
 
 private:
+    /** @brief Load configuration values from CMake, environment, and overrides */
+    struct ConfigValues
+    {
+        QString cmakeValue;    // Value set at compile time (read-only)
+        QString envValue;      // Value from environment variable (read-only) 
+        QString currentValue;   // Current editable value (with overrides)
+    };
+    
     /** @brief Initialize UI components and connections */
     void setupConnections();
     
@@ -97,14 +105,8 @@ private:
     QString generateExampleCommand();
     
     /** @brief Validate if a path exists and update UI accordingly */
-    void validatePath(const QString& path, QLabel* label, const QString& fieldName);
-    
-    /** @brief Load configuration values from CMake, environment, and overrides */
-    struct ConfigValues {
-        QString cmakeValue;    // Value set at compile time (read-only)
-        QString envValue;      // Value from environment variable (read-only) 
-        QString currentValue;   // Current editable value (with overrides)
-    };
+    void validatePath(const QString& path, QTableWidgetItem* item, const QString& fieldName);
+    void setupConfigTable(QTableWidget* table);
     
     /** @brief Get configuration values for OOPENCAL_DIR */
     ConfigValues getOopencalDirConfig();

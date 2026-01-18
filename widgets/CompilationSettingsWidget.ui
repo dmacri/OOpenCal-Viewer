@@ -122,137 +122,46 @@
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
-           <widget class="QLabel" name="oopencalPathLabel">
+           <widget class="QLabel" name="configPathsLabel">
             <property name="text">
-             <string>OOpenCAL Directory:</string>
+             <string>Configuration Paths:</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="oopencalCmakeLabel">
-            <property name="text">
-             <string>CMake:</string>
+           <widget class="QTableWidget" name="configTableWidget">
+            <property name="alternatingRowColors">
+             <bool>true</bool>
             </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="oopencalCmakeValueLabel">
-            <property name="text">
-             <string>Not set</string>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::NoSelection</enum>
             </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
+            <property name="selectionBehavior">
+             <enum>QAbstractItemView::SelectRows</enum>
             </property>
             <property name="wordWrap">
              <bool>true</bool>
             </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="oopencalEnvLabel">
-            <property name="text">
-             <string>Environment:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="oopencalEnvValueLabel">
-            <property name="text">
-             <string>Not set</string>
-            </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="oopencalCurrentLabel">
-            <property name="text">
-             <string>Current:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="oopencalPathValueLabel">
-            <property name="text">
-             <string>Not set</string>
-            </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="projectPathLabel">
-            <property name="text">
-             <string>Project Root:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="projectCmakeLabel">
-            <property name="text">
-             <string>CMake:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="projectCmakeValueLabel">
-            <property name="text">
-             <string>Not set</string>
-            </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="projectEnvLabel">
-            <property name="text">
-             <string>Environment:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="projectEnvValueLabel">
-            <property name="text">
-             <string>Not set</string>
-            </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="projectCurrentLabel">
-            <property name="text">
-             <string>Current:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="projectPathValueLabel">
-            <property name="text">
-             <string>Not set</string>
-            </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
+            <column>
+             <property name="text">
+              <string>Variable</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Compilation Value</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Environment Variable</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Current Value</string>
+             </property>
+            </column>
            </widget>
           </item>
           <item>
@@ -266,82 +175,6 @@
            <widget class="QLabel" name="additionalPathsValueLabel">
             <property name="text">
              <string>-I&quot;&lt;project_root&gt;/visualiserProxy&quot; -I&quot;&lt;project_root&gt;/config&quot;</string>
-            </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="vtkFlagsGroupBox">
-         <property name="title">
-          <string>VTK Compile Flags</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_6">
-          <item>
-           <widget class="QLabel" name="vtkFlagsLabel">
-            <property name="text">
-             <string>VTK Flags:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="vtkCmakeLabel">
-            <property name="text">
-             <string>CMake:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="vtkCmakeValueLabel">
-            <property name="text">
-             <string>Not set</string>
-            </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="vtkEnvLabel">
-            <property name="text">
-             <string>Environment:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="vtkEnvValueLabel">
-            <property name="text">
-             <string>Not set</string>
-            </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="vtkCurrentLabel">
-            <property name="text">
-             <string>Current:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="vtkCurrentValueLabel">
-            <property name="text">
-             <string>Not set</string>
             </property>
             <property name="textInteractionFlags">
              <set>Qt::TextSelectableByMouse</set>
