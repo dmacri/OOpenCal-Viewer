@@ -6,10 +6,13 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QDir>
+#include <QLabel>
+#include <QString>
+#include <QTableWidget>
+#include <QPushButton>
 
 #include "CompilationSettingsWidget.h"
 #include "ui_CompilationSettingsWidget.h"
-
 #include "plugins/CppModuleBuilder.h"
 #include "plugins/CompilationConfig.h"
 
@@ -61,24 +64,33 @@ void CompilationSettingsWidget::loadCompilationSettings()
     QString compilerPath = QString::fromStdString(m_moduleBuilder ? m_moduleBuilder->getCompilerPath() : "clang++");
     ui->compilerValueLabel->setText(compilerPath.isEmpty() ? "Default (clang++)" : compilerPath);
 
-    // Load configuration from singleton
-    QString oopencalDir = QString::fromStdString(config.getOopencalDir());
-    ui->oopencalPathValueLabel->setText(oopencalDir.isEmpty() ? "Not set" : oopencalDir);
+    // Load OOpenCAL directory configuration
+    auto oopencalConfig = getOopencalDirConfig();
+    ui->oopencalCmakeValueLabel->setText(oopencalConfig.cmakeValue);
+    ui->oopencalEnvValueLabel->setText(oopencalConfig.envValue);
+    ui->oopencalPathValueLabel->setText(oopencalConfig.currentValue);
+    validatePath(oopencalConfig.currentValue, ui->oopencalPathValueLabel, "OOpenCAL Directory");
 
-    QString projectRoot = QString::fromStdString(config.getViewerRootDir());
-    ui->projectPathValueLabel->setText(projectRoot.isEmpty() ? "Not set" : projectRoot);
+    // Load viewer root directory configuration
+    auto viewerRootConfig = getViewerRootConfig();
+    ui->projectCmakeValueLabel->setText(viewerRootConfig.cmakeValue);
+    ui->projectEnvValueLabel->setText(viewerRootConfig.envValue);
+    ui->projectPathValueLabel->setText(viewerRootConfig.currentValue);
+    validatePath(viewerRootConfig.currentValue, ui->projectPathValueLabel, "OOpenCal Viewer Root");
 
     // Update additional paths based on project root
-    if (!
-        projectRoot.isEmpty())
-    {
-        QString additionalPaths = QString("-I\"%1/visualiserProxy\" -I\"%1/config\"").arg(projectRoot);
+    if (!viewerRootConfig.currentValue.isEmpty()) {
+        QString additionalPaths = QString("-I\"%1/visualiserProxy\" -I\"%1/config\"").arg(viewerRootConfig.currentValue);
         ui->additionalPathsValueLabel->setText(additionalPaths);
-    }
-    else
-    {
+    } else {
         ui->additionalPathsValueLabel->setText("-I\"<project_root>/visualiserProxy\" -I\"<project_root>/config\"");
     }
+
+    // Load VTK flags configuration
+    auto vtkConfig = getVtkFlagsConfig();
+    ui->vtkCmakeValueLabel->setText(vtkConfig.cmakeValue);
+    ui->vtkEnvValueLabel->setText(vtkConfig.envValue);
+    ui->vtkCurrentValueLabel->setText(vtkConfig.currentValue);
 
     // Load compilation flags from singleton
     QString flags = QString::fromStdString(config.getCompilationFlags());
@@ -116,12 +128,14 @@ QString CompilationSettingsWidget::generateExampleCommand()
 
     // Add include paths from singleton
     auto includePaths = config.getIncludePaths();
-    for (const auto& path : includePaths) {
+    for (const auto& path : includePaths) 
+    {
         command += " " + QString::fromStdString(path);
     }
 
     // Add VTK flags if available
-    if (!vtkFlags.isEmpty()) {
+    if (! vtkFlags.isEmpty()) 
+    {
         command += " " + vtkFlags;
     }
 
@@ -231,5 +245,90 @@ void CompilationSettingsWidget::onEnvironmentVariableSelectionChanged()
     if (selection->hasSelection())
     {
         // Could show additional details in a status bar or tooltip
+    }
+}
+
+CompilationSettingsWidget::ConfigValues CompilationSettingsWidget::getOopencalDirConfig()
+{
+    ConfigValues values;
+    auto& config = viz::plugins::CompilationConfig::getInstance();
+    
+    // Get CMake value (compile-time)
+#ifdef OOPENCAL_DIR
+    values.cmakeValue = OOPENCAL_DIR;
+#else
+    values.cmakeValue = "";
+#endif
+    
+    // Get environment value
+    if (const char* envPath = std::getenv("OOPENCAL_DIR")) {
+        values.envValue = envPath;
+    }
+    
+    // Get current value (with overrides)
+    values.currentValue = QString::fromStdString(config.getOopencalDir());
+    
+    return values;
+}
+
+CompilationSettingsWidget::ConfigValues CompilationSettingsWidget::getViewerRootConfig()
+{
+    ConfigValues values;
+    auto& config = viz::plugins::CompilationConfig::getInstance();
+    
+    // Get CMake value (compile-time)
+#ifdef OOPENCAL_VIEWER_ROOT
+    values.cmakeValue = OOPENCAL_VIEWER_ROOT;
+#else
+    values.cmakeValue = "";
+#endif
+    
+    // Get environment value
+    if (const char* envPath = std::getenv("OOPENCAL_VIEWER_ROOT")) {
+        values.envValue = envPath;
+    }
+    
+    // Get current value (with overrides)
+    values.currentValue = QString::fromStdString(config.getViewerRootDir());
+    
+    return values;
+}
+
+CompilationSettingsWidget::ConfigValues CompilationSettingsWidget::getVtkFlagsConfig()
+{
+    ConfigValues values;
+    auto& config = viz::plugins::CompilationConfig::getInstance();
+    
+    // Get CMake value (compile-time)
+#ifdef VTK_COMPILE_FLAGS
+    values.cmakeValue = VTK_COMPILE_FLAGS;
+#else
+    values.cmakeValue = "";
+#endif
+    
+    // Get environment value (VTK flags usually not from env)
+    values.envValue = ""; // VTK flags are typically compile-time only
+    
+    // Get current value (with overrides)
+    values.currentValue = QString::fromStdString(config.getVtkFlags());
+    
+    return values;
+}
+
+void CompilationSettingsWidget::validatePath(const QString& path, QLabel* label, const QString& fieldName)
+{
+    if (path.isEmpty() || path == "Not set") {
+        label->setStyleSheet("");
+        label->setToolTip("");
+        return;
+    }
+    
+    QDir dir(path);
+    if (!dir.exists()) {
+        label->setStyleSheet("color: red; background-color: #ffe6e6;");
+        label->setToolTip(QString("Path does not exist: %1").arg(path));
+    } else {
+        label->setStyleSheet("color: green;");
+        label->setToolTip(QString("Path exists: %1").arg(path));
     }
 }

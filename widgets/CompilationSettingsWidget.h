@@ -18,6 +18,11 @@
 #include <QWidget>
 #include <memory>
 
+// Forward declarations
+class QLabel;
+class QString;
+class QTableWidget;
+
 namespace Ui
 {
 class CompilationSettingsWidget;
@@ -58,11 +63,11 @@ public:
     explicit CompilationSettingsWidget(QWidget* parent = nullptr);
     ~CompilationSettingsWidget();
 
-    /** @brief Set the CppModuleBuilder instance to get settings from
-     * @param builder Shared pointer to the module builder */
+    /** @brief Set CppModuleBuilder instance to get settings from
+     * @param builder Shared pointer to module builder */
     void setModuleBuilder(std::shared_ptr<viz::plugins::CppModuleBuilder> builder);
 
-    /** @brief Refresh all displayed settings from the current builder configuration */
+    /** @brief Refresh all displayed settings from current builder configuration */
     void refreshSettings();
 
 private slots:
@@ -90,6 +95,25 @@ private:
     
     /** @brief Generate example compilation command from current settings */
     QString generateExampleCommand();
+    
+    /** @brief Validate if a path exists and update UI accordingly */
+    void validatePath(const QString& path, QLabel* label, const QString& fieldName);
+    
+    /** @brief Load configuration values from CMake, environment, and overrides */
+    struct ConfigValues {
+        QString cmakeValue;    // Value set at compile time (read-only)
+        QString envValue;      // Value from environment variable (read-only) 
+        QString currentValue;   // Current editable value (with overrides)
+    };
+    
+    /** @brief Get configuration values for OOPENCAL_DIR */
+    ConfigValues getOopencalDirConfig();
+    
+    /** @brief Get configuration values for OOPENCAL_VIEWER_ROOT */
+    ConfigValues getViewerRootConfig();
+    
+    /** @brief Get configuration values for VTK_COMPILE_FLAGS */
+    ConfigValues getVtkFlagsConfig();
 
 private:
     Ui::CompilationSettingsWidget* ui;

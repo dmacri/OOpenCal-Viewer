@@ -24,7 +24,6 @@
 
 namespace viz::plugins
 {
-
 /** @class CompilationConfig
  * @brief Singleton for managing C++ module compilation configuration.
  *
