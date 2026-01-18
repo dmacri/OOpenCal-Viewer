@@ -137,4 +137,8 @@ std::string detectCppStandard(const std::string& userStandard={});
  * @param compiler Compiler name (e.g., "clang++", "g++")
  * @return true if compiler is available */
 bool isCompilerAvailable(const std::string& compiler);
+
+std::string getOopencalDir();
+
+std::string getProjectRootPath();
 } // namespace viz::plugins

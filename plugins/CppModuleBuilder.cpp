@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include "CppModuleBuilder.h"
+#include "CompilationConfig.h"
 #include "process.hpp" // tiny process library
 #include "ModelLoader.h"
 
@@ -68,25 +69,6 @@ static std::string resolveDirectoryPath(const char* envVarName, const char* cmak
     // 3. Nothing available
     return "";
 }
-
-static std::string getOopencalDir()
-{
-#ifdef OOPENCAL_DIR
-    return resolveDirectoryPath("OOPENCAL_DIR", OOPENCAL_DIR);
-#else
-    return resolveDirectoryPath("OOPENCAL_DIR", nullptr);
-#endif
-}
-
-/// Get the directory containing this executable (project root)
-static std::string getProjectRootPath()
-{
-#ifdef OOPENCAL_VIEWER_ROOT
-    return resolveDirectoryPath("OOPENCAL_VIEWER_ROOT", OOPENCAL_VIEWER_ROOT);
-#else
-    return resolveDirectoryPath("OOPENCAL_VIEWER_ROOT", nullptr);
-#endif
-}
 } // namespace
 
 
@@ -95,8 +77,8 @@ namespace viz::plugins
 CppModuleBuilder::CppModuleBuilder(const std::string& compilerPath,
                                    const std::string& oopencalDir)
     : compilerPath(compilerPath)
-    , oopencalDir(oopencalDir.empty() ? getOopencalDir() : oopencalDir)
-    , projectRootPath(::getProjectRootPath())
+    , oopencalDir(oopencalDir.empty() ? CompilationConfig::getInstance().getOopencalDir() : oopencalDir)
+    , projectRootPath(CompilationConfig::getInstance().getViewerRootDir())
     , progressCallback(nullptr)
 {
 }
@@ -204,29 +186,25 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
     // Auto-detect C++ standard if not provided
     std::string standard = detectCppStandard(cppStandard);
 
+    // Get configuration from singleton
+    auto& config = CompilationConfig::getInstance();
+    
     std::ostringstream cmd;
     cmd << compilerPath
-        << " -shared"
-        << " -fPIC"
+        << " " << config.getCompilationFlags()
         << " -std=" << standard;
 
-    // Add OOpenCAL include path if available
-    if (! oopencalDir.empty())
-    {
-        cmd << " -I\"" << oopencalDir << "/OOpenCAL/base\"";
-        cmd << " -I\"" << oopencalDir << '"';
+    // Add include paths from configuration
+    auto includePaths = config.getIncludePaths();
+    for (const auto& path : includePaths) {
+        cmd << " " << path;
     }
 
-    // Add Qt-VTK-viewer project include paths if available
-    if (! projectRootPath.empty())
-    {
-        std::cout << "Project root path: " << projectRootPath << std::endl;
-        cmd << " -I\"" << projectRootPath << "\"";
-        cmd << " -I\"" << projectRootPath << "/visualiserProxy\"";
-        cmd << " -I\"" << projectRootPath << "/config\"";
+    // Add VTK flags from configuration
+    std::string vtkFlags = config.getVtkFlags();
+    if (!vtkFlags.empty()) {
+        cmd << " " << vtkFlags;
     }
-
-    cmd << " " << VTK_COMPILE_FLAGS; // this is set from CMake, temporary solution (#61)
 
     cmd << " \"" << sourceFile << "\""
         << " -o \"" << outputFile << "\"";
@@ -298,5 +276,24 @@ bool isCompilerAvailable(const std::string &compiler)
     {
         return false;
     }
+}
+
+std::string getOopencalDir()
+{
+#ifdef OOPENCAL_DIR
+    return resolveDirectoryPath("OOPENCAL_DIR", OOPENCAL_DIR);
+#else
+    return resolveDirectoryPath("OOPENCAL_DIR", nullptr);
+#endif
+}
+
+/// Get the directory containing this executable (project root)
+std::string getProjectRootPath()
+{
+#ifdef OOPENCAL_VIEWER_ROOT
+    return resolveDirectoryPath("OOPENCAL_VIEWER_ROOT", OOPENCAL_VIEWER_ROOT);
+#else
+    return resolveDirectoryPath("OOPENCAL_VIEWER_ROOT", nullptr);
+#endif
 }
 } // namespace viz::plugins

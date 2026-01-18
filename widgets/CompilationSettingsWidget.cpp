@@ -11,7 +11,7 @@
 #include "ui_CompilationSettingsWidget.h"
 
 #include "plugins/CppModuleBuilder.h"
-#include "plugins/ModelLoader.h"
+#include "plugins/CompilationConfig.h"
 
 
 CompilationSettingsWidget::CompilationSettingsWidget(QWidget* parent)
@@ -55,26 +55,17 @@ void CompilationSettingsWidget::setupConnections()
 
 void CompilationSettingsWidget::loadCompilationSettings()
 {
-    if (! m_moduleBuilder)
-    {
-        // Set default values when no builder is available
-        ui->compilerValueLabel->setText("clang++ (default)");
-        ui->oopencalPathValueLabel->setText("Not available");
-        ui->projectPathValueLabel->setText("Not available");
-        ui->commandTextEdit->setPlainText("No module builder available");
-        return;
-    }
-
+    auto& config = viz::plugins::CompilationConfig::getInstance();
+    
     // Load compiler settings
-    QString compilerPath = QString::fromStdString(m_moduleBuilder->getCompilerPath());
+    QString compilerPath = QString::fromStdString(m_moduleBuilder ? m_moduleBuilder->getCompilerPath() : "clang++");
     ui->compilerValueLabel->setText(compilerPath.isEmpty() ? "Default (clang++)" : compilerPath);
 
-    // Load OOpenCAL path
-    QString oopencalDir = QString::fromStdString(m_moduleBuilder->getProjectRootPath());
+    // Load configuration from singleton
+    QString oopencalDir = QString::fromStdString(config.getOopencalDir());
     ui->oopencalPathValueLabel->setText(oopencalDir.isEmpty() ? "Not set" : oopencalDir);
 
-    // Load project root path
-    QString projectRoot = QString::fromStdString(m_moduleBuilder->getProjectRootPath());
+    QString projectRoot = QString::fromStdString(config.getViewerRootDir());
     ui->projectPathValueLabel->setText(projectRoot.isEmpty() ? "Not set" : projectRoot);
 
     // Update additional paths based on project root
@@ -89,6 +80,10 @@ void CompilationSettingsWidget::loadCompilationSettings()
         ui->additionalPathsValueLabel->setText("-I\"<project_root>/visualiserProxy\" -I\"<project_root>/config\"");
     }
 
+    // Load compilation flags from singleton
+    QString flags = QString::fromStdString(config.getCompilationFlags());
+    ui->flagsLabel->setText(flags);
+
     // Generate example command
     QString command = generateExampleCommand();
     ui->commandTextEdit->setPlainText(command);
@@ -96,6 +91,8 @@ void CompilationSettingsWidget::loadCompilationSettings()
 
 QString CompilationSettingsWidget::generateExampleCommand()
 {
+    auto& config = viz::plugins::CompilationConfig::getInstance();
+    
     QString compiler = ui->compilerValueLabel->text();
     if (compiler == "Default (clang++)")
     {
@@ -111,19 +108,24 @@ QString CompilationSettingsWidget::generateExampleCommand()
     QString oopencalPath = ui->oopencalPathValueLabel->text();
     QString projectRoot = ui->projectPathValueLabel->text();
 
-    QString command = QString("%1 -shared -fPIC -std=%2").arg(compiler, standard);
+    // Use flags from singleton
+    QString flags = QString::fromStdString(config.getCompilationFlags());
+    QString vtkFlags = QString::fromStdString(config.getVtkFlags());
 
-    if (oopencalPath != "Not set" && !oopencalPath.isEmpty())
-    {
-        command += QString(" -I\"%1/OOpenCAL/base\" -I\"%1\"").arg(oopencalPath);
+    QString command = QString("%1 %2 -std=%3").arg(compiler, flags, standard);
+
+    // Add include paths from singleton
+    auto includePaths = config.getIncludePaths();
+    for (const auto& path : includePaths) {
+        command += " " + QString::fromStdString(path);
     }
 
-    if (projectRoot != "Not set" && !projectRoot.isEmpty())
-    {
-        command += QString(" -I\"%1\" -I\"%1/visualiserProxy\" -I\"%1/config\"").arg(projectRoot);
+    // Add VTK flags if available
+    if (!vtkFlags.isEmpty()) {
+        command += " " + vtkFlags;
     }
 
-    command += " <vtk_flags> \"<source_file>\" -o \"<output_file>\"";
+    command += " \"<source_file>\" -o \"<output_file>\"";
 
     return command;
 }

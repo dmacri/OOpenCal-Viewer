@@ -88,23 +88,10 @@ inline std::string sourceFileParentDirectoryAbsolutePath(const std::source_locat
  * @endcode */
 QString getOOpenCalStartPath()
 {
-    QString baseDir;
+    const auto opencalDir = viz::plugins::getOopencalDir();
+    QString baseDir = QString::fromStdString(opencalDir);
 
-    // Step 1: Try to get OOPENCAL_DIR from environment variable
-    if (qEnvironmentVariableIsSet("OOPENCAL_DIR"))
-    {
-        baseDir = qEnvironmentVariable("OOPENCAL_DIR");
-    }
-
-#ifdef OOPENCAL_DIR
-    // Step 2: If environment not set, use CMake-defined path
-    if (baseDir.isEmpty())
-    {
-        baseDir = QString::fromLocal8Bit(OOPENCAL_DIR);
-    }
-#endif
-
-    // Step 3: Verify that base directory exists
+    // Verify that base directory exists
     QDir dir(baseDir);
     if (baseDir.isEmpty() || !dir.exists())
     {
@@ -112,7 +99,7 @@ QString getOOpenCalStartPath()
         return QString();
     }
 
-    // Step 4: Check if "OOpenCAL/models/" subdirectory exists
+    // Check if "OOpenCAL/models/" subdirectory exists
     QDir modelsDir(dir.filePath("OOpenCAL/models"));
     if (modelsDir.exists())
     {

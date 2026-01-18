@@ -186,6 +186,7 @@ list(APPEND Sources
     plugins/PluginLoader.cpp
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp
+    plugins/CompilationConfig.cpp
     core/CommandLineParser.cpp
     data/ReductionManager.cpp
     data/ModelReader.cpp
