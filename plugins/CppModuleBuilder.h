@@ -127,4 +127,14 @@ private:
                        std::function<void(const std::string&)> stdout_callback,
                        std::function<void(const std::string&)> stderr_callback);
 };
+
+/** @brief Detect C++ standard from compiler
+ * @param userStandard User-provided standard (if empty, auto-detect)
+ * @return C++ standard string (e.g., "c++17", "c++23") */
+std::string detectCppStandard(const std::string& userStandard={});
+
+/** @brief Check if a compiler is available in PATH
+ * @param compiler Compiler name (e.g., "clang++", "g++")
+ * @return true if compiler is available */
+bool isCompilerAvailable(const std::string& compiler);
 } // namespace viz::plugins

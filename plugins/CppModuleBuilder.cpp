@@ -14,57 +14,20 @@ namespace fs = std::filesystem;
 
 namespace
 {
-/** @brief Detect C++ standard from compiler
- * @param userStandard User-provided standard (if empty, auto-detect)
- * @return C++ standard string (e.g., "c++17", "c++23") */
-std::string detectCppStandard(const std::string& userStandard)
-{
-    if (! userStandard.empty())
-        return userStandard;
-
-#ifdef __cplusplus
-    if (__cplusplus >= 202302L)
-        return "c++23";
-    else if (__cplusplus >= 202002L)
-        return "c++20";
-    else if (__cplusplus >= 201703L)
-        return "c++17";
-#endif
-    return "c++14";
-}
-
-/** @brief Check if a compiler is available in PATH
- * @param compiler Compiler name (e.g., "clang++", "g++")
- * @return true if compiler is available */
-bool isCompilerAvailable(const std::string& compiler)
-{
-    try
-    {
-        // Try to run compiler with --version
-        std::string command = compiler + " --version > /dev/null 2>&1";
-        int exitCode = system(command.c_str());
-        return exitCode == 0;
-    }
-    catch (...)
-    {
-        return false;
-    }
-}
-
 /** @brief Find an available C++ compiler
  * @param preferredCompiler Preferred compiler (e.g., "clang++")
  * @return Path to available compiler, or empty string if none found */
 std::string findAvailableCompiler(const std::string& preferredCompiler)
 {
     // Try preferred compiler first
-    if (isCompilerAvailable(preferredCompiler))
+    if (viz::plugins::isCompilerAvailable(preferredCompiler))
         return preferredCompiler;
 
     // Fallback compilers in order of preference
     const std::vector<std::string> fallbacks = {"g++", "clang++", "c++"};
     for (const auto& compiler : fallbacks)
     {
-        if (compiler != preferredCompiler && isCompilerAvailable(compiler))
+        if (compiler != preferredCompiler && viz::plugins::isCompilerAvailable(compiler))
         {
             std::cout << "Preferred compiler '" << preferredCompiler << "' not found, using '"
                       << compiler << "' instead" << std::endl;
@@ -299,6 +262,41 @@ int CppModuleBuilder::executeCommand(const std::string& command,
     {
         std::cerr << "Process execution error: " << e.what() << std::endl;
         return -1;
+    }
+}
+
+std::string detectCppStandard(const std::string &userStandard)
+{
+    if (! userStandard.empty())
+        return userStandard;
+
+#ifdef __cplusplus
+    if (__cplusplus >= 202302L)
+        return "c++23";
+    else if (__cplusplus >= 202002L)
+        return "c++20";
+    else if (__cplusplus >= 201703L)
+        return "c++17";
+    else if (__cplusplus >= 201402L)
+        return "c++14";
+    else if (__cplusplus >= 201103L)
+        return "c++11";
+#endif
+    return "c++14";
+}
+
+bool isCompilerAvailable(const std::string &compiler)
+{
+    try
+    {
+        // Try to run compiler with --version
+        std::string command = compiler + " --version > /dev/null 2>&1";
+        int exitCode = system(command.c_str());
+        return exitCode == 0;
+    }
+    catch (...)
+    {
+        return false;
     }
 }
 } // namespace viz::plugins

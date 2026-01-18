@@ -13,38 +13,6 @@
 #include "plugins/CppModuleBuilder.h"
 #include "plugins/ModelLoader.h"
 
-namespace
-{
-    /** @brief Helper function to detect if a compiler is available
-     * @param compilerPath Path to the compiler executable
-     * @return true if compiler is found and executable */
-    bool isCompilerAvailable(const QString& compilerPath)
-    {
-        QProcess process;
-        process.start(compilerPath, QStringList{"--version"});
-        process.waitForFinished(2000); // Wait max 2 seconds
-        return process.exitCode() == 0;
-    }
-
-    /** @brief Get C++ standard from compiler detection
-     * @return Detected C++ standard string */
-    QString detectCppStandard()
-    {
-#ifdef __cplusplus
-        if (__cplusplus >= 202302L)
-            return "c++23";
-        else if (__cplusplus >= 202002L)
-            return "c++20";
-        else if (__cplusplus >= 201703L)
-            return "c++17";
-        else if (__cplusplus >= 201402L)
-            return "c++14";
-        else if (__cplusplus >= 201103L)
-            return "c++11";
-#endif
-        return "c++14";
-    }
-}
 
 CompilationSettingsWidget::CompilationSettingsWidget(QWidget* parent)
     : QWidget(parent)
@@ -137,7 +105,7 @@ QString CompilationSettingsWidget::generateExampleCommand()
     QString standard = ui->cppStandardValueLabel->text();
     if (standard == "Auto-detect")
     {
-        standard = ::detectCppStandard();
+        standard = QString::fromStdString(viz::plugins::detectCppStandard());
     }
 
     QString oopencalPath = ui->oopencalPathValueLabel->text();
@@ -230,7 +198,7 @@ void CompilationSettingsWidget::updateCompilerStatus()
         compilerPath = "clang++";
     }
 
-    if (isCompilerAvailable(compilerPath))
+    if (viz::plugins::isCompilerAvailable(compilerPath.toStdString()))
     {
         ui->statusValueLabel->setText("Available");
         ui->statusValueLabel->setStyleSheet("color: green;");
@@ -244,8 +212,8 @@ void CompilationSettingsWidget::updateCompilerStatus()
 
 void CompilationSettingsWidget::detectCppStandard()
 {
-    QString detectedStandard = ::detectCppStandard();
-    ui->cppStandardValueLabel->setText(detectedStandard);
+    auto detectedStandard = viz::plugins::detectCppStandard();
+    ui->cppStandardValueLabel->setText(QString::fromStdString(detectedStandard));
 }
 
 void CompilationSettingsWidget::onRefreshClicked()
