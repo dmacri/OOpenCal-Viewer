@@ -107,6 +107,7 @@ private:
     /** @brief Validate if a path exists and update UI accordingly */
     void validatePath(const QString& path, QTableWidgetItem* item, const QString& fieldName);
     void setupConfigTable(QTableWidget* table);
+    void updateConfigValue(const QString& variableName, const QString& value);
     
     /** @brief Get configuration values for OOPENCAL_DIR */
     ConfigValues getOopencalDirConfig();

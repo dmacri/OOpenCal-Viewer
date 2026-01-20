@@ -102,41 +102,109 @@ void CompilationSettingsWidget::setupConfigTable(QTableWidget* table)
     
     // Row 0: OOPENCAL_DIR
     table->setItem(0, 0, new QTableWidgetItem("OOPENCAL_DIR"));
-    table->setItem(0, 1, new QTableWidgetItem(oopencalConfig.cmakeValue));
-    table->setItem(0, 2, new QTableWidgetItem(oopencalConfig.envValue));
+    auto* oopencalCmakeItem = new QTableWidgetItem(oopencalConfig.cmakeValue);
+    table->setItem(0, 1, oopencalCmakeItem);
+    validatePath(oopencalConfig.cmakeValue, oopencalCmakeItem, "OOPENCAL_DIR");
+    
+    auto* oopencalEnvItem = new QTableWidgetItem(oopencalConfig.envValue);
+    table->setItem(0, 2, oopencalEnvItem);
+    validatePath(oopencalConfig.envValue, oopencalEnvItem, "OOPENCAL_DIR");
+    
     auto* oopencalCurrentItem = new QTableWidgetItem(oopencalConfig.currentValue);
     table->setItem(0, 3, oopencalCurrentItem);
     validatePath(oopencalConfig.currentValue, oopencalCurrentItem, "OOPENCAL_DIR");
     
     // Row 1: OOPENCAL_VIEWER_ROOT
     table->setItem(1, 0, new QTableWidgetItem("OOPENCAL_VIEWER_ROOT"));
-    table->setItem(1, 1, new QTableWidgetItem(viewerRootConfig.cmakeValue));
-    table->setItem(1, 2, new QTableWidgetItem(viewerRootConfig.envValue));
+    auto* viewerRootCmakeItem = new QTableWidgetItem(viewerRootConfig.cmakeValue);
+    table->setItem(1, 1, viewerRootCmakeItem);
+    validatePath(viewerRootConfig.cmakeValue, viewerRootCmakeItem, "OOPENCAL_VIEWER_ROOT");
+    
+    auto* viewerRootEnvItem = new QTableWidgetItem(viewerRootConfig.envValue);
+    table->setItem(1, 2, viewerRootEnvItem);
+    validatePath(viewerRootConfig.envValue, viewerRootEnvItem, "OOPENCAL_VIEWER_ROOT");
+    
     auto* viewerRootItem = new QTableWidgetItem(viewerRootConfig.currentValue);
     table->setItem(1, 3, viewerRootItem);
     validatePath(viewerRootConfig.currentValue, viewerRootItem, "OOPENCAL_VIEWER_ROOT");
     
-    // Row 2: VTK_COMPILE_FLAGS
+    // Row 2: VTK_COMPILE_FLAGS (no path validation for flags)
     table->setItem(2, 0, new QTableWidgetItem("VTK_COMPILE_FLAGS"));
     table->setItem(2, 1, new QTableWidgetItem(vtkConfig.cmakeValue));
     table->setItem(2, 2, new QTableWidgetItem(vtkConfig.envValue));
     auto* vtkItem = new QTableWidgetItem(vtkConfig.currentValue);
     table->setItem(2, 3, vtkItem);
     
-    // Make first two columns read-only
-    for (int row = 0; row < 3; ++row)
-    {
-        for (int col = 0; col < 2; ++col)
-        {
-            if (auto* item = table->item(row, col))
-            {
+    // Make first three columns read-only, but allow editing in Current Value column
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            if (auto* item = table->item(row, col)) {
                 item->setFlags(item->flags() & ~Qt::ItemIsEditable);
             }
         }
     }
     
+    // Connect cell changed signal for validation updates
+    connect(table, &QTableWidget::cellChanged, this, [this, table](int row, int column) {
+        if (column == 3) // Only Current Value column
+        {
+            auto* item = table->item(row, column);
+            if (item)
+            {
+                QString variableName = table->item(row, 0)->text();
+                validatePath(item->text(), item, variableName);
+                
+                // Update the configuration in singleton without causing recursion
+                updateConfigValue(variableName, item->text());
+            }
+        }
+    });
+    
+    // Block signals temporarily to prevent recursion during initial setup
+    table->blockSignals(true);
+    
     // Resize columns to content
     table->resizeColumnsToContents();
+    
+    // Unblock signals after initial setup
+    table->blockSignals(false);
+}
+
+void CompilationSettingsWidget::updateConfigValue(const QString& variableName, const QString& value)
+{
+    auto& config = viz::plugins::CompilationConfig::getInstance();
+    
+    if (variableName == "OOPENCAL_DIR")
+    {
+        config.setOopencalDir(value.toStdString());
+    }
+    else if (variableName == "OOPENCAL_VIEWER_ROOT")
+    {
+        config.setViewerRootDir(value.toStdString());
+    }
+    else if (variableName == "VTK_COMPILE_FLAGS")
+    {
+        config.setVtkFlags(value.toStdString());
+    }
+    
+    // Update only the additional paths and example command - don't reload the whole table
+    auto viewerRootConfig = getViewerRootConfig();
+    if (! viewerRootConfig.currentValue.isEmpty())
+    {
+        QString additionalPaths = QString("-I\"%1/visualiserProxy\" -I\"%1/config\"").arg(viewerRootConfig.currentValue);
+        ui->additionalPathsValueLabel->setText(additionalPaths);
+    }
+    else
+    {
+        ui->additionalPathsValueLabel->setText("-I\"<project_root>/visualiserProxy\" -I\"<project_root>/config\"");
+    }
+    
+    // Update compilation flags and example command
+    QString flags = QString::fromStdString(config.getCompilationFlags());
+    ui->flagsLabel->setText(flags);
+    
+    QString command = generateExampleCommand();
+    ui->commandTextEdit->setPlainText(command);
 }
 
 QString CompilationSettingsWidget::generateExampleCommand()
