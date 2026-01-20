@@ -35,7 +35,7 @@
         <x>0</x>
         <y>0</y>
         <width>766</width>
-        <height>928</height>
+        <height>953</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -44,67 +44,113 @@
          <property name="title">
           <string>Compiler Configuration</string>
          </property>
-         <layout class="QFormLayout" name="formLayout">
+         <property name="alignment">
+          <set>Qt::AlignmentFlag::AlignCenter</set>
+         </property>
+         <layout class="QGridLayout" name="gridLayout">
           <item row="0" column="0">
-           <widget class="QLabel" name="compilerLabel">
-            <property name="text">
-             <string>Compiler:</string>
+           <widget class="QGroupBox" name="groupBox_2">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
             </property>
+            <property name="title">
+             <string>Compiler</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignmentFlag::AlignCenter</set>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_3">
+             <item>
+              <widget class="QLabel" name="compilerValueLabel">
+               <property name="autoFillBackground">
+                <bool>true</bool>
+               </property>
+               <property name="frameShape">
+                <enum>QFrame::Shape::StyledPanel</enum>
+               </property>
+               <property name="frameShadow">
+                <enum>QFrame::Shadow::Sunken</enum>
+               </property>
+               <property name="text">
+                <string>Not set</string>
+               </property>
+               <property name="textInteractionFlags">
+                <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QLabel" name="compilerValueLabel">
-            <property name="text">
-             <string>Not set</string>
+           <widget class="QGroupBox" name="groupBox">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
             </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
+            <property name="title">
+             <string>C++ Standard</string>
             </property>
-            <property name="autoFillBackground">
-             <bool>true</bool>
+            <property name="alignment">
+             <set>Qt::AlignmentFlag::AlignCenter</set>
             </property>
-            <property name="frameShape">
-             <enum>QFrame::Shape::StyledPanel</enum>
-            </property>
-            <property name="frameShadow">
-             <enum>QFrame::Shadow::Sunken</enum>
-            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_2">
+             <item>
+              <widget class="QLabel" name="cppStandardValueLabel">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="text">
+                <string>Auto-detect</string>
+               </property>
+               <property name="textInteractionFlags">
+                <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="cppStandardLabel">
-            <property name="text">
-             <string>C++ Standard:</string>
+          <item row="0" column="2">
+           <widget class="QGroupBox" name="flagsGroupBox">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
             </property>
-           </widget>
-          </item>
-          <item row="1" column="1">
-           <widget class="QLabel" name="cppStandardValueLabel">
-            <property name="text">
-             <string>Auto-detect</string>
+            <property name="title">
+             <string>Compilation Flags</string>
             </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
+            <property name="alignment">
+             <set>Qt::AlignmentFlag::AlignCenter</set>
             </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="flagsGroupBox">
-         <property name="title">
-          <string>Compilation Flags</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_3">
-          <item>
-           <widget class="QLabel" name="flagsLabel">
-            <property name="text">
-             <string>-shared -fPIC -std=&lt;standard&gt;</string>
-            </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
-            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_3">
+             <item>
+              <widget class="QLabel" name="flagsLabel">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="text">
+                <string>-shared -fPIC -std=&lt;standard&gt;</string>
+               </property>
+               <property name="textInteractionFlags">
+                <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
          </layout>
@@ -114,6 +160,9 @@
         <widget class="QGroupBox" name="pathsGroupBox">
          <property name="title">
           <string>Include Paths</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignmentFlag::AlignCenter</set>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
@@ -167,6 +216,11 @@
           </item>
           <item>
            <widget class="QLabel" name="additionalPathsLabel">
+            <property name="font">
+             <font>
+              <bold>true</bold>
+             </font>
+            </property>
             <property name="text">
              <string>Additional Include Paths:</string>
             </property>
@@ -193,6 +247,9 @@
          <property name="title">
           <string>Example Compilation Command</string>
          </property>
+         <property name="alignment">
+          <set>Qt::AlignmentFlag::AlignCenter</set>
+         </property>
          <layout class="QVBoxLayout" name="verticalLayout_6">
           <item>
            <widget class="QTextEdit" name="commandTextEdit">
@@ -211,6 +268,9 @@
         <widget class="QGroupBox" name="environmentGroupBox">
          <property name="title">
           <string>Environment Variables</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignmentFlag::AlignCenter</set>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_5">
           <item>
