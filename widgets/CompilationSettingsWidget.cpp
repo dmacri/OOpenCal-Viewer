@@ -17,6 +17,12 @@
 #include "plugins/CompilationConfig.h"
 
 
+namespace
+{
+constexpr const char defaultCompiler[] = "clang++";
+} // namespace
+
+
 CompilationSettingsWidget::CompilationSettingsWidget(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::CompilationSettingsWidget)
@@ -61,8 +67,8 @@ void CompilationSettingsWidget::loadCompilationSettings()
     auto& config = viz::plugins::CompilationConfig::getInstance();
     
     // Load compiler settings
-    QString compilerPath = QString::fromStdString(m_moduleBuilder ? m_moduleBuilder->getCompilerPath() : "clang++");
-    ui->compilerValueLabel->setText(compilerPath.isEmpty() ? "Default (clang++)" : compilerPath);
+    QString compilerPath = QString::fromStdString(m_moduleBuilder ? m_moduleBuilder->getCompilerPath() : defaultCompiler);
+    ui->compilerValueLabel->setText(compilerPath.isEmpty() ? defaultCompiler : compilerPath);
     
     // Validate compiler availability and update status
     validateCompilerAvailability(compilerPath);
@@ -212,26 +218,35 @@ void CompilationSettingsWidget::updateConfigValue(const QString& variableName, c
 
 void CompilationSettingsWidget::validateCompilerAvailability(const QString& compilerPath)
 {
-    if (compilerPath.isEmpty() || compilerPath == "Default (clang++)")
+    QString resolvedPath;
+
+    // Try to resolve compiler path:
+    // 1. If a path was provided, check it directly
+    // 2. Otherwise, try to find it in PATH (e.g. default compiler like "gcc")
+    if (! compilerPath.isEmpty())
+    {
+        QFileInfo compilerInfo(compilerPath);
+        if (compilerInfo.exists() && compilerInfo.isExecutable())
+        {
+            resolvedPath = compilerInfo.absoluteFilePath();
+        }
+        else
+        {
+            resolvedPath = QStandardPaths::findExecutable(compilerPath);
+        }
+    }
+
+    // Compiler found
+    if (! resolvedPath.isEmpty())
     {
         ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
-        ui->compilerValueLabel->setToolTip("Default compiler is available");
-        return;
+        ui->compilerValueLabel->setToolTip(tr("Compiler is available: %1").arg(resolvedPath));
     }
-    
-    // Check if compiler executable exists
-    QFileInfo compilerInfo(compilerPath);
-    bool exists = compilerInfo.exists() && compilerInfo.isExecutable();
-    
-    if (exists)
-    {
-        ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
-        ui->compilerValueLabel->setToolTip(QString("Compiler is available: %1").arg(compilerPath));
-    }
+    // Compiler not found
     else
     {
         ui->compilerValueLabel->setStyleSheet("color: red; background-color: #ffe6e6;");
-        ui->compilerValueLabel->setToolTip(QString("Compiler not found: %1").arg(compilerPath));
+        ui->compilerValueLabel->setToolTip(tr("Compiler not found: %1").arg(compilerPath));
     }
 }
 
@@ -240,11 +255,6 @@ QString CompilationSettingsWidget::generateExampleCommand()
     auto& config = viz::plugins::CompilationConfig::getInstance();
     
     QString compiler = ui->compilerValueLabel->text();
-    if (compiler == "Default (clang++)")
-    {
-        compiler = "clang++";
-    }
-
     QString standard = ui->cppStandardValueLabel->text();
     if (standard == "Auto-detect")
     {
@@ -353,21 +363,12 @@ void CompilationSettingsWidget::updateCompilerStatus()
 {
     QString compilerPath = ui->compilerValueLabel->text();
     
-    if (compilerPath == "Default (clang++)" || compilerPath == "Not set")
+    if (compilerPath == "Not set")
     {
-        compilerPath = "clang++";
+        compilerPath = defaultCompiler;
     }
 
-    if (viz::plugins::isCompilerAvailable(compilerPath.toStdString()))
-    {
-        ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
-        ui->compilerValueLabel->setToolTip("Compiler is available");
-    }
-    else
-    {
-        ui->compilerValueLabel->setStyleSheet("color: red; background-color: #ffe6e6;");
-        ui->compilerValueLabel->setToolTip("Compiler not found");
-    }
+    validateCompilerAvailability(compilerPath);
 }
 
 void CompilationSettingsWidget::detectCppStandard()
