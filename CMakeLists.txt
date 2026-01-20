@@ -531,7 +531,7 @@ clean_genex(VTK_INCLUDES_EXPANDED "${_vtk_includes}")
 clean_genex(VTK_DEFS_EXPANDED "${_vtk_defs}")
 clean_genex(VTK_OPTS_EXPANDED "${_vtk_opts}")
 
-# Build final compile flags string
+# Build final compile flags string (keep for backward compatibility)
 set(VTK_COMPILE_FLAGS_STR "")
 foreach(inc IN LISTS VTK_INCLUDES_EXPANDED)
     if (EXISTS "${inc}")
@@ -544,9 +544,29 @@ endforeach()
 string(REPLACE "\\" "\\\\" VTK_COMPILE_FLAGS_ESCAPED "${VTK_COMPILE_FLAGS_STR}")
 string(REPLACE "\"" "\\\"" VTK_COMPILE_FLAGS_ESCAPED "${VTK_COMPILE_FLAGS_ESCAPED}")
 
-# Add as compile definition (accessible as VTK_COMPILE_FLAGS macro in C++)
+# Prepare clean VTK include paths (pipe-separated to avoid CMake semicolon issues)
+set(VTK_INCLUDES_CLEAN "")
+foreach(inc IN LISTS VTK_INCLUDES_EXPANDED)
+    if (EXISTS "${inc}")
+        if(VTK_INCLUDES_CLEAN)
+            string(APPEND VTK_INCLUDES_CLEAN "|${inc}")
+        else()
+            set(VTK_INCLUDES_CLEAN "${inc}")
+        endif()
+    endif()
+endforeach()
+
+# Escape VTK includes for C++ macro - handle quotes properly
+set(VTK_INCLUDES_ESCAPED "${VTK_INCLUDES_CLEAN}")
+# Replace backslashes with double backslashes for C++ string literal
+string(REPLACE "\\" "\\\\" VTK_INCLUDES_ESCAPED "${VTK_INCLUDES_ESCAPED}")
+# Replace existing quotes with escaped quotes for C++ string literal
+string(REPLACE "\"" "\\\"" VTK_INCLUDES_ESCAPED "${VTK_INCLUDES_ESCAPED}")
+
+# Add as compile definitions (accessible as macros in C++)
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     VTK_COMPILE_FLAGS="${VTK_COMPILE_FLAGS_ESCAPED}"
+    "VTK_INCLUDES=\"${VTK_INCLUDES_ESCAPED}\""
 )
 
 # (Optional) Debug print to verify values

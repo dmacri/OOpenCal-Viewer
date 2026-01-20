@@ -1,11 +1,11 @@
 /** @file CompilationConfig.cpp
  * @brief Implementation of CompilationConfig singleton for managing compilation settings. */
 
-#include <filesystem>
-#include <cstdlib>
-
 #include "CompilationConfig.h"
 
+#include <cstdlib>
+#include <filesystem>
+#include <sstream>
 
 namespace viz::plugins
 {
@@ -52,6 +52,39 @@ std::string CompilationConfig::getVtkFlags() const
         return m_state.vtkFlagsOverride.value();
     }
     return getDefaultVtkFlags();
+}
+
+std::string CompilationConfig::getVtkIncludePaths() const
+{
+    if (m_state.vtkFlagsOverride.has_value())
+    {
+        // If override is set, we need to extract paths from the override
+        std::string override = m_state.vtkFlagsOverride.value();
+        std::stringstream ss(override);
+        std::string item;
+        std::vector<std::string> paths;
+        
+        while (ss >> item)
+        {
+            if (item.substr(0, 2) == "-I")
+            {
+                paths.push_back(item.substr(2));
+            }
+        }
+        
+        if (paths.empty())
+            return override; // Return as-is if no -I flags found
+        
+        std::string result = paths[0];
+        for (size_t i = 1; i < paths.size(); ++i)
+        {
+            result += "|" + paths[i];
+        }
+        return result;
+    }
+    
+    // Get default paths (without -I prefixes)
+    return getDefaultVtkIncludePathsImpl();
 }
 
 std::string CompilationConfig::getDefaultVtkFlags() const
@@ -359,8 +392,97 @@ std::string CompilationConfig::getDefaultViewerRootDirImpl() const
 
 std::string CompilationConfig::getDefaultVtkFlagsImpl() const
 {
+    std::string result = "";
+    
+    // First try environment variable
+    const char* envVtk = std::getenv("VTK_INCLUDES");
+    if (envVtk && std::string(envVtk) != "")
+    {
+        // Split by pipe and add -I flags
+        std::string envStr(envVtk);
+        std::stringstream ss(envStr);
+        std::string path;
+        
+        while (std::getline(ss, path, '|'))
+        {
+            if (! path.empty())
+            {
+                result += "-I" + path + " ";
+            }
+        }
+        return result;
+    }
+    
+    // Fall back to CMake-provided VTK_INCLUDES
+#ifdef VTK_INCLUDES
+    std::string cmakeIncludes(VTK_INCLUDES);
+    if (! cmakeIncludes.empty())
+    {
+        // Split by pipe and add -I flags
+        std::stringstream ss(cmakeIncludes);
+        std::string path;
+        
+        while (std::getline(ss, path, '|'))
+        {
+            if (!path.empty())
+            {
+                result += "-I" + path + " ";
+            }
+        }
+        return result;
+    }
+#endif
+    
+    // Final fallback to old VTK_COMPILE_FLAGS for backward compatibility
 #ifdef VTK_COMPILE_FLAGS
     return VTK_COMPILE_FLAGS;
+#else
+    return "";
+#endif
+}
+
+std::string CompilationConfig::getDefaultVtkIncludePathsImpl() const
+{
+    // First try environment variable
+    const char* envVtk = std::getenv("VTK_INCLUDES");
+    if (envVtk && std::string(envVtk) != "")
+    {
+        return std::string(envVtk);
+    }
+    
+    // Fall back to CMake-provided VTK_INCLUDES
+#ifdef VTK_INCLUDES
+    std::string cmakeIncludes(VTK_INCLUDES);
+    if (! cmakeIncludes.empty())
+    {
+        return cmakeIncludes;
+    }
+#endif
+    
+    // Final fallback - extract from old VTK_COMPILE_FLAGS for backward compatibility
+#ifdef VTK_COMPILE_FLAGS
+    std::string oldFlags(VTK_COMPILE_FLAGS);
+    std::stringstream ss(oldFlags);
+    std::string item;
+    std::vector<std::string> paths;
+    
+    while (ss >> item)
+    {
+        if (item.substr(0, 2) == "-I")
+        {
+            paths.push_back(item.substr(2));
+        }
+    }
+    
+    if (paths.empty())
+        return "";
+    
+    std::string result = paths[0];
+    for (size_t i = 1; i < paths.size(); ++i)
+    {
+        result += "|" + paths[i];
+    }
+    return result;
 #else
     return "";
 #endif

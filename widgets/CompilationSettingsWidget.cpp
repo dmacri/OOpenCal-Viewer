@@ -10,6 +10,7 @@
 #include <QString>
 #include <QTableWidget>
 #include <QPushButton>
+#include <cstdlib>
 
 #include "CompilationSettingsWidget.h"
 #include "ui_CompilationSettingsWidget.h"
@@ -148,8 +149,8 @@ void CompilationSettingsWidget::setupConfigTable(QTableWidget* table)
     table->setItem(1, 3, viewerRootItem);
     validatePath(viewerRootConfig.currentValue, viewerRootItem, "OOPENCAL_VIEWER_ROOT");
     
-    // Row 2: VTK_COMPILE_FLAGS (no path validation for flags)
-    table->setItem(2, 0, new QTableWidgetItem("VTK_COMPILE_FLAGS"));
+    // Row 2: VTK_INCLUDES (no path validation for flags)
+    table->setItem(2, 0, new QTableWidgetItem("VTK_INCLUDES"));
     table->setItem(2, 1, new QTableWidgetItem(vtkConfig.cmakeValue));
     table->setItem(2, 2, new QTableWidgetItem(vtkConfig.envValue));
     auto* vtkItem = new QTableWidgetItem(vtkConfig.currentValue);
@@ -202,7 +203,7 @@ void CompilationSettingsWidget::updateConfigValue(const QString& variableName, c
     {
         config.setViewerRootDir(value.toStdString());
     }
-    else if (variableName == "VTK_COMPILE_FLAGS")
+    else if (variableName == "VTK_INCLUDES")
     {
         config.setVtkFlags(value.toStdString());
     }
@@ -471,17 +472,21 @@ CompilationSettingsWidget::ConfigValues CompilationSettingsWidget::getVtkFlagsCo
     auto& config = viz::plugins::CompilationConfig::getInstance();
     
     // Get CMake value (compile-time)
-#ifdef VTK_COMPILE_FLAGS
+#ifdef VTK_INCLUDES
+    values.cmakeValue = VTK_INCLUDES;
+#elif defined(VTK_COMPILE_FLAGS)
+    // Fallback to old format for backward compatibility
     values.cmakeValue = VTK_COMPILE_FLAGS;
 #else
     values.cmakeValue = "";
 #endif
     
-    // Get environment value (VTK flags usually not from env)
-    values.envValue = ""; // VTK flags are typically compile-time only
+    // Get environment value (VTK includes from environment variable)
+    const char* envVtk = std::getenv("VTK_INCLUDES");
+    values.envValue = envVtk ? QString(envVtk) : "";
     
-    // Get current value (with overrides)
-    values.currentValue = QString::fromStdString(config.getVtkFlags());
+    // Get current value (with overrides) - show clean paths without -I
+    values.currentValue = QString::fromStdString(config.getVtkIncludePaths());
     
     return values;
 }

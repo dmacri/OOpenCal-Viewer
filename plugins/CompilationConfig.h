@@ -85,6 +85,10 @@ public:
      * @return VTK flags string */
     std::string getVtkFlags() const;
     
+    /** @brief Get VTK include paths without -I prefixes (with overrides applied)
+     * @return VTK include paths string (semicolon-separated) */
+    std::string getVtkIncludePaths() const;
+
     /** @brief Get default VTK compilation flags
      * @return Default VTK flags string */
     std::string getDefaultVtkFlags() const;
@@ -190,8 +194,10 @@ private:
      * @return Default viewer root directory path */
     std::string getDefaultViewerRootDirImpl() const;
     
-    /** @brief Get default VTK flags from CMake
-     * @return Default VTK flags */
+    /** @brief Get default VTK compilation flags implementation */
     std::string getDefaultVtkFlagsImpl() const;
+
+    /** @brief Get default VTK include paths without -I prefixes implementation */
+    std::string getDefaultVtkIncludePathsImpl() const;
 };
 } // namespace viz::plugins
