@@ -26,14 +26,24 @@ constexpr const char defaultCompiler[] = "clang++";
 CompilationSettingsWidget::CompilationSettingsWidget(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::CompilationSettingsWidget)
+    , m_moduleBuilder(nullptr)
 {
     ui->setupUi(this);
-    setupConnections();
     
     // Initialize with default values
     loadEnvironmentVariables();
     detectCppStandard();
     updateCompilerStatus();
+    
+    // Connect environment group box toggle signal
+    connect(ui->environmentGroupBox, &QGroupBox::clicked, this, [this]() {
+        toggleEnvironmentGroup();
+    });
+    
+    // Set initial arrow state
+    updateEnvironmentGroupArrow(true);
+    
+    setupConnections();
 }
 
 CompilationSettingsWidget::~CompilationSettingsWidget()
@@ -375,6 +385,21 @@ void CompilationSettingsWidget::detectCppStandard()
 {
     auto detectedStandard = viz::plugins::detectCppStandard();
     ui->cppStandardValueLabel->setText(QString::fromStdString(detectedStandard));
+}
+
+void CompilationSettingsWidget::toggleEnvironmentGroup()
+{
+    bool isExpanded = ui->environmentGroupBox->isChecked();
+    updateEnvironmentGroupArrow(isExpanded);
+    
+    // Show/hide the table widget
+    ui->environmentTableWidget->setVisible(isExpanded);
+}
+
+void CompilationSettingsWidget::updateEnvironmentGroupArrow(bool isExpanded)
+{
+    QString title = isExpanded ? "Environment Variables ▼" : "Environment Variables ▶";
+    ui->environmentGroupBox->setTitle(title);
 }
 
 void CompilationSettingsWidget::onRefreshClicked()

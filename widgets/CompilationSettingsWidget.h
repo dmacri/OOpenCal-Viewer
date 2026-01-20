@@ -109,6 +109,8 @@ private:
     void setupConfigTable(QTableWidget* table);
     void updateConfigValue(const QString& variableName, const QString& value);
     void validateCompilerAvailability(const QString& compilerPath);
+    void toggleEnvironmentGroup();
+    void updateEnvironmentGroupArrow(bool isExpanded);
     
     /** @brief Get configuration values for OOPENCAL_DIR */
     ConfigValues getOopencalDirConfig();
