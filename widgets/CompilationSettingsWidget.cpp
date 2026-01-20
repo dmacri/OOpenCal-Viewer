@@ -40,8 +40,9 @@ CompilationSettingsWidget::CompilationSettingsWidget(QWidget* parent)
         toggleEnvironmentGroup();
     });
     
-    // Set initial arrow state
-    updateEnvironmentGroupArrow(true);
+    // Set initial arrow state to collapsed (hidden)
+    updateEnvironmentGroupArrow(false);
+    ui->environmentTableWidget->setVisible(false);
     
     setupConnections();
 }
