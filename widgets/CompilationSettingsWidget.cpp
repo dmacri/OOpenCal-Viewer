@@ -63,6 +63,9 @@ void CompilationSettingsWidget::loadCompilationSettings()
     // Load compiler settings
     QString compilerPath = QString::fromStdString(m_moduleBuilder ? m_moduleBuilder->getCompilerPath() : "clang++");
     ui->compilerValueLabel->setText(compilerPath.isEmpty() ? "Default (clang++)" : compilerPath);
+    
+    // Validate compiler availability and update status
+    validateCompilerAvailability(compilerPath);
 
     // Setup configuration table with 3 rows
     setupConfigTable(ui->configTableWidget);
@@ -207,6 +210,31 @@ void CompilationSettingsWidget::updateConfigValue(const QString& variableName, c
     ui->commandTextEdit->setPlainText(command);
 }
 
+void CompilationSettingsWidget::validateCompilerAvailability(const QString& compilerPath)
+{
+    if (compilerPath.isEmpty() || compilerPath == "Default (clang++)")
+    {
+        ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
+        ui->compilerValueLabel->setToolTip("Default compiler is available");
+        return;
+    }
+    
+    // Check if compiler executable exists
+    QFileInfo compilerInfo(compilerPath);
+    bool exists = compilerInfo.exists() && compilerInfo.isExecutable();
+    
+    if (exists)
+    {
+        ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
+        ui->compilerValueLabel->setToolTip(QString("Compiler is available: %1").arg(compilerPath));
+    }
+    else
+    {
+        ui->compilerValueLabel->setStyleSheet("color: red; background-color: #ffe6e6;");
+        ui->compilerValueLabel->setToolTip(QString("Compiler not found: %1").arg(compilerPath));
+    }
+}
+
 QString CompilationSettingsWidget::generateExampleCommand()
 {
     auto& config = viz::plugins::CompilationConfig::getInstance();
@@ -227,10 +255,12 @@ QString CompilationSettingsWidget::generateExampleCommand()
     QString projectRoot = "";
     
     // Get current values from the unified config table
-    if (ui->configTableWidget->item(0, 3)) {
+    if (ui->configTableWidget->item(0, 3))
+    {
         oopencalPath = ui->configTableWidget->item(0, 3)->text();
     }
-    if (ui->configTableWidget->item(1, 3)) {
+    if (ui->configTableWidget->item(1, 3))
+    {
         projectRoot = ui->configTableWidget->item(1, 3)->text();
     }
 
@@ -330,13 +360,13 @@ void CompilationSettingsWidget::updateCompilerStatus()
 
     if (viz::plugins::isCompilerAvailable(compilerPath.toStdString()))
     {
-        ui->statusValueLabel->setText("Available");
-        ui->statusValueLabel->setStyleSheet("color: green;");
+        ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
+        ui->compilerValueLabel->setToolTip("Compiler is available");
     }
     else
     {
-        ui->statusValueLabel->setText("Not found");
-        ui->statusValueLabel->setStyleSheet("color: red;");
+        ui->compilerValueLabel->setStyleSheet("color: red; background-color: #ffe6e6;");
+        ui->compilerValueLabel->setToolTip("Compiler not found");
     }
 }
 

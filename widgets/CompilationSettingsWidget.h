@@ -108,6 +108,7 @@ private:
     void validatePath(const QString& path, QTableWidgetItem* item, const QString& fieldName);
     void setupConfigTable(QTableWidget* table);
     void updateConfigValue(const QString& variableName, const QString& value);
+    void validateCompilerAvailability(const QString& compilerPath);
     
     /** @brief Get configuration values for OOPENCAL_DIR */
     ConfigValues getOopencalDirConfig();
