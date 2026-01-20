@@ -1,15 +1,14 @@
 /** @file CompilationConfig.cpp
- * @brief Implementation of CompilationConfig singleton for managing compilation settings.
- */
-
-#include "CompilationConfig.h"
+ * @brief Implementation of CompilationConfig singleton for managing compilation settings. */
 
 #include <filesystem>
 #include <cstdlib>
 
+#include "CompilationConfig.h"
+
+
 namespace viz::plugins
 {
-
 CompilationConfig& CompilationConfig::getInstance()
 {
     static CompilationConfig instance;
@@ -18,7 +17,8 @@ CompilationConfig& CompilationConfig::getInstance()
 
 std::string CompilationConfig::getCompilationFlags() const
 {
-    if (m_state.compilationFlagsOverride.has_value()) {
+    if (m_state.compilationFlagsOverride.has_value())
+    {
         return m_state.compilationFlagsOverride.value();
     }
     return getDefaultCompilationFlags();
@@ -31,9 +31,12 @@ std::string CompilationConfig::getDefaultCompilationFlags() const
 
 void CompilationConfig::setCompilationFlags(const std::string& flags)
 {
-    if (flags.empty()) {
+    if (flags.empty())
+    {
         m_state.compilationFlagsOverride.reset();
-    } else {
+    } 
+    else 
+    {
         m_state.compilationFlagsOverride = flags;
     }
 }
@@ -58,9 +61,12 @@ std::string CompilationConfig::getDefaultVtkFlags() const
 
 void CompilationConfig::setVtkFlags(const std::string& flags)
 {
-    if (flags.empty()) {
+    if (flags.empty())
+    {
         m_state.vtkFlagsOverride.reset();
-    } else {
+    } 
+    else 
+    {
         m_state.vtkFlagsOverride = flags;
     }
 }
@@ -72,7 +78,8 @@ void CompilationConfig::resetVtkFlags()
 
 std::string CompilationConfig::getOopencalDir() const
 {
-    if (m_state.oopencalDirOverride.has_value()) {
+    if (m_state.oopencalDirOverride.has_value())
+    {
         return m_state.oopencalDirOverride.value();
     }
     return getDefaultOopencalDir();
@@ -85,9 +92,12 @@ std::string CompilationConfig::getDefaultOopencalDir() const
 
 void CompilationConfig::setOopencalDir(const std::string& path)
 {
-    if (path.empty()) {
+    if (path.empty())
+    {
         m_state.oopencalDirOverride.reset();
-    } else {
+    } 
+    else 
+    {
         m_state.oopencalDirOverride = path;
     }
 }
@@ -99,7 +109,8 @@ void CompilationConfig::resetOopencalDir()
 
 std::string CompilationConfig::getViewerRootDir() const
 {
-    if (m_state.viewerRootDirOverride.has_value()) {
+    if (m_state.viewerRootDirOverride.has_value())
+    {
         return m_state.viewerRootDirOverride.value();
     }
     return getDefaultViewerRootDir();
@@ -112,9 +123,12 @@ std::string CompilationConfig::getDefaultViewerRootDir() const
 
 void CompilationConfig::setViewerRootDir(const std::string& path)
 {
-    if (path.empty()) {
+    if (path.empty()) 
+    {
         m_state.viewerRootDirOverride.reset();
-    } else {
+    } 
+    else 
+    {
         m_state.viewerRootDirOverride = path;
     }
 }
@@ -144,7 +158,8 @@ std::vector<std::string> CompilationConfig::getOopencalIncludePaths() const
     std::vector<std::string> paths;
     std::string oopencalDir = getOopencalDir();
     
-    if (!oopencalDir.empty()) {
+    if (! oopencalDir.empty())
+    {
         paths.push_back("-I\"" + oopencalDir + "/OOpenCAL/base\"");
         paths.push_back("-I\"" + oopencalDir + "\"");
     }
@@ -157,7 +172,8 @@ std::vector<std::string> CompilationConfig::getProjectIncludePaths() const
     std::vector<std::string> paths;
     std::string projectRoot = getViewerRootDir();
     
-    if (!projectRoot.empty()) {
+    if (! projectRoot.empty())
+    {
         paths.push_back("-I\"" + projectRoot + "\"");
         paths.push_back("-I\"" + projectRoot + "/visualiserProxy\"");
         paths.push_back("-I\"" + projectRoot + "/config\"");
@@ -187,25 +203,29 @@ std::string CompilationConfig::getConfigurationSummary() const
     std::string summary = "Compilation Configuration:\n";
     
     summary += "  Base flags: " + getCompilationFlags();
-    if (m_state.compilationFlagsOverride.has_value()) {
+    if (m_state.compilationFlagsOverride.has_value())
+    {
         summary += " (override: " + getDefaultCompilationFlags() + ")";
     }
     summary += "\n";
     
     summary += "  VTK flags: " + getVtkFlags();
-    if (m_state.vtkFlagsOverride.has_value()) {
+    if (m_state.vtkFlagsOverride.has_value())
+    {
         summary += " (override: " + getDefaultVtkFlags() + ")";
     }
     summary += "\n";
     
     summary += "  OOpenCAL dir: " + getOopencalDir();
-    if (m_state.oopencalDirOverride.has_value()) {
+    if (m_state.oopencalDirOverride.has_value())
+    {
         summary += " (override: " + getDefaultOopencalDir() + ")";
     }
     summary += "\n";
     
     summary += "  Viewer root: " + getViewerRootDir();
-    if (m_state.viewerRootDirOverride.has_value()) {
+    if (m_state.viewerRootDirOverride.has_value())
+    {
         summary += " (override: " + getDefaultViewerRootDir() + ")";
     }
     summary += "\n";
@@ -230,7 +250,8 @@ bool CompilationConfig::importConfiguration(const std::string& configJson)
     // Simple JSON parsing - in a real implementation, use a proper JSON library
     // This is a basic implementation for demonstration
     
-    if (configJson.empty()) {
+    if (configJson.empty()) 
+    {
         return false;
     }
     
@@ -238,10 +259,12 @@ bool CompilationConfig::importConfiguration(const std::string& configJson)
     auto extractValue = [](const std::string& json, const std::string& key) -> std::string {
         std::string searchKey = "\"" + key + "\": \"";
         size_t pos = json.find(searchKey);
-        if (pos != std::string::npos) {
+        if (pos != std::string::npos)
+        {
             pos += searchKey.length();
             size_t endPos = json.find("\"", pos);
-            if (endPos != std::string::npos) {
+            if (endPos != std::string::npos)
+            {
                 return json.substr(pos, endPos - pos);
             }
         }
@@ -250,22 +273,26 @@ bool CompilationConfig::importConfiguration(const std::string& configJson)
     
     // Extract and set values
     std::string flags = extractValue(configJson, "compilationFlags");
-    if (!flags.empty()) {
+    if (! flags.empty())
+    {
         setCompilationFlags(flags);
     }
     
     std::string vtkFlags = extractValue(configJson, "vtkFlags");
-    if (!vtkFlags.empty()) {
+    if (! vtkFlags.empty())
+    {
         setVtkFlags(vtkFlags);
     }
     
     std::string oopencalDir = extractValue(configJson, "oopencalDir");
-    if (!oopencalDir.empty()) {
+    if (! oopencalDir.empty())
+    {
         setOopencalDir(oopencalDir);
     }
     
     std::string viewerRoot = extractValue(configJson, "viewerRootDir");
-    if (!viewerRoot.empty()) {
+    if (! viewerRoot.empty())
+    {
         setViewerRootDir(viewerRoot);
     }
     
@@ -338,5 +365,4 @@ std::string CompilationConfig::getDefaultVtkFlagsImpl() const
     return "";
 #endif
 }
-
 } // namespace viz::plugins

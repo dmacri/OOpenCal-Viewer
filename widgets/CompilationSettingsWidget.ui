@@ -20,7 +20,7 @@
       <string>&lt;h2&gt;C++ Module Compilation Settings&lt;/h2&gt;</string>
      </property>
      <property name="alignment">
-      <set>Qt::AlignCenter</set>
+      <set>Qt::AlignmentFlag::AlignCenter</set>
      </property>
     </widget>
    </item>
@@ -34,8 +34,8 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>780</width>
-        <height>540</height>
+        <width>766</width>
+        <height>928</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -58,7 +58,7 @@
              <string>Not set</string>
             </property>
             <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
+             <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
             </property>
            </widget>
           </item>
@@ -89,7 +89,7 @@
              <string>Auto-detect</string>
             </property>
             <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
+             <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
             </property>
            </widget>
           </item>
@@ -108,7 +108,7 @@
              <string>-shared -fPIC -std=&lt;standard&gt;</string>
             </property>
             <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
+             <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
             </property>
            </widget>
           </item>
@@ -130,14 +130,20 @@
           </item>
           <item>
            <widget class="QTableWidget" name="configTableWidget">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
             <property name="alternatingRowColors">
              <bool>true</bool>
             </property>
             <property name="selectionMode">
-             <enum>QAbstractItemView::NoSelection</enum>
+             <enum>QAbstractItemView::SelectionMode::NoSelection</enum>
             </property>
             <property name="selectionBehavior">
-             <enum>QAbstractItemView::SelectRows</enum>
+             <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
             </property>
             <property name="wordWrap">
              <bool>true</bool>
@@ -176,11 +182,30 @@
             <property name="text">
              <string>-I&quot;&lt;project_root&gt;/visualiserProxy&quot; -I&quot;&lt;project_root&gt;/config&quot;</string>
             </property>
-            <property name="textInteractionFlags">
-             <set>Qt::TextSelectableByMouse</set>
-            </property>
             <property name="wordWrap">
              <bool>true</bool>
+            </property>
+            <property name="textInteractionFlags">
+             <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="commandGroupBox">
+         <property name="title">
+          <string>Example Compilation Command</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_6">
+          <item>
+           <widget class="QTextEdit" name="commandTextEdit">
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+            <property name="plainText">
+             <string>&lt;compiler&gt; -shared -fPIC -std=&lt;standard&gt; -I&quot;&lt;oopencal_path&gt;&quot; -I&quot;&lt;project_root&gt;&quot; -I&quot;&lt;project_root&gt;/visualiserProxy&quot; -I&quot;&lt;project_root&gt;/config&quot; &lt;vtk_flags&gt; &quot;&lt;source_file&gt;&quot; -o &quot;&lt;output_file&gt;&quot;</string>
             </property>
            </widget>
           </item>
@@ -199,10 +224,10 @@
              <bool>true</bool>
             </property>
             <property name="selectionMode">
-             <enum>QAbstractItemView::SingleSelection</enum>
+             <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
             </property>
             <property name="selectionBehavior">
-             <enum>QAbstractItemView::SelectRows</enum>
+             <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
             </property>
             <property name="wordWrap">
              <bool>true</bool>
@@ -223,33 +248,11 @@
         </widget>
        </item>
        <item>
-        <widget class="QGroupBox" name="commandGroupBox">
-         <property name="title">
-          <string>Example Compilation Command</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_6">
-          <item>
-           <widget class="QTextEdit" name="commandTextEdit">
-            <property name="maximumHeight">
-             <number>100</number>
-            </property>
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-            <property name="plainText">
-             <string>&lt;compiler&gt; -shared -fPIC -std=&lt;standard&gt; -I"&lt;oopencal_path&gt;" -I"&lt;project_root&gt;" -I"&lt;project_root&gt;/visualiserProxy" -I"&lt;project_root&gt;/config" &lt;vtk_flags&gt; "&lt;source_file&gt;" -o "&lt;output_file&gt;"</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
         <layout class="QHBoxLayout" name="horizontalLayout">
          <item>
           <spacer name="horizontalSpacer">
            <property name="orientation">
-            <enum>Qt::Horizontal</enum>
+            <enum>Qt::Orientation::Horizontal</enum>
            </property>
            <property name="sizeHint" stdset="0">
             <size>

@@ -202,12 +202,12 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
 
     // Add VTK flags from configuration
     std::string vtkFlags = config.getVtkFlags();
-    if (!vtkFlags.empty()) {
+    if (! vtkFlags.empty())
+    {
         cmd << " " << vtkFlags;
     }
 
-    cmd << " \"" << sourceFile << "\""
-        << " -o \"" << outputFile << "\"";
+    cmd << " \"" << sourceFile << "\"" << " -o \"" << outputFile << "\"";
 
     return cmd.str();
 }
