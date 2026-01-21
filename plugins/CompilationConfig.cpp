@@ -432,13 +432,8 @@ std::string CompilationConfig::getDefaultVtkFlagsImpl() const
         return result;
     }
 #endif
-    
-    // Final fallback to old VTK_COMPILE_FLAGS for backward compatibility
-#ifdef VTK_COMPILE_FLAGS
-    return VTK_COMPILE_FLAGS;
-#else
-    return "";
-#endif
+
+    return {};
 }
 
 std::string CompilationConfig::getDefaultVtkIncludePathsImpl() const
@@ -458,33 +453,7 @@ std::string CompilationConfig::getDefaultVtkIncludePathsImpl() const
         return cmakeIncludes;
     }
 #endif
-    
-    // Final fallback - extract from old VTK_COMPILE_FLAGS for backward compatibility
-#ifdef VTK_COMPILE_FLAGS
-    std::string oldFlags(VTK_COMPILE_FLAGS);
-    std::stringstream ss(oldFlags);
-    std::string item;
-    std::vector<std::string> paths;
-    
-    while (ss >> item)
-    {
-        if (item.substr(0, 2) == "-I")
-        {
-            paths.push_back(item.substr(2));
-        }
-    }
-    
-    if (paths.empty())
-        return "";
-    
-    std::string result = paths[0];
-    for (size_t i = 1; i < paths.size(); ++i)
-    {
-        result += "|" + paths[i];
-    }
-    return result;
-#else
-    return "";
-#endif
+
+    return {};
 }
 } // namespace viz::plugins

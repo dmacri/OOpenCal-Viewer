@@ -118,7 +118,7 @@ private:
     /** @brief Get configuration values for OOPENCAL_VIEWER_ROOT */
     ConfigValues getViewerRootConfig();
     
-    /** @brief Get configuration values for VTK_COMPILE_FLAGS */
+    /** @brief Get configuration values for VTK_INCLUDES */
     ConfigValues getVtkFlagsConfig();
 
 private:

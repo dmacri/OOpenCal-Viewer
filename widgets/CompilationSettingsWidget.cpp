@@ -474,9 +474,6 @@ CompilationSettingsWidget::ConfigValues CompilationSettingsWidget::getVtkFlagsCo
     // Get CMake value (compile-time)
 #ifdef VTK_INCLUDES
     values.cmakeValue = VTK_INCLUDES;
-#elif defined(VTK_COMPILE_FLAGS)
-    // Fallback to old format for backward compatibility
-    values.cmakeValue = VTK_COMPILE_FLAGS;
 #else
     values.cmakeValue = "";
 #endif

@@ -565,7 +565,6 @@ string(REPLACE "\"" "\\\"" VTK_INCLUDES_ESCAPED "${VTK_INCLUDES_ESCAPED}")
 
 # Add as compile definitions (accessible as macros in C++)
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-    VTK_COMPILE_FLAGS="${VTK_COMPILE_FLAGS_ESCAPED}"
     "VTK_INCLUDES=\"${VTK_INCLUDES_ESCAPED}\""
 )
 

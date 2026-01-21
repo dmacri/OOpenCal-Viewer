@@ -92,18 +92,18 @@ public:
     /** @brief Get default VTK compilation flags
      * @return Default VTK flags string */
     std::string getDefaultVtkFlags() const;
-    
+
     /** @brief Set VTK compilation flags override
      * @param flags Custom VTK flags, or empty to use defaults */
     void setVtkFlags(const std::string& flags);
-    
+
     /** @brief Reset VTK flags to defaults */
     void resetVtkFlags();
 
     /** @brief Get OOpenCAL directory path (with overrides applied)
      * @return OOpenCAL directory path */
     std::string getOopencalDir() const;
-    
+
     /** @brief Get default OOpenCAL directory path
      * @return Default OOpenCAL directory path */
     std::string getDefaultOopencalDir() const;
@@ -179,21 +179,21 @@ private:
     };
 
     ConfigState m_state;
-    
+
     /** @brief Resolve directory path using environment variable and CMake define
      * @param envVarName Environment variable name
      * @param cmakeDefineValue CMake define value
      * @return Resolved directory path */
     std::string resolveDirectoryPath(const char* envVarName, const char* cmakeDefineValue) const;
-    
+
     /** @brief Get default OOpenCAL directory from environment/CMake
      * @return Default OOpenCAL directory path */
     std::string getDefaultOopencalDirImpl() const;
-    
+
     /** @brief Get default viewer root directory from environment/CMake
      * @return Default viewer root directory path */
     std::string getDefaultViewerRootDirImpl() const;
-    
+
     /** @brief Get default VTK compilation flags implementation */
     std::string getDefaultVtkFlagsImpl() const;
 
