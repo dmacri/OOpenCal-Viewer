@@ -209,15 +209,15 @@ void CompilationSettingsWidget::setupConfigTable(QTableWidget* table)
     validatePath(vtkConfig.cmakeValue, vtkCmakeItem, "VTK_INCLUDES");
     
     auto* vtkEnvItem = new QTableWidgetItem(vtkConfig.envValue);
-    table->setItem(2, 2, vtkEnvItem);
+    table->setItem(ConfigRow::VTK_INCLUDES_ROW, 2, vtkEnvItem);
     validatePath(vtkConfig.envValue, vtkEnvItem, "VTK_INCLUDES");
 
     auto* vtkItem = new QTableWidgetItem(vtkConfig.currentValue);
-    table->setItem(2, 3, vtkItem);
+    table->setItem(ConfigRow::VTK_INCLUDES_ROW, 3, vtkItem);
     validatePath(vtkConfig.currentValue, vtkItem, "VTK_INCLUDES");
     
     // Make first three columns read-only, but allow editing in Current Value column
-    for (int row = 0; row < 3; ++row)
+    for (int row = 0; row < ConfigRow::CONFIG_ROWS_COUNT; ++row)
     {
         for (int col = 0; col < 3; ++col)
         {
