@@ -1,6 +1,9 @@
 /** @file CompilationSettingsWidget.cpp
  * @brief Implementation of CompilationSettingsWidget for displaying C++ compilation settings. */
 
+#include <string>
+#include <sstream>
+#include <cstdlib>
 #include <QTableWidgetItem>
 #include <QHeaderView>
 #include <QProcess>
@@ -16,17 +19,67 @@
 #include <QBrush>
 #include <QColor>
 #include <QRegularExpression>
-#include <cstdlib>
 
 #include "CompilationSettingsWidget.h"
 #include "ui_CompilationSettingsWidget.h"
 #include "plugins/CppModuleBuilder.h"
 #include "plugins/CompilationConfig.h"
 
-
 namespace
 {
 constexpr const char defaultCompiler[] = "clang++";
+
+/** Returns the name and version of the compiler used to build this binary.
+ * Works on Linux, Windows, and macOS.
+ *
+ * @return A string containing compiler name and version (e.g., "g++ 13.2.0" or "clang++ 15.0.7") */
+std::string getCompilerInfo()
+{
+    std::ostringstream info;
+
+#if defined(__clang__)
+    // Clang defines __clang__ and also __GNUC__, so check it first
+    info << "clang++ "
+         << __clang_major__ << "."
+         << __clang_minor__ << "."
+         << __clang_patchlevel__;
+
+#elif defined(__GNUC__) || defined(__GNUG__)
+    // GCC or G++
+    info << "g++ "
+         << __GNUC__ << "."
+         << __GNUC_MINOR__ << "."
+         << __GNUC_PATCHLEVEL__;
+
+#elif defined(_MSC_VER)
+    // Microsoft Visual C++
+    info << "MSVC " << _MSC_VER;
+
+    // Optionally decode the version number to a more readable format
+    // e.g., 1930 = Visual Studio 2022 version 17.0
+    if (_MSC_VER >= 1940)
+    {
+        info << " (VS 2022 17.10+)";
+    }
+    else if (_MSC_VER >= 1930)
+    {
+        info << " (VS 2022 17.0-17.9)";
+    }
+    else if (_MSC_VER >= 1920)
+    {
+        info << " (VS 2019)";
+    }
+    else if (_MSC_VER >= 1910)
+    {
+        info << " (VS 2017)";
+    }
+
+#else
+    info << "Unknown compiler";
+#endif
+
+    return info.str();
+}
 } // namespace
 
 
@@ -288,9 +341,11 @@ QString CompilationSettingsWidget::getCompilerVersion(const QString& compilerPat
     
     // Simple version extraction - look for first version number pattern
     QStringList lines = fullOutput.split('\n');
-    for (const QString& line : lines) {
+    for (const QString& line : lines)
+    {
         // Look for version patterns
-        if (line.contains("version", Qt::CaseInsensitive)) {
+        if (line.contains("version", Qt::CaseInsensitive))
+        {
             // Extract version number using simple string operations
             QStringList parts = line.split(' ');
             for (const QString& part : parts)
@@ -367,7 +422,9 @@ void CompilationSettingsWidget::validateCompilerAvailability(const QString& comp
         {
             tooltip = tr("Compiler: %1 %2\nPath: %3").arg(compilerName, compilerVersion, resolvedPath);
         }
-        
+
+        tooltip += tr("\nNOTE: To compile %1 used %2").arg(QApplication::applicationName(), getCompilerInfo());
+
         ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
         ui->compilerValueLabel->setToolTip(tooltip);
     }

@@ -46,7 +46,7 @@ int main(int argc, char* argv[])
 
     QApplication a(argc, argv);
     QApplication::setStyle(QStyleFactory::create("Fusion"));
-    QApplication::setApplicationName("Visualiser");
+    QApplication::setApplicationName("OOpenCal-Visualiser");
 
     // Load plugins from standard locations
     // This happens before MainWindow creation so models are available immediately
