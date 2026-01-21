@@ -157,9 +157,12 @@ void CompilationSettingsWidget::setupConfigTable(QTableWidget* table)
     table->setItem(2, 3, vtkItem);
     
     // Make first three columns read-only, but allow editing in Current Value column
-    for (int row = 0; row < 3; ++row) {
-        for (int col = 0; col < 3; ++col) {
-            if (auto* item = table->item(row, col)) {
+    for (int row = 0; row < 3; ++row)
+    {
+        for (int col = 0; col < 3; ++col)
+        {
+            if (auto* item = table->item(row, col))
+            {
                 item->setFlags(item->flags() & ~Qt::ItemIsEditable);
             }
         }
