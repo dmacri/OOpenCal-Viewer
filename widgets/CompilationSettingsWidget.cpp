@@ -8,8 +8,13 @@
 #include <QDir>
 #include <QLabel>
 #include <QString>
+#include <QStringList>
 #include <QTableWidget>
 #include <QPushButton>
+#include <QGroupBox>
+#include <QWidget>
+#include <QBrush>
+#include <QColor>
 #include <cstdlib>
 
 #include "CompilationSettingsWidget.h"
@@ -88,14 +93,32 @@ void CompilationSettingsWidget::loadCompilationSettings()
     // Setup configuration table with 3 rows
     setupConfigTable(ui->configTableWidget);
 
-    // Update additional paths based on project root
+    // Update additional paths based on project root and VTK includes
     auto viewerRootConfig = getViewerRootConfig();
-    if (!viewerRootConfig.currentValue.isEmpty()) {
-        QString additionalPaths = QString("-I\"%1/visualiserProxy\" -I\"%1/config\"").arg(viewerRootConfig.currentValue);
-        ui->additionalPathsValueLabel->setText(additionalPaths);
-    } else {
-        ui->additionalPathsValueLabel->setText("-I\"<project_root>/visualiserProxy\" -I\"<project_root>/config\"");
+    auto vtkConfig = getVtkFlagsConfig();
+    QStringList additionalPaths;
+    
+    // Add project root paths if available
+    if (! viewerRootConfig.currentValue.isEmpty())
+    {
+        additionalPaths << QString("-I\"%1/visualiserProxy\"").arg(viewerRootConfig.currentValue);
+        additionalPaths << QString("-I\"%1/config\"").arg(viewerRootConfig.currentValue);
     }
+    
+    // Add VTK include paths if available
+    if (! vtkConfig.currentValue.isEmpty())
+    {
+        QStringList vtkPaths = vtkConfig.currentValue.split(" ", Qt::SkipEmptyParts);
+        for (const QString& vtkPath : vtkPaths)
+        {
+            if (! vtkPath.isEmpty())
+            {
+                additionalPaths << QString("-I\"%1\"").arg(vtkPath);
+            }
+        }
+    }
+    
+    ui->additionalPathsValueLabel->setText(additionalPaths.join(" "));
 
     // Load compilation flags from singleton
     QString flags = QString::fromStdString(config.getCompilationFlags());
@@ -149,12 +172,19 @@ void CompilationSettingsWidget::setupConfigTable(QTableWidget* table)
     table->setItem(1, 3, viewerRootItem);
     validatePath(viewerRootConfig.currentValue, viewerRootItem, "OOPENCAL_VIEWER_ROOT");
     
-    // Row 2: VTK_INCLUDES (no path validation for flags)
+    // Row 2: VTK_INCLUDES (with path validation)
     table->setItem(2, 0, new QTableWidgetItem("VTK_INCLUDES"));
-    table->setItem(2, 1, new QTableWidgetItem(vtkConfig.cmakeValue));
-    table->setItem(2, 2, new QTableWidgetItem(vtkConfig.envValue));
+    auto* vtkCmakeItem = new QTableWidgetItem(vtkConfig.cmakeValue);
+    table->setItem(2, 1, vtkCmakeItem);
+    validatePath(vtkConfig.cmakeValue, vtkCmakeItem, "VTK_INCLUDES");
+    
+    auto* vtkEnvItem = new QTableWidgetItem(vtkConfig.envValue);
+    table->setItem(2, 2, vtkEnvItem);
+    validatePath(vtkConfig.envValue, vtkEnvItem, "VTK_INCLUDES");
+
     auto* vtkItem = new QTableWidgetItem(vtkConfig.currentValue);
     table->setItem(2, 3, vtkItem);
+    validatePath(vtkConfig.currentValue, vtkItem, "VTK_INCLUDES");
     
     // Make first three columns read-only, but allow editing in Current Value column
     for (int row = 0; row < 3; ++row)

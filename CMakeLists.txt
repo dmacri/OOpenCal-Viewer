@@ -531,16 +531,6 @@ clean_genex(VTK_INCLUDES_EXPANDED "${_vtk_includes}")
 clean_genex(VTK_DEFS_EXPANDED "${_vtk_defs}")
 clean_genex(VTK_OPTS_EXPANDED "${_vtk_opts}")
 
-# Build final compile flags string (keep for backward compatibility) with deduplication
-set(VTK_COMPILE_FLAGS_STR "")
-set(VTK_ADDED_PATHS)  # List to track already added paths for deduplication
-foreach(inc IN LISTS VTK_INCLUDES_EXPANDED)
-    if (EXISTS "${inc}" AND NOT inc IN_LIST VTK_ADDED_PATHS)
-        string(APPEND VTK_COMPILE_FLAGS_STR "-I${inc} ")
-        list(APPEND VTK_ADDED_PATHS "${inc}")
-    endif()
-endforeach()
-
 # Prepare clean VTK include paths (space-separated) with deduplication
 set(VTK_INCLUDES_CLEAN "")
 set(VTK_CLEAN_ADDED_PATHS)  # Separate list for clean paths deduplication
