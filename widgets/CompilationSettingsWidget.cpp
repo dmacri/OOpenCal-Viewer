@@ -93,32 +93,8 @@ void CompilationSettingsWidget::loadCompilationSettings()
     // Setup configuration table with 3 rows
     setupConfigTable(ui->configTableWidget);
 
-    // Update additional paths based on project root and VTK includes
-    auto viewerRootConfig = getViewerRootConfig();
-    auto vtkConfig = getVtkFlagsConfig();
-    QStringList additionalPaths;
-    
-    // Add project root paths if available
-    if (! viewerRootConfig.currentValue.isEmpty())
-    {
-        additionalPaths << QString("-I\"%1/visualiserProxy\"").arg(viewerRootConfig.currentValue);
-        additionalPaths << QString("-I\"%1/config\"").arg(viewerRootConfig.currentValue);
-    }
-    
-    // Add VTK include paths if available
-    if (! vtkConfig.currentValue.isEmpty())
-    {
-        QStringList vtkPaths = vtkConfig.currentValue.split(" ", Qt::SkipEmptyParts);
-        for (const QString& vtkPath : vtkPaths)
-        {
-            if (! vtkPath.isEmpty())
-            {
-                additionalPaths << QString("-I\"%1\"").arg(vtkPath);
-            }
-        }
-    }
-    
-    ui->additionalPathsValueLabel->setText(additionalPaths.join(" "));
+    // Update additional paths with current configuration values
+    updateAdditionalPaths();
 
     // Load compilation flags from singleton
     QString flags = QString::fromStdString(config.getCompilationFlags());
@@ -210,18 +186,57 @@ void CompilationSettingsWidget::setupConfigTable(QTableWidget* table)
                 
                 // Update the configuration in singleton without causing recursion
                 updateConfigValue(variableName, item->text());
+                
+                // Update additional paths to reflect changes
+                updateAdditionalPaths();
             }
         }
     });
     
     // Block signals temporarily to prevent recursion during initial setup
-    table->blockSignals(true);
+    QSignalBlocker tableBlocker(table);
     
     // Resize columns to content
     table->resizeColumnsToContents();
+}
+
+void CompilationSettingsWidget::updateAdditionalPaths()
+{
+    // Update additional paths based on project root and VTK includes
+    auto viewerRootConfig = getViewerRootConfig();
+    auto vtkConfig = getVtkFlagsConfig();
+    auto oopenCalConfig = getOopencalDirConfig();
+
+    QString additionalPaths;
     
-    // Unblock signals after initial setup
-    table->blockSignals(false);
+    // Add project root paths if available
+    if (! viewerRootConfig.currentValue.isEmpty())
+    {
+        additionalPaths += QString(" -I\"%1/visualiserProxy\"").arg(viewerRootConfig.currentValue);
+
+        additionalPaths += QString(" -I\"%1/config\"").arg(viewerRootConfig.currentValue);
+    }
+    
+    // Add VTK include paths if available
+    if (! vtkConfig.currentValue.isEmpty())
+    {
+        QStringList vtkPaths = vtkConfig.currentValue.split(" ", Qt::SkipEmptyParts);
+        for (const QString& vtkPath : vtkPaths)
+        {
+            if (! vtkPath.isEmpty())
+            {
+                additionalPaths += QString(" -I\"%1\"").arg(vtkPath);
+            }
+        }
+    }
+
+    // Add OOpenCal include path if available
+    if (! oopenCalConfig.currentValue.isEmpty())
+    {
+        additionalPaths += QString(" -I\"%1\"").arg(oopenCalConfig.currentValue);
+    }
+    
+    ui->additionalPathsValueLabel->setText(additionalPaths.trimmed());
 }
 
 void CompilationSettingsWidget::updateConfigValue(const QString& variableName, const QString& value)
@@ -242,16 +257,7 @@ void CompilationSettingsWidget::updateConfigValue(const QString& variableName, c
     }
     
     // Update only the additional paths and example command - don't reload the whole table
-    auto viewerRootConfig = getViewerRootConfig();
-    if (! viewerRootConfig.currentValue.isEmpty())
-    {
-        QString additionalPaths = QString("-I\"%1/visualiserProxy\" -I\"%1/config\"").arg(viewerRootConfig.currentValue);
-        ui->additionalPathsValueLabel->setText(additionalPaths);
-    }
-    else
-    {
-        ui->additionalPathsValueLabel->setText("-I\"<project_root>/visualiserProxy\" -I\"<project_root>/config\"");
-    }
+    updateAdditionalPaths();
     
     // Update compilation flags and example command
     QString flags = QString::fromStdString(config.getCompilationFlags());

@@ -121,6 +121,9 @@ private:
     /** @brief Get configuration values for VTK_INCLUDES */
     ConfigValues getVtkFlagsConfig();
 
+    /** @brief Update additional paths label with current configuration values */
+    void updateAdditionalPaths();
+
 private:
     Ui::CompilationSettingsWidget* ui;
     std::shared_ptr<viz::plugins::CppModuleBuilder> m_moduleBuilder;
