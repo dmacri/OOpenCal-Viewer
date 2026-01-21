@@ -15,6 +15,7 @@
 #include <QWidget>
 #include <QBrush>
 #include <QColor>
+#include <QRegularExpression>
 #include <cstdlib>
 
 #include "CompilationSettingsWidget.h"
@@ -267,6 +268,70 @@ void CompilationSettingsWidget::updateConfigValue(const QString& variableName, c
     ui->commandTextEdit->setPlainText(command);
 }
 
+QString CompilationSettingsWidget::getCompilerVersion(const QString& compilerPath)
+{
+    if (compilerPath.isEmpty())
+        return "";
+    
+    // Check compiler type first
+    QString compilerName = QFileInfo(compilerPath).baseName().toLower();
+
+    QProcess process;
+    QStringList args("--version");
+
+    process.start(compilerPath, args);
+    process.waitForFinished(2000); // Wait max 2 seconds
+    
+    QString output = process.readAllStandardOutput();
+    QString error = process.readAllStandardError();
+    QString fullOutput = output + error;
+    
+    // Simple version extraction - look for first version number pattern
+    QStringList lines = fullOutput.split('\n');
+    for (const QString& line : lines) {
+        // Look for version patterns
+        if (line.contains("version", Qt::CaseInsensitive)) {
+            // Extract version number using simple string operations
+            QStringList parts = line.split(' ');
+            for (const QString& part : parts)
+            {
+                if (part.contains('.')) // Likely version number
+                {
+                    QStringList versionParts = part.split('.');
+                    if (versionParts.size() >= 2)
+                    {
+                        QString major = versionParts[0];
+                        QString minor = versionParts[1];
+                        QString patch = (versionParts.size() > 2) ? versionParts[2] : "";
+                        
+                        // Remove any non-digit characters
+                        major.remove(QRegularExpression("[^0-9]"));
+                        minor.remove(QRegularExpression("[^0-9]"));
+                        patch.remove(QRegularExpression("[^0-9]"));
+                        
+                        QString version = major + "." + minor;
+                        if (! patch.isEmpty())
+                        {
+                            version += "." + patch;
+                        }
+                        return version;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Fallback: look for any X.Y.Z pattern in the output
+    QRegularExpression versionPattern(R"((\d+\.\d+(\.\d+)?))");
+    QRegularExpressionMatch match = versionPattern.match(fullOutput);
+    if (match.hasMatch())
+    {
+        return match.captured(1);
+    }
+    
+    return "";
+}
+
 void CompilationSettingsWidget::validateCompilerAvailability(const QString& compilerPath)
 {
     QString resolvedPath;
@@ -290,8 +355,21 @@ void CompilationSettingsWidget::validateCompilerAvailability(const QString& comp
     // Compiler found
     if (! resolvedPath.isEmpty())
     {
+        QString compilerVersion = getCompilerVersion(resolvedPath);
+        QString compilerName = QFileInfo(resolvedPath).baseName();
+        
+        QString tooltip;
+        if (compilerVersion.isEmpty())
+        {
+            tooltip = tr("Compiler is available: %1").arg(resolvedPath);
+        }
+        else
+        {
+            tooltip = tr("Compiler: %1 %2\nPath: %3").arg(compilerName, compilerVersion, resolvedPath);
+        }
+        
         ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
-        ui->compilerValueLabel->setToolTip(tr("Compiler is available: %1").arg(resolvedPath));
+        ui->compilerValueLabel->setToolTip(tooltip);
     }
     // Compiler not found
     else

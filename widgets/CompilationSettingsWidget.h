@@ -112,6 +112,9 @@ private:
     void toggleEnvironmentGroup();
     void updateEnvironmentGroupArrow(bool isExpanded);
     
+    /** @brief Get compiler version information */
+    QString getCompilerVersion(const QString& compilerPath);
+    
     /** @brief Get configuration values for OOPENCAL_DIR */
     ConfigValues getOopencalDirConfig();
     
