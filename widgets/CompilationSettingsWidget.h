@@ -60,6 +60,16 @@ class CompilationSettingsWidget : public QWidget
     Q_OBJECT
 
 public:
+    /** @brief Row indices for configuration table */
+    enum ConfigRow 
+    {
+        OOPENCAL_DIR_ROW = 0,
+        OOPENCAL_VIEWER_ROOT_ROW = 1,
+        VTK_INCLUDES_ROW = 2,
+
+        CONFIG_ROWS_COUNT
+    };
+    
     explicit CompilationSettingsWidget(QWidget* parent = nullptr);
     ~CompilationSettingsWidget();
 

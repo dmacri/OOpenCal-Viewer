@@ -161,7 +161,7 @@ void CompilationSettingsWidget::loadCompilationSettings()
 
 void CompilationSettingsWidget::setupConfigTable(QTableWidget* table)
 {
-    table->setRowCount(3);
+    table->setRowCount(ConfigRow::CONFIG_ROWS_COUNT);
     table->setColumnCount(4);
     
     // Set headers
@@ -175,37 +175,37 @@ void CompilationSettingsWidget::setupConfigTable(QTableWidget* table)
     auto vtkConfig = getVtkFlagsConfig();
     
     // Row 0: OOPENCAL_DIR
-    table->setItem(0, 0, new QTableWidgetItem("OOPENCAL_DIR"));
+    table->setItem(ConfigRow::OOPENCAL_DIR_ROW, 0, new QTableWidgetItem("OOPENCAL_DIR"));
     auto* oopencalCmakeItem = new QTableWidgetItem(oopencalConfig.cmakeValue);
-    table->setItem(0, 1, oopencalCmakeItem);
+    table->setItem(ConfigRow::OOPENCAL_DIR_ROW, 1, oopencalCmakeItem);
     validatePath(oopencalConfig.cmakeValue, oopencalCmakeItem, "OOPENCAL_DIR");
     
     auto* oopencalEnvItem = new QTableWidgetItem(oopencalConfig.envValue);
-    table->setItem(0, 2, oopencalEnvItem);
+    table->setItem(ConfigRow::OOPENCAL_DIR_ROW, 2, oopencalEnvItem);
     validatePath(oopencalConfig.envValue, oopencalEnvItem, "OOPENCAL_DIR");
     
     auto* oopencalCurrentItem = new QTableWidgetItem(oopencalConfig.currentValue);
-    table->setItem(0, 3, oopencalCurrentItem);
+    table->setItem(ConfigRow::OOPENCAL_DIR_ROW, 3, oopencalCurrentItem);
     validatePath(oopencalConfig.currentValue, oopencalCurrentItem, "OOPENCAL_DIR");
     
     // Row 1: OOPENCAL_VIEWER_ROOT
-    table->setItem(1, 0, new QTableWidgetItem("OOPENCAL_VIEWER_ROOT"));
+    table->setItem(ConfigRow::OOPENCAL_VIEWER_ROOT_ROW, 0, new QTableWidgetItem("OOPENCAL_VIEWER_ROOT"));
     auto* viewerRootCmakeItem = new QTableWidgetItem(viewerRootConfig.cmakeValue);
-    table->setItem(1, 1, viewerRootCmakeItem);
+    table->setItem(ConfigRow::OOPENCAL_VIEWER_ROOT_ROW, 1, viewerRootCmakeItem);
     validatePath(viewerRootConfig.cmakeValue, viewerRootCmakeItem, "OOPENCAL_VIEWER_ROOT");
     
     auto* viewerRootEnvItem = new QTableWidgetItem(viewerRootConfig.envValue);
-    table->setItem(1, 2, viewerRootEnvItem);
+    table->setItem(ConfigRow::OOPENCAL_VIEWER_ROOT_ROW, 2, viewerRootEnvItem);
     validatePath(viewerRootConfig.envValue, viewerRootEnvItem, "OOPENCAL_VIEWER_ROOT");
     
     auto* viewerRootItem = new QTableWidgetItem(viewerRootConfig.currentValue);
-    table->setItem(1, 3, viewerRootItem);
+    table->setItem(ConfigRow::OOPENCAL_VIEWER_ROOT_ROW, 3, viewerRootItem);
     validatePath(viewerRootConfig.currentValue, viewerRootItem, "OOPENCAL_VIEWER_ROOT");
     
     // Row 2: VTK_INCLUDES (with path validation)
-    table->setItem(2, 0, new QTableWidgetItem("VTK_INCLUDES"));
+    table->setItem(ConfigRow::VTK_INCLUDES_ROW, 0, new QTableWidgetItem("VTK_INCLUDES"));
     auto* vtkCmakeItem = new QTableWidgetItem(vtkConfig.cmakeValue);
-    table->setItem(2, 1, vtkCmakeItem);
+    table->setItem(ConfigRow::VTK_INCLUDES_ROW, 1, vtkCmakeItem);
     validatePath(vtkConfig.cmakeValue, vtkCmakeItem, "VTK_INCLUDES");
     
     auto* vtkEnvItem = new QTableWidgetItem(vtkConfig.envValue);
