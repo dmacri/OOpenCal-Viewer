@@ -1,13 +1,13 @@
 /** @file CompilationConfig.cpp
  * @brief Implementation of CompilationConfig singleton for managing compilation settings. */
 
+#include "CompilationConfig.h"
+
 #include <sstream>
 #include <cstdlib>
 #include <unordered_set>
 #include <filesystem>
 #include <sstream>
-#include "CompilationConfig.h"
-
 
 namespace viz::plugins
 {
@@ -50,8 +50,7 @@ void CompilationConfig::resetCompilationFlags()
 
 std::string CompilationConfig::getVtkFlags() const
 {
-    if (m_state.vtkFlagsOverride.has_value())
-    {
+    if (m_state.vtkFlagsOverride.has_value()) {
         return m_state.vtkFlagsOverride.value();
     }
     return getDefaultVtkFlags();
@@ -184,10 +183,6 @@ std::vector<std::string> CompilationConfig::getIncludePaths() const
     // Add project include paths
     auto projectPaths = getProjectIncludePaths();
     paths.insert(paths.end(), projectPaths.begin(), projectPaths.end());
-
-    // VTK include pathes
-    auto vtkIncludes = getVtkFlags();
-    paths.push_back(vtkIncludes);
     
     return paths;
 }
