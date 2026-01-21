@@ -436,7 +436,7 @@ void CompilationSettingsWidget::validateCompilerAvailability(const QString& comp
     }
 }
 
-QString CompilationSettingsWidget::generateExampleCommand()
+QString CompilationSettingsWidget::generateExampleCommand() // TODO: GB: This method seems to have duplications with CppModuleBuilder::compileModule
 {
     auto& config = viz::plugins::CompilationConfig::getInstance();
     
