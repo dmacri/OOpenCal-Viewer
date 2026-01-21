@@ -3,7 +3,9 @@
 
 #include "CompilationConfig.h"
 
+#include <sstream>
 #include <cstdlib>
+#include <unordered_set>
 #include <filesystem>
 #include <sstream>
 
@@ -76,9 +78,8 @@ std::string CompilationConfig::getVtkIncludePaths() const
             return override; // Return as-is if no -I flags found
         
         std::string result = paths[0];
-        for (size_t i = 1; i < paths.size(); ++i)
-        {
-            result += "|" + paths[i];
+        for (size_t i = 1; i < paths.size(); ++i) {
+            result += " " + paths[i];
         }
         return result;
     }
@@ -398,14 +399,14 @@ std::string CompilationConfig::getDefaultVtkFlagsImpl() const
     const char* envVtk = std::getenv("VTK_INCLUDES");
     if (envVtk && std::string(envVtk) != "")
     {
-        // Split by pipe and add -I flags
+        // Split by space and add -I flags
         std::string envStr(envVtk);
         std::stringstream ss(envStr);
         std::string path;
         
-        while (std::getline(ss, path, '|'))
+        while (ss >> path)
         {
-            if (! path.empty())
+            if (!path.empty())
             {
                 result += "-I" + path + " ";
             }
@@ -416,13 +417,13 @@ std::string CompilationConfig::getDefaultVtkFlagsImpl() const
     // Fall back to CMake-provided VTK_INCLUDES
 #ifdef VTK_INCLUDES
     std::string cmakeIncludes(VTK_INCLUDES);
-    if (! cmakeIncludes.empty())
+    if (!cmakeIncludes.empty())
     {
-        // Split by pipe and add -I flags
+        // Split by space and add -I flags
         std::stringstream ss(cmakeIncludes);
         std::string path;
         
-        while (std::getline(ss, path, '|'))
+        while (ss >> path)
         {
             if (!path.empty())
             {
@@ -442,7 +443,7 @@ std::string CompilationConfig::getDefaultVtkIncludePathsImpl() const
     const char* envVtk = std::getenv("VTK_INCLUDES");
     if (envVtk && std::string(envVtk) != "")
     {
-        return std::string(envVtk);
+        return deduplicatePaths(std::string(envVtk));
     }
     
     // Fall back to CMake-provided VTK_INCLUDES
@@ -450,10 +451,40 @@ std::string CompilationConfig::getDefaultVtkIncludePathsImpl() const
     std::string cmakeIncludes(VTK_INCLUDES);
     if (! cmakeIncludes.empty())
     {
-        return cmakeIncludes;
+        return deduplicatePaths(cmakeIncludes);
     }
 #endif
+    
+    return "";
+}
 
-    return {};
+std::string CompilationConfig::deduplicatePaths(const std::string& paths) const
+{
+    if (paths.empty())
+        return "";
+    
+    std::stringstream ss(paths);
+    std::string path;
+    std::unordered_set<std::string> seen;
+    std::vector<std::string> uniquePaths;
+    
+    while (ss >> path)
+    {
+        if (seen.find(path) == seen.end())
+        {
+            seen.insert(path);
+            uniquePaths.push_back(path);
+        }
+    }
+    
+    if (uniquePaths.empty())
+        return "";
+    
+    std::string result = uniquePaths[0];
+    for (size_t i = 1; i < uniquePaths.size(); ++i)
+    {
+        result += " " + uniquePaths[i];
+    }
+    return result;
 }
 } // namespace viz::plugins

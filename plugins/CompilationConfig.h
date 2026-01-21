@@ -199,5 +199,8 @@ private:
 
     /** @brief Get default VTK include paths without -I prefixes implementation */
     std::string getDefaultVtkIncludePathsImpl() const;
+
+    /** @brief Remove duplicate paths from a space-separated string */
+    std::string deduplicatePaths(const std::string& paths) const;
 };
 } // namespace viz::plugins
