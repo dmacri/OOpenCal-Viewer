@@ -1207,7 +1207,7 @@ void MainWindow::loadModelDataWithExistingModel(const QString& modelDirectory, c
         std::cout << "[DEBUG] " << tr("Model Data Loaded").toStdString()
                   << tr("Model data loaded successfully using existing model '%1' from:\n%2\n\nConfiguration loaded and ready to use.")
                          .arg(existingModelName)
-                         .arg(actualModelDir.string()).toStdString() << std::endl;
+                         .arg(QString::fromStdString(actualModelDir.string())).toStdString() << std::endl;
     }
     catch (const std::exception& e)
     {

@@ -423,7 +423,7 @@ void CompilationSettingsWidget::validateCompilerAvailability(const QString& comp
             tooltip = tr("Compiler: %1 %2\nPath: %3").arg(compilerName, compilerVersion, resolvedPath);
         }
 
-        tooltip += tr("\nNOTE: To compile %1 used %2").arg(QApplication::applicationName(), getCompilerInfo());
+        tooltip += tr("\nNOTE: To compile %1 used %2").arg(QApplication::applicationName(), QString::fromStdString(getCompilerInfo()));
 
         ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
         ui->compilerValueLabel->setToolTip(tooltip);
@@ -436,7 +436,7 @@ void CompilationSettingsWidget::validateCompilerAvailability(const QString& comp
     }
 }
 
-QString CompilationSettingsWidget::generateExampleCommand() // TODO: GB: This method seems to have duplications with CppModuleBuilder::compileModule
+QString CompilationSettingsWidget::generateExampleCommand()
 {
     auto& config = viz::plugins::CompilationConfig::getInstance();
     
