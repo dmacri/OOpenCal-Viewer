@@ -7,6 +7,8 @@
 #include <memory>
 #include <format>
 #include <string>
+#include <QString>
+#include <QLibrary>
 
 #include "ModelLoader.h"
 #include "config/Config.h"
@@ -18,36 +20,6 @@
 namespace
 {
 namespace fs = std::filesystem;
-
-/// Get the directory containing this executable (project root)
-static std::string getProjectRootPath()
-{
-    // 1. Prefer environment variable first
-    if (const char* envPath = std::getenv("OOPENCAL_VIEWER_ROOT"))
-    {
-        if (! std::string(envPath).empty())
-        {
-            return envPath;
-        }
-    }
-
-// 2. Use compile-time define provided by CMake (if exists and directory is valid)
-#ifdef OOPENCAL_VIEWER_ROOT
-    {
-        const std::string viewerPath = OOPENCAL_VIEWER_ROOT;
-
-        // Only use it if it points to an existing directory
-        std::error_code ec; // this is used to use version which does not throw
-        if (std::filesystem::exists(viewerPath, ec) && std::filesystem::is_directory(viewerPath, ec))
-        {
-            return viewerPath;
-        }
-    }
-#endif
-
-    // 3. Fallback: nothing available → return empty string
-    return "";
-}
 
 /** Check if file `a` is newer than file `b`.
  *  Returns:
@@ -68,14 +40,6 @@ bool isFileNewer(const std::filesystem::path& a, const std::filesystem::path& b)
     return fs::last_write_time(a) > fs::last_write_time(b);
 }
 
-std::string generateModuleNameForSourceFile(const std::string& cppHeaderFile)
-{
-    std::filesystem::path file(cppHeaderFile);
-    const std::string base = file.stem().string();  // e.g. "BallCell"
-    const auto sharedLibraryName = "lib" + base + "Plugin.so";
-    return file.parent_path() / sharedLibraryName;
-}
-
 std::string generateClassNameFromCppHeaderFileName(const std::string& cppHeaderFile)
 {
     std::filesystem::path file(cppHeaderFile);
@@ -88,17 +52,12 @@ std::string generateClassNameFromCppHeaderFileName(const std::string& cppHeaderF
 ModelLoader::ModelLoader()
     : builder(std::make_unique<viz::plugins::CppModuleBuilder>())
 {
-    std::string projectRoot = getProjectRootPath();
-    if (! projectRoot.empty())
-    {
-        builder->setProjectRootPath(projectRoot);
-    }
 }
 
 ModelLoader::~ModelLoader() = default;
 
 
-ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& modelDirectory)
+ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& modelDirectory, bool forceCompilation)
 {
     LoadResult result;
 
@@ -116,24 +75,16 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
         result.config = std::make_shared<Config>(headerPath);
         result.config->readConfigFile();
 
-        // Get model name from output_file_name parameter
-        ConfigCategory* generalCat = result.config->getConfigCategory(ConfigConstants::CATEGORY_GENERAL, true);
-        if (!generalCat)
+        try
         {
-            std::cerr << "Error: GENERAL section not found in Header.txt" << std::endl;
+            result.outputFileName = readOutputFileName(result.config.get());
+        }
+        catch(const std::invalid_argument& e)
+        {
+            std::cerr << "Error: " << e.what() << std::endl;
             result.success = false;
             return result;
         }
-
-        ConfigParameter* outputParam = generalCat->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME);
-        if (!outputParam)
-        {
-            std::cerr << "Error: output_file_name not found in GENERAL section" << std::endl;
-            result.success = false;
-            return result;
-        }
-
-        result.outputFileName = outputParam->getValue<std::string>();
 
         // Find C++ header file
         std::string sourceFile = findHeaderFile(modelDirectory);
@@ -144,26 +95,18 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             return result;
         }
 
-        std::cout << "Found header file: '" << sourceFile << "'\n";
+        std::cout << "[DEBUG] Found header file: '" << sourceFile << "'\n";
 
         // Determine output file path
         const std::string moduleFileName = generateModuleNameForSourceFile(sourceFile);
-        std::cout << "Trying to open: " << moduleFileName << "'\t, source never than compiled?: " << std::boolalpha << isFileNewer(sourceFile, moduleFileName) << std::endl;
 
         // Check if compilation is needed
-        if (moduleExists(moduleFileName))
-        {
-            std::cout << "Module '" << moduleFileName << "' already exists" << std::endl;
-            if (isFileNewer(sourceFile, moduleFileName))
-            {
-                std::cerr << "[WARNING] C++ source file '" << sourceFile << "' is never than module file '" << moduleFileName << "'" << std::endl;
-            }
-        }
-        else // if module does not exist
+        const bool compilationNecessarily = ! moduleExists(moduleFileName) || forceCompilation;
+        if (compilationNecessarily)
         {
             const std::string wrapperSource = modelDirectory + "/" + result.outputFileName + std::string(DirectoryConstants::WRAPPER_FILE_SUFFIX);
 
-            std::cout << "Compiling module: " << sourceFile << std::endl;
+            std::cout << "[DEBUG] Compiling module: " << sourceFile << std::endl;
 
             // Generate wrapper code
             const auto className = generateClassNameFromCppHeaderFileName(sourceFile);
@@ -205,6 +148,14 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
                     std::cerr << "Warning: Failed to remove wrapper file: " << e.what() << std::endl;
                     // Don't fail the build if wrapper removal fails
                 }
+            }
+        }
+        else
+        {
+            std::cout << "Module '" << moduleFileName << "' already exists" << std::endl;
+            if (isFileNewer(sourceFile, moduleFileName))
+            {
+                std::cerr << "[WARNING] C++ source file '" << sourceFile << "' is never than module file '" << moduleFileName << "'" << std::endl;
             }
         }
 
@@ -258,6 +209,46 @@ std::string ModelLoader::findHeaderFile(const std::string& modelDirectory)
     }
     return {};
 }
+
+std::string ModelLoader::readOutputFileName(Config* config)
+{
+    // Get model name from output_file_name parameter
+    ConfigCategory* generalCat = config->getConfigCategory(ConfigConstants::CATEGORY_GENERAL, /*ignoreCase=*/true);
+    if (! generalCat)
+    {
+        throw std::invalid_argument(std::string("Error: GENERAL section not found in ") + DirectoryConstants::HEADER_FILE_NAME);
+    }
+
+    const ConfigParameter* outputParam = generalCat->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME);
+    if (! outputParam)
+    {
+        throw std::invalid_argument("Error: output_file_name not found in GENERAL section");
+    }
+
+    return outputParam->getValue<std::string>();
+}
+
+std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppHeaderFile)
+{
+    std::filesystem::path file(cppHeaderFile);
+    const std::string baseName = file.stem().string();  // e.g. "BallCell"
+    const auto sharedLibraryName = "lib" + baseName + "Plugin.so";
+    return file.parent_path() / sharedLibraryName;
+}
+// TODO: GB: Use QLibrary to make this multiplatform
+// std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppHeaderFile)
+// {
+//     std::filesystem::path file(cppHeaderFile);
+//     const auto baseName = QString::fromStdString(file.stem().string()) + "Plugin";
+
+//     // QLibrary handles platform-specific prefixes and suffixes
+//     QLibrary lib(baseName);
+
+//     // Force only filename generation, do not load
+//     const auto libFileName = lib.fileName();
+
+//     return file.parent_path() / libFileName.toStdString();
+// }
 
 bool ModelLoader::moduleExists(const std::string& outputPath)
 {

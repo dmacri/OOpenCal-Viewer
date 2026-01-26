@@ -20,15 +20,15 @@ class CppModuleBuilder;
  * @brief Result of a compilation attempt. */
 struct CompilationResult
 {
-    bool success = false;           ///< Whether compilation succeeded
-    int exitCode = -1;              ///< Compiler exit code
-    std::string stdout;             ///< Compiler standard output
-    std::string stderr;             ///< Compiler error output
-    std::string sourceFile;         ///< Source file that was compiled
-    std::string outputFile;         ///< Output .so file path
-    std::string compileCommand;     ///< The actual compile command used
+    bool success = false;       ///< Whether compilation succeeded
+    int exitCode = -1;          ///< Compiler exit code
+    std::string stdout;         ///< Compiler standard output
+    std::string stderr;         ///< Compiler error output
+    std::string sourceFile;     ///< Source file that was compiled
+    std::string outputFile;     ///< Output .so file path
+    std::string compileCommand; ///< The actual compile command used
 };
-}
+} // namespace viz::plugins
 
 /** @class ModelLoader
  * @brief Loads OOpenCAL models from directories with automatic compilation.
@@ -57,26 +57,40 @@ public:
      * @brief Result of model loading attempt. */
     struct LoadResult
     {
-        bool success = false;                    ///< Whether loading succeeded
-        std::string compiledModulePath;          ///< Path to compiled .so file
-        std::string outputFileName;              ///< Output file name from Header.txt (e.g., "ball")
-        std::string pluginModelName;             ///< Model name from plugin's getModelName() (e.g., "Ball Model")
-        std::shared_ptr<Config> config;          ///< Parsed configuration
+        bool success = false;           ///< Whether loading succeeded
+        std::string compiledModulePath; ///< Path to compiled .so file
+        std::string outputFileName;     ///< Output file name from Header.txt (e.g., "ball")
+        std::string pluginModelName;    ///< Model name from plugin's getModelName() (e.g., "Ball Model")
+        std::shared_ptr<Config> config; ///< Parsed configuration
         std::optional<viz::plugins::CompilationResult> compilationResult; ///< Compilation details if compilation was attempted
     };
 
-    /** @brief Create a new ModelLoader instance */
+    /// @brief Create a new ModelLoader instance
     ModelLoader();
     ~ModelLoader();
 
     /** @brief Load a model from a directory
      * @param modelDirectory Path to directory containing Header.txt and model source
      * @return LoadResult with success status and details */
-    LoadResult loadModelFromDirectory(const std::string& modelDirectory);
+    LoadResult loadModelFromDirectory(const std::string& modelDirectory, bool forceCompilation = false);
+
+    /// @brief The method reads outputFileName from Config, if not found throws exception
+    static std::string readOutputFileName(Config* config);
 
     /** @brief Get the C++ module builder
      * @return Pointer to the CppModuleBuilder instance */
-    viz::plugins::CppModuleBuilder* getBuilder() { return builder.get(); }
+    viz::plugins::CppModuleBuilder* getBuilder()
+    {
+        return builder.get();
+    }
+
+    /** @brief Find C++ header file in directory
+     * @param modelDirectory Directory to search
+     * @return Path to first .h file found, or empty string if none found */
+    static std::string findHeaderFile(const std::string& modelDirectory);
+
+    /// @brief It generates name of compiled directory from cpp header file
+    static std::string generateModuleNameForSourceFile(const std::string& cppHeaderFile);
 
 private:
     std::unique_ptr<viz::plugins::CppModuleBuilder> builder;
@@ -85,11 +99,6 @@ private:
      * @param modelDirectory Directory to validate
      * @return true if directory contains Header.txt and at least one .h file */
     bool validateDirectory(const std::string& modelDirectory);
-
-    /** @brief Find C++ header file in directory
-     * @param modelDirectory Directory to search
-     * @return Path to first .h file found, or empty string if none found */
-    std::string findHeaderFile(const std::string& modelDirectory);
 
     /** @brief Check if compiled module exists and is up-to-date
      * @param outputPath Path to the .so file

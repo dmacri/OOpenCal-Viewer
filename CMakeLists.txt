@@ -174,6 +174,7 @@ list(APPEND Sources
     widgets/SceneWidget.cpp
     widgets/ColorSettingsDialog.cpp
     widgets/ColorSettings.cpp
+    widgets/CompilationSettingsWidget.cpp
     widgets/AboutDialog.cpp
     widgets/CompilationLogWidget.cpp
     widgets/ReductionDialog.cpp
@@ -181,9 +182,11 @@ list(APPEND Sources
     widgets/SubstateDisplayWidget.cpp
     widgets/SubstatesDockWidget.cpp
     widgets/CustomInteractorStyle.cpp
+    widgets/CustomDirectoryDialog.cpp
     plugins/PluginLoader.cpp
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp
+    plugins/CompilationConfig.cpp
     core/CommandLineParser.cpp
     data/ReductionManager.cpp
     data/ModelReader.cpp
@@ -528,22 +531,30 @@ clean_genex(VTK_INCLUDES_EXPANDED "${_vtk_includes}")
 clean_genex(VTK_DEFS_EXPANDED "${_vtk_defs}")
 clean_genex(VTK_OPTS_EXPANDED "${_vtk_opts}")
 
-# Build final compile flags string
-set(VTK_COMPILE_FLAGS_STR "")
+# Prepare clean VTK include paths (space-separated) with deduplication
+set(VTK_INCLUDES_CLEAN "")
+set(VTK_CLEAN_ADDED_PATHS)  # Separate list for clean paths deduplication
 foreach(inc IN LISTS VTK_INCLUDES_EXPANDED)
-    if (EXISTS "${inc}")
-        string(APPEND VTK_COMPILE_FLAGS_STR "-I${inc} ")
+    if (EXISTS "${inc}" AND NOT inc IN_LIST VTK_CLEAN_ADDED_PATHS)
+        if(VTK_INCLUDES_CLEAN)
+            string(APPEND VTK_INCLUDES_CLEAN " ${inc}")
+        else()
+            set(VTK_INCLUDES_CLEAN "${inc}")
+        endif()
+        list(APPEND VTK_CLEAN_ADDED_PATHS "${inc}")
     endif()
 endforeach()
 
-# Escape special characters for use in compile definition
-# Replace backslashes and quotes to ensure proper string literal
-string(REPLACE "\\" "\\\\" VTK_COMPILE_FLAGS_ESCAPED "${VTK_COMPILE_FLAGS_STR}")
-string(REPLACE "\"" "\\\"" VTK_COMPILE_FLAGS_ESCAPED "${VTK_COMPILE_FLAGS_ESCAPED}")
+# Escape VTK includes for C++ macro - handle quotes properly
+set(VTK_INCLUDES_ESCAPED "${VTK_INCLUDES_CLEAN}")
+# Replace backslashes with double backslashes for C++ string literal
+string(REPLACE "\\" "\\\\" VTK_INCLUDES_ESCAPED "${VTK_INCLUDES_ESCAPED}")
+# Replace existing quotes with escaped quotes for C++ string literal
+string(REPLACE "\"" "\\\"" VTK_INCLUDES_ESCAPED "${VTK_INCLUDES_ESCAPED}")
 
-# Add as compile definition (accessible as VTK_COMPILE_FLAGS macro in C++)
+# Add as compile definitions (accessible as macros in C++)
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-    VTK_COMPILE_FLAGS="${VTK_COMPILE_FLAGS_ESCAPED}"
+    "VTK_INCLUDES=\"${VTK_INCLUDES_ESCAPED}\""
 )
 
 # (Optional) Debug print to verify values
@@ -656,6 +667,7 @@ if(CLANG_FORMAT_EXE)
             COMMAND ${CLANG_FORMAT_EXE} -i -style=file ${FORMAT_SOURCES_SAFE}
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             COMMENT "Running clang-format on project sources"
+            COMMAND_EXPAND_LISTS
         )
 
         add_custom_target(clang-format-check
@@ -663,6 +675,7 @@ if(CLANG_FORMAT_EXE)
                 | grep -q "replacement offset"
                 && (echo \"Files need reformatting\" && exit 1) || echo \"Everything is properly formatted\"
             COMMENT "Checking formatting with clang-format (no changes applied)"
+            COMMAND_EXPAND_LISTS
         )
     else()
         message(WARNING "No source files found to format.")

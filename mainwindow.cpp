@@ -37,8 +37,10 @@
 #include "widgets/AboutDialog.h"
 #include "widgets/ColorSettingsDialog.h"
 #include "widgets/CompilationLogWidget.h"
+#include "widgets/CompilationSettingsWidget.h"
 #include "widgets/ConfigDetailsDialog.h"
 #include "widgets/ReductionDialog.h"
+#include "widgets/CustomDirectoryDialog.h"
 
 
 namespace
@@ -86,23 +88,10 @@ inline std::string sourceFileParentDirectoryAbsolutePath(const std::source_locat
  * @endcode */
 QString getOOpenCalStartPath()
 {
-    QString baseDir;
+    const auto opencalDir = viz::plugins::getOopencalDir();
+    QString baseDir = QString::fromStdString(opencalDir);
 
-    // Step 1: Try to get OOPENCAL_DIR from environment variable
-    if (qEnvironmentVariableIsSet("OOPENCAL_DIR"))
-    {
-        baseDir = qEnvironmentVariable("OOPENCAL_DIR");
-    }
-
-#ifdef OOPENCAL_DIR
-    // Step 2: If environment not set, use CMake-defined path
-    if (baseDir.isEmpty())
-    {
-        baseDir = QString::fromLocal8Bit(OOPENCAL_DIR);
-    }
-#endif
-
-    // Step 3: Verify that base directory exists
+    // Verify that base directory exists
     QDir dir(baseDir);
     if (baseDir.isEmpty() || !dir.exists())
     {
@@ -110,7 +99,7 @@ QString getOOpenCalStartPath()
         return QString();
     }
 
-    // Step 4: Check if "OOpenCAL/models/" subdirectory exists
+    // Check if "OOpenCAL/models/" subdirectory exists
     QDir modelsDir(dir.filePath("OOpenCAL/models"));
     if (modelsDir.exists())
     {
@@ -201,6 +190,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionLoadPlugin, &QAction::triggered, this, &MainWindow::onLoadPluginRequested);
     connect(ui->actionLoadModelFromDirectory, &QAction::triggered, this, &MainWindow::onLoadModelFromDirectoryRequested);
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
+    connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
     connect(ui->actionShow_reduction, &QAction::triggered, this, &MainWindow::onShowReductionRequested);
 
     // View mode actions
@@ -566,8 +556,7 @@ bool MainWindow::handleMissingStepDuringPlayback(StepIndex targetStep, PlayingDi
                                      : tr("previous available step is %1").arg(nextStep);
 
     std::cerr << tr("Missing Step During Playback").toStdString()
-              << tr("Step %1 is not available.\nThe %2.\n\nDo you want to continue playback skipping to the next available step, "
-                    "or stop playback at the current step?")
+              << tr("Step %1 is not available.\nThe %2")
                      .arg(targetStep)
                      .arg(nextStepText).toStdString() << endl;
     currentStep = nextStep;
@@ -946,6 +935,22 @@ void MainWindow::onColorSettingsRequested()
     colorSettings->show();
 }
 
+void MainWindow::onCompilationSettingsRequested()
+{
+    auto* compilationSettings = new CompilationSettingsWidget(this);
+    
+    // Set up the widget as a window
+    compilationSettings->setWindowFlags(Qt::Window);
+    compilationSettings->setWindowTitle("Compilation Settings");
+    compilationSettings->resize(800, 600);
+    
+    // Create a default module builder for now
+    auto moduleBuilder = std::make_shared<viz::plugins::CppModuleBuilder>();
+    compilationSettings->setModuleBuilder(moduleBuilder);
+    
+    compilationSettings->show();
+}
+
 void MainWindow::enterNoConfigurationFileMode()
 {
     ui->sceneWidget->setHidden(true);
@@ -1043,21 +1048,45 @@ void MainWindow::onLoadPluginRequested()
 
 void MainWindow::onLoadModelFromDirectoryRequested()
 {
-    QString modelDirectory = QFileDialog::getExistingDirectory(
-        this,
-        tr("Load Model from Directory"),
-        getOOpenCalStartPath(),
-        QFileDialog::ShowDirsOnly);
+    CustomDirectoryDialog dialog(this);
 
-    if (modelDirectory.isEmpty())
+    // Set the starting directory using the same logic as the original dialog
+    QString startPath = getOOpenCalStartPath();
+    if (! startPath.isEmpty())
     {
-        return; // User cancelled
+        dialog.setStartDirectory(startPath);
     }
 
-    loadModelFromDirectory(modelDirectory);
+    if (QDialog::Accepted == dialog.exec())
+    {
+        QString modelDirectory = dialog.getSelectedDirectory();
+        if (! modelDirectory.isEmpty())
+        {
+            // Check which loading mode is selected
+            if (CustomDirectoryDialog::LoadingMode::UseExistingModel == dialog.getLoadingMode())
+            {
+                // Load data using existing model
+                QString existingModelName = dialog.getSelectedExistingModel();
+                if (! existingModelName.isEmpty())
+                {
+                    loadModelDataWithExistingModel(modelDirectory, existingModelName);
+                }
+                else
+                {
+                    QMessageBox::warning(this, tr("No Model Selected"),
+                        tr("Please select a model from the available models list."));
+                }
+            }
+            else // CompileModule mode (default behavior)
+            {
+                // Load model with compilation as before
+                loadModelFromDirectory(modelDirectory, dialog.compilationRequested());
+            }
+        }
+    }
 }
 
-void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
+void MainWindow::loadModelFromDirectory(const QString& modelDirectory, bool forceCompilation)
 {
     // Show wait cursor during model loading
     WaitCursorGuard waitCursor("Loading model from directory...");
@@ -1081,7 +1110,7 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
 
         ModelLoader loader;
         loader.getBuilder()->setProjectRootPath(sourceFileParentDirectoryAbsolutePath());
-        const auto result = loader.loadModelFromDirectory(actualModelDir.string());
+        const auto result = loader.loadModelFromDirectory(actualModelDir.string(), forceCompilation);
 
         if (! result.success)
         {
@@ -1133,42 +1162,56 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory)
             pluginModelName = loadedPlugins.back().name;
         }
         
-        switchToModel(QString::fromStdString(pluginModelName));
-
-        // Step 4: Load configuration from Header.txt
-        progress.setLabelText(tr("Loading configuration..."));
-        QApplication::processEvents();
-
-        // Build path to Header.txt in the model directory
-        fs::path headerPath = actualModelDir / DirectoryConstants::HEADER_FILE_NAME;
-        
-        if (!fs::exists(headerPath))
-        {
-            progress.close();
-
-            QMessageBox::critical(this, tr("Configuration Load Failed"),
-                tr("Header.txt not found in model directory:\n%1").arg(QString::fromStdString(actualModelDir.string())));
-            return;
-        }
-
-        // Open configuration using the config object from ModelLoader
-        // This avoids reading the file twice
-        openConfigurationFile(QString::fromStdString(headerPath.string()), result.config);
-
-        // Add directory to recent directories list
-        addToRecentDirectories(QString::fromStdString(actualModelDir.string()));
-
-        progress.close();
-
-        std::cout << "[DEBUG] " << tr("Model Changed").toStdString()
-                  << tr("Model '%1' loaded successfully from:\n%2\n\nConfiguration loaded and ready to use.")
-                         .arg(QString::fromStdString(pluginModelName))
-                         .arg(QString::fromStdString(actualModelDir.string())).toStdString() << std::endl;
+        loadModelDataWithExistingModel(modelDirectory, QString::fromStdString(pluginModelName));
     }
     catch (const std::exception& e)
     {
         QMessageBox::critical(this, tr("Error"),
             tr("An error occurred while loading the model:\n%1").arg(e.what()));
+    }
+}
+
+void MainWindow::loadModelDataWithExistingModel(const QString& modelDirectory, const QString& existingModelName)
+{
+    try
+    {
+        // The model directory should contain Header.txt and data files
+        namespace fs = std::filesystem;
+        fs::path actualModelDir = fs::path(modelDirectory.toStdString());
+
+        if (! SceneWidgetVisualizerFactory::isModelRegistered(existingModelName.toStdString()))
+        {
+            QMessageBox::critical(this, tr("Model Not Available"),
+                tr("The requested model '%1' is not available in the system.").arg(existingModelName));
+            return;
+        }
+
+        switchToModel(existingModelName);
+
+        // Build path to Header.txt in the model directory
+        fs::path headerPath = actualModelDir / DirectoryConstants::HEADER_FILE_NAME;
+        
+        if (! fs::exists(headerPath))
+        {
+            QMessageBox::critical(this, tr("Configuration Load Failed"),
+                tr("Header.txt not found in model directory:\n%1").arg(QString::fromStdString(actualModelDir.string())));
+            return;
+        }
+
+        // Load configuration from Header.txt
+        openConfigurationFile(QString::fromStdString(headerPath.string()));
+
+        // Add directory to recent directories list
+        addToRecentDirectories(QString::fromStdString(actualModelDir.string()));
+
+        std::cout << "[DEBUG] " << tr("Model Data Loaded").toStdString()
+                  << tr("Model data loaded successfully using existing model '%1' from:\n%2\n\nConfiguration loaded and ready to use.")
+                         .arg(existingModelName)
+                         .arg(QString::fromStdString(actualModelDir.string())).toStdString() << std::endl;
+    }
+    catch (const std::exception& e)
+    {
+        QMessageBox::critical(this, tr("Error"), tr("An error occurred while loading model data:\n%1").arg(e.what()));
     }
 }
 

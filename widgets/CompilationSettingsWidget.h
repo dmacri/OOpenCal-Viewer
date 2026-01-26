@@ -1,0 +1,145 @@
+/** @file CompilationSettingsWidget.h
+ * @brief Widget for displaying and managing C++ module compilation settings.
+ *
+ * This file contains the CompilationSettingsWidget class which provides a user interface
+ * for viewing and potentially modifying C++ compilation options. The widget displays:
+ * - C++ standard settings
+ * - Compiler configuration
+ * - Compilation flags
+ * - Include paths (OOpenCAL and project paths)
+ * - Environment variables and their values
+ *
+ * The widget integrates with CppModuleBuilder to access current compilation
+ * configuration and provides a read-only view of settings (with future extension
+ * capabilities for editing). */
+
+#pragma once
+
+#include <memory>
+#include <QWidget>
+
+class QLabel;
+class QString;
+class QTableWidget;
+class QTableWidgetItem;
+
+namespace Ui
+{
+class CompilationSettingsWidget;
+}
+
+namespace viz::plugins
+{
+class CppModuleBuilder;
+}
+
+/** @class CompilationSettingsWidget
+ * @brief Widget for displaying C++ module compilation settings.
+ *
+ * This class provides a comprehensive interface for viewing compilation settings
+ * used by the CppModuleBuilder. It displays current compiler configuration,
+ * compilation flags, include paths, and environment variables in an organized
+ * and user-friendly manner.
+ *
+ * The widget is designed to be extendable for future editing capabilities
+ * while currently providing a read-only view of the compilation configuration.
+ *
+ * Key features:
+ * - Display current C++ standard
+ * - Show compiler path and availability
+ * - List compilation flags (-shared, -fPIC, -std=)
+ * - Show OOpenCAL include paths
+ * - Display project include paths
+ * - Show environment variables and their values
+ * - Refresh settings on demand
+ *
+ * @note The widget uses Qt's model-view framework for displaying environment
+ * variables and provides automatic refresh capabilities. */
+class CompilationSettingsWidget : public QWidget
+{
+    Q_OBJECT
+
+public:
+    /** @brief Row indices for configuration table */
+    enum ConfigRow 
+    {
+        OOPENCAL_DIR_ROW = 0,
+        OOPENCAL_VIEWER_ROOT_ROW = 1,
+        VTK_INCLUDES_ROW = 2,
+
+        CONFIG_ROWS_COUNT
+    };
+    
+    explicit CompilationSettingsWidget(QWidget* parent = nullptr);
+    ~CompilationSettingsWidget();
+
+    /** @brief Set CppModuleBuilder instance to get settings from
+     * @param builder Shared pointer to module builder */
+    void setModuleBuilder(std::shared_ptr<viz::plugins::CppModuleBuilder> builder);
+
+    /** @brief Refresh all displayed settings from current builder configuration */
+    void refreshSettings();
+
+private slots:
+    /** @brief Handle refresh button click */
+    void onRefreshClicked();
+    
+    /** @brief Handle environment variable selection change */
+    void onEnvironmentVariableSelectionChanged();
+
+private:
+    /** @brief Load configuration values from CMake, environment, and overrides */
+    struct ConfigValues
+    {
+        QString cmakeValue;    // Value set at compile time (read-only)
+        QString envValue;      // Value from environment variable (read-only) 
+        QString currentValue;   // Current editable value (with overrides)
+    };
+    
+    /** @brief Initialize UI components and connections */
+    void setupConnections();
+    
+    /** @brief Load and display compilation settings */
+    void loadCompilationSettings();
+    
+    /** @brief Load and display environment variables */
+    void loadEnvironmentVariables();
+    
+    /** @brief Update compiler status display */
+    void updateCompilerStatus();
+    
+    /** @brief Detect and display C++ standard */
+    void detectCppStandard();
+    
+    /** @brief Generate example compilation command from current settings */
+    QString generateExampleCommand();
+    
+    /** @brief Validate if a path exists and update UI accordingly */
+    void validatePath(const QString& path, QTableWidgetItem* item, const QString& fieldName);
+    void setupConfigTable(QTableWidget* table);
+    void updateConfigValue(const QString& variableName, const QString& value);
+    void validateCompilerAvailability(const QString& compilerPath);
+    void toggleEnvironmentGroup();
+    void updateEnvironmentGroupArrow(bool isExpanded);
+    
+    /** @brief Get compiler version information */
+    QString getCompilerVersion(const QString& compilerPath);
+    
+    /** @brief Get configuration values for OOPENCAL_DIR */
+    ConfigValues getOopencalDirConfig();
+    
+    /** @brief Get configuration values for OOPENCAL_VIEWER_ROOT */
+    ConfigValues getViewerRootConfig();
+    
+    /** @brief Get configuration values for VTK_INCLUDES */
+    ConfigValues getVtkFlagsConfig();
+
+    /** @brief Update additional paths label with current configuration values */
+    void updateAdditionalPaths();
+
+private:
+    Ui::CompilationSettingsWidget* ui;
+    std::shared_ptr<viz::plugins::CppModuleBuilder> m_moduleBuilder;
+    QString m_currentCompiler;
+    QString m_currentStandard;
+};

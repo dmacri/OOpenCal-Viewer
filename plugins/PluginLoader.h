@@ -6,18 +6,20 @@
 
 #pragma once
 
+#include <QLibrary>
+#include <memory>
 #include <string>
 #include <vector>
 
 /** @brief Information about a loaded plugin */
 struct PluginInfo
 {
-    std::string path; ///< Full path to the plugin file
-    std::string name; ///< Plugin name (from getModelName)
-    std::string info; ///< Plugin description (from getPluginInfo)
-    int version{};    ///< Plugin version (from getPluginVersion)
-    void* handle{};   ///< dlopen handle
-    bool isLoaded{};  ///< Load status
+    std::string path;                 ///< Full path to the plugin file
+    std::string name;                 ///< Plugin name (from getModelName)
+    std::string info;                 ///< Plugin description (from getPluginInfo)
+    int version{};                    ///< Plugin version (from getPluginVersion)
+    std::unique_ptr<QLibrary> handle; ///< QLibrary handle for cross-platform plugin loading
+    bool isLoaded{};                  ///< Load status
 };
 
 /** @brief Manages plugin loading and lifecycle
@@ -44,7 +46,7 @@ public:
     /** @brief Load a single plugin from path
      * @param pluginPath Full path to .so file
      * @return true if loaded successfully, false otherwise */
-    bool loadPlugin(const std::string& pluginPath, bool overridePlugin=false);
+    bool loadPlugin(const std::string& pluginPath, bool overridePlugin = false);
 
     /** @brief Load all plugins from a directory
      * @param directory Path to directory containing .so files
