@@ -177,51 +177,108 @@ private:
 template <class Matrix>
 void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
-    const auto numberOfPoints = nRows * nCols;
-    vtkNew<vtkDoubleArray> pointValues;
-    pointValues->SetNumberOfTuples(numberOfPoints);
-    
-    // Set scalar values: points are inserted in order (row, col), but colors are indexed by (nRows - 1 - row) * nCols + col
-    // So we need to map point index to color index
-    for (int row = 0; row < nRows; row++)
+    // Compile-time switch between high-quality cell rendering (true)
+    // and faster point-based rendering (false).
+    constexpr bool kUseCellRendering = true;
+
+    if constexpr (kUseCellRendering)
     {
-        for (int col = 0; col < nCols; col++)
+        const auto numberOfCells = nRows * nCols;
+        vtkNew<vtkDoubleArray> cellValues;
+        cellValues->SetNumberOfTuples(numberOfCells);
+
+        // Set scalar values for cells (one color per cell, no interpolation)
+        for (int row = 0; row < nRows; row++)
         {
-            int pointIndex = row * nCols + col;  // Sequential point index
-            int colorIndex = (nRows - 1 - row) * nCols + col;  // Color index from buidColor()
-            pointValues->SetValue(pointIndex, colorIndex);
+            for (int col = 0; col < nCols; col++)
+            {
+                const int cellId = row * nCols + col;
+                const int colorIndex = (nRows - 1 - row) * nCols + col; // Color index from buidColor()
+                cellValues->SetValue(cellId, colorIndex);
+            }
         }
+
+        vtkNew<vtkLookupTable> lut;
+        lut->SetNumberOfTableValues(numberOfCells);
+
+        vtkNew<vtkPoints> points;
+        for (int row = 0; row <= nRows; row++)
+        {
+            for (int col = 0; col <= nCols; col++)
+            {
+                // Insert points with Y inverted to match buidColor() indexing
+                points->InsertNextPoint(/*x=*/col, /*y=*/nRows - row, /*z=*/1); /// z is not used
+            }
+        }
+
+        vtkNew<vtkStructuredGrid> structuredGrid;
+        structuredGrid->SetDimensions(nCols + 1, nRows + 1, 1);
+        structuredGrid->SetPoints(points);
+        structuredGrid->GetCellData()->SetScalars(cellValues);
+
+        buidColor(lut, nCols, nRows, p, colorSubstateInfos);
+
+        vtkNew<vtkDataSetMapper> gridMapper;
+        gridMapper->UpdateDataObject();
+        gridMapper->SetInputData(structuredGrid);
+        gridMapper->SetLookupTable(lut);
+        gridMapper->SetScalarRange(0, numberOfCells - 1);
+        gridMapper->SetScalarModeToUseCellData();
+        gridMapper->InterpolateScalarsBeforeMappingOff(); // Keep sharp cell boundaries for small grids
+
+        gridActor->SetMapper(gridMapper);
+        renderer->AddActor(gridActor);
     }
-
-    vtkNew<vtkLookupTable> lut;
-    lut->SetNumberOfTableValues(numberOfPoints);
-
-    vtkNew<vtkPoints> points;
-    for (int row = 0; row < nRows; row++)
+    else
     {
-        for (int col = 0; col < nCols; col++)
+        // Original point-based rendering: faster and suitable for large grids.
+        const auto numberOfPoints = nRows * nCols;
+        vtkNew<vtkDoubleArray> pointValues;
+        pointValues->SetNumberOfTuples(numberOfPoints);
+
+        // Set scalar values: points are inserted in order (row, col), but colors are indexed by (nRows - 1 - row) * nCols + col
+        // So we need to map point index to color index
+        for (int row = 0; row < nRows; row++)
         {
-            // Insert points with Y inverted to match buidColor() indexing
-            // buidColor() uses (nRows - 1 - row) so points must be positioned accordingly
-            points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/1); /// z is not used
+            for (int col = 0; col < nCols; col++)
+            {
+                int pointIndex = row * nCols + col;  // Sequential point index
+                int colorIndex = (nRows - 1 - row) * nCols + col;  // Color index from buidColor()
+                pointValues->SetValue(pointIndex, colorIndex);
+            }
         }
+
+        vtkNew<vtkLookupTable> lut;
+        lut->SetNumberOfTableValues(numberOfPoints);
+
+        vtkNew<vtkPoints> points;
+        for (int row = 0; row < nRows; row++)
+        {
+            for (int col = 0; col < nCols; col++)
+            {
+                // Insert points with Y inverted to match buidColor() indexing
+                // buidColor() uses (nRows - 1 - row) so points must be positioned accordingly
+                points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/1); /// z is not used
+            }
+        }
+
+        vtkNew<vtkStructuredGrid> structuredGrid;
+        structuredGrid->SetDimensions(nCols, nRows, 1);
+        structuredGrid->SetPoints(points);
+        structuredGrid->GetPointData()->SetScalars(pointValues);
+
+        buidColor(lut, nCols, nRows, p, colorSubstateInfos);
+
+        vtkNew<vtkDataSetMapper> gridMapper;
+        gridMapper->UpdateDataObject();
+        gridMapper->SetInputData(structuredGrid);
+        gridMapper->SetLookupTable(lut);
+        gridMapper->SetScalarRange(0, numberOfPoints - 1);
+        gridMapper->InterpolateScalarsBeforeMappingOff();
+
+        gridActor->SetMapper(gridMapper);
+        renderer->AddActor(gridActor);
     }
-
-    vtkNew<vtkStructuredGrid> structuredGrid;
-    structuredGrid->SetDimensions(nCols, nRows, 1);
-    structuredGrid->SetPoints(points);
-    structuredGrid->GetPointData()->SetScalars(pointValues);
-
-    buidColor(lut, nCols, nRows, p, colorSubstateInfos);
-
-    vtkNew<vtkDataSetMapper> gridMapper;
-    gridMapper->UpdateDataObject();
-    gridMapper->SetInputData(structuredGrid);
-    gridMapper->SetLookupTable(lut);
-    gridMapper->SetScalarRange(0, numberOfPoints - 1);
-
-    gridActor->SetMapper(gridMapper);
-    renderer->AddActor(gridActor);
 }
 
 template<class Matrix>
