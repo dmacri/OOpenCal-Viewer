@@ -27,7 +27,35 @@
 
 namespace
 {
-constexpr const char defaultCompiler[] = "clang++";
+/** @brief Get the compiler name and version used to build this application
+ * @return Pair of (compiler_name, version_string) e.g. ("clang++", "15.0.7") or ("g++", "13.2.0") */
+std::pair<std::string, std::string> getBuildCompilerInfo()
+{
+#if defined(__clang__)
+    std::ostringstream version;
+    version << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
+    return {"clang++", version.str()};
+#elif defined(__GNUC__) || defined(__GNUG__)
+    std::ostringstream version;
+    version << __GNUC__ << "." << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__;
+    return {"g++", version.str()};
+#elif defined(_MSC_VER)
+    std::ostringstream version;
+    version << _MSC_VER;
+    // Decode version to readable format
+    if (_MSC_VER >= 1940)
+        version << " (VS 2022 17.10+)";
+    else if (_MSC_VER >= 1930)
+        version << " (VS 2022 17.0-17.9)";
+    else if (_MSC_VER >= 1920)
+        version << " (VS 2019)";
+    else if (_MSC_VER >= 1910)
+        version << " (VS 2017)";
+    return {"cl", version.str()};
+#else
+    return {"", ""};
+#endif
+}
 
 /** Returns the name and version of the compiler used to build this binary.
  * Works on Linux, Windows, and macOS.
@@ -35,50 +63,55 @@ constexpr const char defaultCompiler[] = "clang++";
  * @return A string containing compiler name and version (e.g., "g++ 13.2.0" or "clang++ 15.0.7") */
 std::string getCompilerInfo()
 {
-    std::ostringstream info;
+    auto [name, version] = getBuildCompilerInfo();
+    if (name.empty())
+        return "Unknown compiler";
+    return name + " " + version;
+}
 
-#if defined(__clang__)
-    // Clang defines __clang__ and also __GNUC__, so check it first
-    info << "clang++ "
-         << __clang_major__ << "."
-         << __clang_minor__ << "."
-         << __clang_patchlevel__;
-
-#elif defined(__GNUC__) || defined(__GNUG__)
-    // GCC or G++
-    info << "g++ "
-         << __GNUC__ << "."
-         << __GNUC_MINOR__ << "."
-         << __GNUC_PATCHLEVEL__;
-
-#elif defined(_MSC_VER)
-    // Microsoft Visual C++
-    info << "MSVC " << _MSC_VER;
-
-    // Optionally decode the version number to a more readable format
-    // e.g., 1930 = Visual Studio 2022 version 17.0
-    if (_MSC_VER >= 1940)
+/** @brief Select the best available compiler with intelligent fallback
+ * 
+ * Selection priority:
+ * 1. Same compiler and version as used to build the application
+ * 2. Same compiler family (e.g., clang++ or g++) but different version
+ * 3. Other available compilers (g++, clang++, c++)
+ * 
+ * @return Path to best available compiler, or empty string if none found */
+std::string selectDefaultCompiler()
+{
+    auto [buildCompiler, buildVersion] = getBuildCompilerInfo();
+    
+    // Priority 1: Try exact compiler with version (e.g., "clang++-15")
+    if (!buildCompiler.empty() && !buildVersion.empty())
     {
-        info << " (VS 2022 17.10+)";
+        // Extract major version
+        std::string majorVersion = buildVersion.substr(0, buildVersion.find('.'));
+        std::string compilerWithVersion = buildCompiler + "-" + majorVersion;
+        
+        if (viz::plugins::isCompilerAvailable(compilerWithVersion))
+        {
+            return compilerWithVersion;
+        }
     }
-    else if (_MSC_VER >= 1930)
+    
+    // Priority 2: Try same compiler family without version (e.g., "clang++" or "g++")
+    if (!buildCompiler.empty() && viz::plugins::isCompilerAvailable(buildCompiler))
     {
-        info << " (VS 2022 17.0-17.9)";
+        return buildCompiler;
     }
-    else if (_MSC_VER >= 1920)
+    
+    // Priority 3: Try other common compilers
+    const std::vector<std::string> fallbacks = {"g++", "clang++", "c++"};
+    for (const auto& compiler : fallbacks)
     {
-        info << " (VS 2019)";
+        if (compiler != buildCompiler && viz::plugins::isCompilerAvailable(compiler))
+        {
+            return compiler;
+        }
     }
-    else if (_MSC_VER >= 1910)
-    {
-        info << " (VS 2017)";
-    }
-
-#else
-    info << "Unknown compiler";
-#endif
-
-    return info.str();
+    
+    // Fallback to clang++ if nothing found (will show as unavailable in UI)
+    return "clang++";
 }
 } // namespace
 
@@ -137,9 +170,10 @@ void CompilationSettingsWidget::loadCompilationSettings()
 {
     auto& config = viz::plugins::CompilationConfig::getInstance();
     
-    // Load compiler settings
+    // Load compiler settings with intelligent default
+    std::string defaultCompiler = selectDefaultCompiler();
     QString compilerPath = QString::fromStdString(m_moduleBuilder ? m_moduleBuilder->getCompilerPath() : defaultCompiler);
-    ui->compilerValueLabel->setText(compilerPath.isEmpty() ? defaultCompiler : compilerPath);
+    ui->compilerValueLabel->setText(compilerPath.isEmpty() ? QString::fromStdString(defaultCompiler) : compilerPath);
     
     // Validate compiler availability and update status
     validateCompilerAvailability(compilerPath);
@@ -551,7 +585,7 @@ void CompilationSettingsWidget::updateCompilerStatus()
     
     if (compilerPath == "Not set")
     {
-        compilerPath = defaultCompiler;
+        compilerPath = QString::fromStdString(selectDefaultCompiler());
     }
 
     validateCompilerAvailability(compilerPath);
