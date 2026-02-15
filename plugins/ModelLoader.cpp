@@ -270,7 +270,7 @@ bool ModelLoader::generateWrapper(const std::string& wrapperPath, const std::str
 #include <iostream>
 #include <memory>
 #include <string>
-#include "visualiserProxy/SceneWidgetVisualizerAdapter.h"
+#include "visualiserProxy/SceneWidgetVisualizerProxy.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
 
 // The actual model class is defined in the compiled model header
@@ -286,7 +286,7 @@ void registerPlugin()
     std::cout << "Registering " MODEL_NAME " plugin..." << std::endl;
 
     bool success = SceneWidgetVisualizerFactory::registerModel(MODEL_NAME, []() {{
-        return std::make_unique<SceneWidgetVisualizerAdapter<{1}>>(
+        return std::make_unique<SceneWidgetVisualizerTemplate<{1}>>(
             MODEL_NAME
         );
     }});

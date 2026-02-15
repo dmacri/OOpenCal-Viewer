@@ -11,7 +11,7 @@
  * recompiling the application. Models are identified by their string names.
  * 
  * @see ISceneWidgetVisualizer
- * @see SceneWidgetVisualizerAdapter
+ * @see SceneWidgetVisualizerTemplate
  * @see doc/CHANGELOG_RUNTIME_MODELS.md for architectural details */
 
 #pragma once

@@ -6,7 +6,7 @@
 #include <OOpenCAL/models/SciddicaT/SciddicaTCell.h>
 
 #include "ISceneWidgetVisualizer.h"
-#include "SceneWidgetVisualizerAdapter.h"
+#include "SceneWidgetVisualizerProxy.h"
 
 
 std::map<std::string, SceneWidgetVisualizerFactory::ModelCreator>& SceneWidgetVisualizerFactory::getRegistry()
@@ -26,13 +26,13 @@ void SceneWidgetVisualizerFactory::initializeBuiltInModels()
     registerModel("Ball",
                   []()
                   {
-                      return std::make_unique<SceneWidgetVisualizerAdapter<BallCell>>("Ball");
+                      return std::make_unique<SceneWidgetVisualizerTemplate<BallCell>>("Ball");
                   });
 
     registerModel("SciddicaT",
                   []()
                   {
-                      return std::make_unique<SceneWidgetVisualizerAdapter<SciddicaTCell>>("SciddicaT");
+                      return std::make_unique<SceneWidgetVisualizerTemplate<SciddicaTCell>>("SciddicaT");
                   });
 
     isInitializedWithBuildInModels = true;

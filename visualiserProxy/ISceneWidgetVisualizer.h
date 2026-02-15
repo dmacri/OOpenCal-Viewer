@@ -11,7 +11,7 @@
  * where different model types can be visualized using a common interface while
  * maintaining their specific behaviors and requirements.
  * 
- * @see SceneWidgetVisualizerAdapter
+ * @see SceneWidgetVisualizerTemplate
  * @see SceneWidgetVisualizerFactory
  * @see doc/CHANGELOG_RUNTIME_MODELS.md for architectural details */
 
@@ -36,7 +36,7 @@ struct SubstateInfo;
  * allowing the visualization system to work with various models through a uniform interface.
  * 
  * Each model type (e.g., Ball, SciddicaT) provides its own implementation of this interface,
- * typically through the SceneWidgetVisualizerAdapter template class. The interface
+ * typically through the SceneWidgetVisualizerTemplate template class. The interface
  * handles the complete visualization lifecycle, from data loading to rendering.
  * 
  * @note Implementations of this interface should be thread-safe if used in a multi-threaded context. */
