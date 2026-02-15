@@ -74,6 +74,8 @@ private slots: // menu actions
     // Settings submenu
     void onColorSettingsRequested();
     void onCompilationSettingsRequested();
+    void onCellRenderingToggled(bool checked);
+    void syncCellRenderingCheckbox();
 
     // Help submenu:
     void showAboutThisApplicationDialog();

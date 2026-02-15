@@ -191,6 +191,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionLoadModelFromDirectory, &QAction::triggered, this, &MainWindow::onLoadModelFromDirectoryRequested);
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
     connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
+    connect(ui->actionCellRendering, &QAction::triggered, this, &MainWindow::onCellRenderingToggled);
     connect(ui->actionShow_reduction, &QAction::triggered, this, &MainWindow::onShowReductionRequested);
 
     // View mode actions
@@ -907,6 +908,9 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Synchronize flat scene background checkbox with current visibility state
         syncFlatSceneBackgroundCheckbox();
 
+        // Synchronize cell rendering checkbox with current setting
+        syncCellRenderingCheckbox();
+
         // Update UI with new configuration
         showInputFilePathOnBarLabel(configFileName);
 
@@ -949,6 +953,24 @@ void MainWindow::onCompilationSettingsRequested()
     compilationSettings->setModuleBuilder(moduleBuilder);
     
     compilationSettings->show();
+}
+
+void MainWindow::onCellRenderingToggled(bool checked)
+{
+    if (ui->sceneWidget)
+    {
+        ui->sceneWidget->setUseCellRendering(checked);
+        ui->sceneWidget->setViewMode2D(); // this is to refresh visualization
+    }
+}
+
+void MainWindow::syncCellRenderingCheckbox()
+{
+    if (ui->sceneWidget)
+    {
+        bool useCellRendering = ui->sceneWidget->getUseCellRendering();
+        ui->actionCellRendering->setChecked(useCellRendering);
+    }
 }
 
 void MainWindow::enterNoConfigurationFileMode()

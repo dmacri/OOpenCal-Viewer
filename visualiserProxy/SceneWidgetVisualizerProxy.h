@@ -89,9 +89,9 @@ public:
         modelReader.readStageStateFromFilesForStep(p, sp, lines);
     }
 
-    void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
+    void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos, bool useCellRendering = false) override
     {
-        visualiser.drawWithVTK(p, nRows, nCols, renderer, gridActor, colorSubstateInfos);
+        visualiser.drawWithVTK(p, nRows, nCols, renderer, gridActor, colorSubstateInfos, useCellRendering);
     }
 
     void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
