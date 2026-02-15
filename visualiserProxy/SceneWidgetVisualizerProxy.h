@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <string>
+#include <vector>
 #include "ISceneWidgetVisualizer.h"
 #include "data/ModelReader.hpp"
 #include "visualiser/Visualizer.hpp"
@@ -48,10 +50,6 @@ public:
         : m_modelName(modelName)
     {
     }
-
-    Visualizer visualiser;            ///< The visualizer instance for rendering the model
-    ModelReader<Cell> modelReader;    ///< The reader for loading and managing model data
-    std::vector<std::vector<Cell>> p; ///< 2D vector storing the cell data
 
     /** @brief Initializes the internal matrix with the specified dimensions.
      *
@@ -158,4 +156,8 @@ public:
 
 private:
     const std::string m_modelName;
+
+    Visualizer visualiser;            ///< The visualizer instance for rendering the model
+    ModelReader<Cell> modelReader;    ///< The reader for loading and managing model data
+    std::vector<std::vector<Cell>> p; ///< 2D vector storing the cell data
 };
