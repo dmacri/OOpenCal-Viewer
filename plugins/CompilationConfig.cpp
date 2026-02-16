@@ -9,6 +9,44 @@
 #include <unordered_set>
 #include <filesystem>
 #include <vector>
+#include <QProcess>
+#include <QString>
+#include <QStringList>
+#include <QRegularExpression>
+
+namespace
+{
+/** @brief Extract compiler version from compiler executable using QProcess
+ * @param compilerName Name or path to compiler executable
+ * @return Version string (e.g., "15.2.0") or empty string if extraction failed */
+std::string extractCompilerVersion(const std::string& compilerName)
+{
+    QProcess process;
+    process.start(QString::fromStdString(compilerName), QStringList() << "--version");
+    
+    if (!process.waitForFinished(1000)) // 1 second timeout
+        return "";
+    
+    QString output = process.readAllStandardOutput();
+    if (output.isEmpty())
+        return "";
+    
+    // Get first line of output
+    QString firstLine = output.split('\n').first();
+    
+    // Use regex to extract version number (e.g., "15.2.0" or "11.4.0")
+    // Pattern matches: one or more digits, followed by dot and digits, optionally repeated
+    QRegularExpression versionRegex(R"((\d+\.\d+(?:\.\d+)?))");
+    QRegularExpressionMatch match = versionRegex.match(firstLine);
+    
+    if (match.hasMatch())
+    {
+        return match.captured(1).toStdString();
+    }
+    
+    return "";
+}
+} // anonymous namespace
 
 namespace viz::plugins
 {
@@ -109,31 +147,14 @@ std::vector<CompilationConfig::CompilerInfo> CompilationConfig::detectAvailableC
             info.isFamilyMatch = (family == buildCompiler);
             info.isExactMatch = false;
             
-            // Try to get version
-            std::string versionCmd = family + " --version 2>&1 | head -n1";
-            FILE* pipe = popen(versionCmd.c_str(), "r");
-            if (pipe)
+            // Extract version using helper function
+            info.version = extractCompilerVersion(family);
+            
+            // Check if exact match
+            if (info.isFamilyMatch && !buildVersion.empty() && !info.version.empty())
             {
-                char buffer[256];
-                if (fgets(buffer, sizeof(buffer), pipe))
-                {
-                    std::string output(buffer);
-                    // Extract version number (simple pattern matching)
-                    size_t pos = output.find_first_of("0123456789");
-                    if (pos != std::string::npos)
-                    {
-                        size_t endPos = output.find_first_not_of("0123456789.", pos);
-                        info.version = output.substr(pos, endPos - pos);
-                        
-                        // Check if exact match
-                        if (info.isFamilyMatch && !buildVersion.empty())
-                        {
-                            std::string detectedMajor = info.version.substr(0, info.version.find('.'));
-                            info.isExactMatch = (detectedMajor == buildMajorVersion);
-                        }
-                    }
-                }
-                pclose(pipe);
+                std::string detectedMajor = info.version.substr(0, info.version.find('.'));
+                info.isExactMatch = (detectedMajor == buildMajorVersion);
             }
             
             compilers.push_back(info);
@@ -154,24 +175,8 @@ std::vector<CompilationConfig::CompilerInfo> CompilationConfig::detectAvailableC
                 info.isFamilyMatch = (family == buildCompiler);
                 info.isExactMatch = (family == buildCompiler && std::to_string(version) == buildMajorVersion);
                 
-                // Try to get full version
-                std::string versionCmd = versionedCompiler + " --version 2>&1 | head -n1";
-                FILE* pipe = popen(versionCmd.c_str(), "r");
-                if (pipe)
-                {
-                    char buffer[256];
-                    if (fgets(buffer, sizeof(buffer), pipe))
-                    {
-                        std::string output(buffer);
-                        size_t pos = output.find_first_of("0123456789");
-                        if (pos != std::string::npos)
-                        {
-                            size_t endPos = output.find_first_not_of("0123456789.", pos);
-                            info.version = output.substr(pos, endPos - pos);
-                        }
-                    }
-                    pclose(pipe);
-                }
+                // Extract version using helper function
+                info.version = extractCompilerVersion(versionedCompiler);
                 
                 compilers.push_back(info);
             }
