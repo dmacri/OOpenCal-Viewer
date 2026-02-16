@@ -62,9 +62,16 @@ SubstateDisplayWidget::~SubstateDisplayWidget()
 
 void SubstateDisplayWidget::connectSignals()
 {
-    connect(ui->use3dButton, &QPushButton::clicked, this, [this]() {
-        emit use3rdDimensionRequested(fieldName());
-    });
+    // Connect "Use as 3D" checkbox state change
+    #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+        connect(ui->use3dCheckBox, &QCheckBox::checkStateChanged, this, [this]() {
+            emit use3dStateChanged(fieldName(), ui->use3dCheckBox->isChecked());
+        });
+    #else
+        connect(ui->use3dCheckBox, &QCheckBox::stateChanged, this, [this]() {
+            emit use3dStateChanged(fieldName(), ui->use3dCheckBox->isChecked());
+        });
+    #endif
 
     // Connect "Use as 2D" checkbox state change
     #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
@@ -238,15 +245,15 @@ void SubstateDisplayWidget::updateButtonState()
     const bool hasMax = hasMaxValue();
     const bool isEnabled = hasMin && hasMax;
     
-    // Update "Use as 3D" button state
-    ui->use3dButton->setEnabled(isEnabled);
+    // Update "Use as 3D" checkbox state
+    ui->use3dCheckBox->setEnabled(isEnabled);
     if (isEnabled)
     {
-        ui->use3dButton->setToolTip("Use this field as 3rd dimension in 3D visualization");
+        ui->use3dCheckBox->setToolTip("Use this field as 3rd dimension in 3D visualization (only one substate can be 3D at a time)");
     }
     else
     {
-        ui->use3dButton->setToolTip("Set both Min and Max values to enable 3D visualization");
+        ui->use3dCheckBox->setToolTip("Set both Min and Max values to enable 3D visualization");
     }
 
     // Update "Use as 2D" button state (same requirement as 3D)
@@ -262,7 +269,7 @@ void SubstateDisplayWidget::installEventFiltersOnChildren()
     ui->minSpinBox->installEventFilter(this);
     ui->maxSpinBox->installEventFilter(this);
     ui->formatLineEdit->installEventFilter(this);
-    ui->use3dButton->installEventFilter(this);
+    ui->use3dCheckBox->installEventFilter(this);
     ui->nameLabel->installEventFilter(this);
     ui->valueLabel->installEventFilter(this);
 }
@@ -585,4 +592,14 @@ void SubstateDisplayWidget::startDrag()
     
     // Execute the drag operation
     drag->exec(Qt::MoveAction);
+}
+
+bool SubstateDisplayWidget::isUse3DChecked() const
+{
+    return ui->use3dCheckBox->isChecked();
+}
+
+void SubstateDisplayWidget::setUse3DChecked(bool checked)
+{
+    ui->use3dCheckBox->setChecked(checked);
 }

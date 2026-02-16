@@ -140,11 +140,20 @@ public:
     /// @param checked True to check the checkbox
     void setUse2DChecked(bool checked);
 
+    /// @brief Check if "Use as 3D" checkbox is checked.
+    /// @return True if checkbox is checked
+    bool isUse3DChecked() const;
+
+    /// @brief Set "Use as 3D" checkbox state.
+    /// @param checked True to check the checkbox
+    void setUse3DChecked(bool checked);
+
 signals:
-    /** @brief Signal emitted when "Use as 3rd dimension" button is clicked.
+    /** @brief Signal emitted when "Use as 3D" checkbox state changes.
      * 
-     * @param fieldName The name of the field */
-    void use3rdDimensionRequested(const std::string& fieldName);
+     * @param fieldName The name of the field
+     * @param checked True if checkbox is now checked, false if unchecked */
+    void use3dStateChanged(const std::string& fieldName, bool checked);
 
     /** @brief Signal emitted when "Use as 2D" button is clicked.
      * 

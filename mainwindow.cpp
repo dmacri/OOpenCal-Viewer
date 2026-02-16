@@ -828,8 +828,8 @@ void MainWindow::updateSubstateDockeWidget()
         ui->substatesDockWidget->updateSubstates(settingParam);
 
         // TODO: GB: Do we really need to send this to MainWindow? Maybe SubstatesDockWidget can directly control SceneWidget?
-        // Connect signal for 3D visualization request
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3rdDimensionRequested, this, &MainWindow::onUse3rdDimensionRequested);
+        // Connect signal for 3D visualization state changes
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3dStateChanged, this, &MainWindow::onUse3dStateChanged);
         connect(ui->substatesDockWidget, &SubstatesDockWidget::useSubstatesColorringRequested, this, &MainWindow::onUseSubstatesColorringRequested);
         connect(ui->substatesDockWidget, &SubstatesDockWidget::deactivateRequested, this, &MainWindow::onDeactivateRequested);
         connect(ui->substatesDockWidget, &SubstatesDockWidget::visualizationRefreshRequested, ui->sceneWidget, &SceneWidget::refreshVisualization);
@@ -2149,8 +2149,21 @@ void MainWindow::onRecentDirectoryTriggered()
     loadModelFromDirectory(directoryPath);
 }
 
-void MainWindow::onUse3rdDimensionRequested(const std::string& fieldName)
+void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
 {
+    // If checkbox is being unchecked, disable 3D mode
+    if (!checked)
+    {
+        // Show wait cursor during view mode change
+        WaitCursorGuard waitCursor("Switching to 2D visualization...");
+        
+        // Disable 3D substate visualization
+        ui->sceneWidget->setActiveSubstateFor3D("");
+        ui->sceneWidget->refreshVisualization();
+        return;
+    }
+    
+    // Checkbox is being checked - enable 3D mode for this substate
     // Show wait cursor during view mode change
     WaitCursorGuard waitCursor("Switching to 3D substate visualization...");
 
