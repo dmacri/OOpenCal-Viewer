@@ -64,21 +64,12 @@
             </property>
             <layout class="QHBoxLayout" name="horizontalLayout_3">
              <item>
-              <widget class="QLabel" name="compilerValueLabel">
-               <property name="autoFillBackground">
-                <bool>true</bool>
+              <widget class="QComboBox" name="compilerComboBox">
+               <property name="editable">
+                <bool>false</bool>
                </property>
-               <property name="frameShape">
-                <enum>QFrame::Shape::StyledPanel</enum>
-               </property>
-               <property name="frameShadow">
-                <enum>QFrame::Shadow::Sunken</enum>
-               </property>
-               <property name="text">
-                <string>Not set</string>
-               </property>
-               <property name="textInteractionFlags">
-                <set>Qt::TextInteractionFlag::TextSelectableByMouse</set>
+               <property name="sizeAdjustPolicy">
+                <enum>QComboBox::SizeAdjustPolicy::AdjustToContents</enum>
                </property>
               </widget>
              </item>

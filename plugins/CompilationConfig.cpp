@@ -85,6 +85,115 @@ std::string CompilationConfig::getDefaultCompiler()
     return "clang++";
 }
 
+std::vector<CompilationConfig::CompilerInfo> CompilationConfig::detectAvailableCompilers()
+{
+    std::vector<CompilerInfo> compilers;
+    auto [buildCompiler, buildVersion] = getBuildCompilerInfo();
+    std::string buildMajorVersion = buildVersion.empty() ? "" : buildVersion.substr(0, buildVersion.find('.'));
+    
+    // Define compiler families to search
+    const std::vector<std::string> families = {"g++", "clang++", "c++"};
+    
+    // For each family, try to find versioned variants
+    // We'll check versions from 8 to 20 (covering most modern compilers)
+    for (const auto& family : families)
+    {
+        // First, try the base compiler (e.g., "g++", "clang++")
+        if (isCompilerAvailable(family))
+        {
+            CompilerInfo info;
+            info.name = family;
+            info.family = family;
+            info.fullPath = family; // Will be resolved by system PATH
+            info.isAvailable = true;
+            info.isFamilyMatch = (family == buildCompiler);
+            info.isExactMatch = false;
+            
+            // Try to get version
+            std::string versionCmd = family + " --version 2>&1 | head -n1";
+            FILE* pipe = popen(versionCmd.c_str(), "r");
+            if (pipe)
+            {
+                char buffer[256];
+                if (fgets(buffer, sizeof(buffer), pipe))
+                {
+                    std::string output(buffer);
+                    // Extract version number (simple pattern matching)
+                    size_t pos = output.find_first_of("0123456789");
+                    if (pos != std::string::npos)
+                    {
+                        size_t endPos = output.find_first_not_of("0123456789.", pos);
+                        info.version = output.substr(pos, endPos - pos);
+                        
+                        // Check if exact match
+                        if (info.isFamilyMatch && !buildVersion.empty())
+                        {
+                            std::string detectedMajor = info.version.substr(0, info.version.find('.'));
+                            info.isExactMatch = (detectedMajor == buildMajorVersion);
+                        }
+                    }
+                }
+                pclose(pipe);
+            }
+            
+            compilers.push_back(info);
+        }
+        
+        // Now try versioned variants (e.g., "g++-11", "g++-12", "clang++-15")
+        for (int version = 8; version <= 20; ++version)
+        {
+            std::string versionedCompiler = family + "-" + std::to_string(version);
+            
+            if (isCompilerAvailable(versionedCompiler))
+            {
+                CompilerInfo info;
+                info.name = versionedCompiler;
+                info.family = family;
+                info.fullPath = versionedCompiler;
+                info.isAvailable = true;
+                info.isFamilyMatch = (family == buildCompiler);
+                info.isExactMatch = (family == buildCompiler && std::to_string(version) == buildMajorVersion);
+                
+                // Try to get full version
+                std::string versionCmd = versionedCompiler + " --version 2>&1 | head -n1";
+                FILE* pipe = popen(versionCmd.c_str(), "r");
+                if (pipe)
+                {
+                    char buffer[256];
+                    if (fgets(buffer, sizeof(buffer), pipe))
+                    {
+                        std::string output(buffer);
+                        size_t pos = output.find_first_of("0123456789");
+                        if (pos != std::string::npos)
+                        {
+                            size_t endPos = output.find_first_not_of("0123456789.", pos);
+                            info.version = output.substr(pos, endPos - pos);
+                        }
+                    }
+                    pclose(pipe);
+                }
+                
+                compilers.push_back(info);
+            }
+        }
+    }
+    
+    // Sort compilers by priority:
+    // 1. Exact match (same family and version)
+    // 2. Family match (same family, different version) - newest first
+    // 3. Other compilers
+    std::sort(compilers.begin(), compilers.end(), [](const CompilerInfo& a, const CompilerInfo& b) {
+        if (a.isExactMatch != b.isExactMatch)
+            return a.isExactMatch > b.isExactMatch;
+        if (a.isFamilyMatch != b.isFamilyMatch)
+            return a.isFamilyMatch > b.isFamilyMatch;
+        // Within same category, sort by version (descending)
+        return a.version > b.version;
+    });
+    
+    return compilers;
+}
+
 CompilationConfig& CompilationConfig::getInstance()
 {
     static CompilationConfig instance;

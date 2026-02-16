@@ -16,7 +16,9 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include <QWidget>
+#include "plugins/CompilationConfig.h"
 
 class QLabel;
 class QString;
@@ -86,6 +88,9 @@ private slots:
     
     /** @brief Handle environment variable selection change */
     void onEnvironmentVariableSelectionChanged();
+    
+    /** @brief Handle compiler selection change in ComboBox */
+    void onCompilerSelectionChanged(int index);
 
 private:
     /** @brief Load configuration values from CMake, environment, and overrides */
@@ -108,6 +113,12 @@ private:
     /** @brief Update compiler status display */
     void updateCompilerStatus();
     
+    /** @brief Populate compiler ComboBox with detected compilers */
+    void populateCompilerComboBox();
+    
+    /** @brief Update ComboBox background color based on compiler match quality */
+    void updateCompilerComboBoxStyle();
+    
     /** @brief Detect and display C++ standard */
     void detectCppStandard();
     
@@ -118,7 +129,6 @@ private:
     void validatePath(const QString& path, QTableWidgetItem* item, const QString& fieldName);
     void setupConfigTable(QTableWidget* table);
     void updateConfigValue(const QString& variableName, const QString& value);
-    void validateCompilerAvailability(const QString& compilerPath);
     void toggleEnvironmentGroup();
     void updateEnvironmentGroupArrow(bool isExpanded);
     
@@ -142,4 +152,5 @@ private:
     std::shared_ptr<viz::plugins::CppModuleBuilder> m_moduleBuilder;
     QString m_currentCompiler;
     QString m_currentStandard;
+    std::vector<viz::plugins::CompilationConfig::CompilerInfo> m_availableCompilers;
 };

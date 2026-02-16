@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <utility>
 
 namespace viz::plugins
 {
@@ -183,6 +184,27 @@ public:
      * 
      * @return Path to best available compiler, or "clang++" as fallback */
     static std::string getDefaultCompiler();
+
+    /** @brief Compiler information structure */
+    struct CompilerInfo
+    {
+        std::string name;           ///< Compiler executable name (e.g., "g++-15", "clang++")
+        std::string family;         ///< Compiler family ("g++", "clang++", "cl")
+        std::string version;        ///< Version string (e.g., "15.2.0")
+        std::string fullPath;       ///< Full path to compiler executable
+        bool isExactMatch;          ///< True if exact match with build compiler
+        bool isFamilyMatch;         ///< True if same family as build compiler
+        bool isAvailable;           ///< True if compiler is available in system
+    };
+
+    /** @brief Detect all available compilers in the system
+     * 
+     * This function searches for common C++ compilers (g++, clang++, c++) and their
+     * versioned variants (e.g., g++-11, g++-12, clang++-15, etc.).
+     * 
+     * @return Vector of CompilerInfo structures, sorted by priority (exact match first,
+     *         then family matches, then other compilers) */
+    static std::vector<CompilerInfo> detectAvailableCompilers();
 
 private:
     CompilationConfig() = default;

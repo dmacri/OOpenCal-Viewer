@@ -74,19 +74,31 @@ void CompilationSettingsWidget::setupConnections()
     connect(ui->refreshButton, &QPushButton::clicked, this, &CompilationSettingsWidget::onRefreshClicked);
     
     connect(ui->environmentTableWidget, &QTableWidget::itemSelectionChanged, this, &CompilationSettingsWidget::onEnvironmentVariableSelectionChanged);
+    
+    connect(ui->compilerComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CompilationSettingsWidget::onCompilerSelectionChanged);
 }
 
 void CompilationSettingsWidget::loadCompilationSettings()
 {
     auto& config = viz::plugins::CompilationConfig::getInstance();
     
+    // Populate compiler ComboBox with detected compilers
+    populateCompilerComboBox();
+    
     // Load compiler settings with intelligent default from CompilationConfig
     std::string defaultCompiler = viz::plugins::CompilationConfig::getDefaultCompiler();
     QString compilerPath = QString::fromStdString(m_moduleBuilder ? m_moduleBuilder->getCompilerPath() : defaultCompiler);
-    ui->compilerValueLabel->setText(compilerPath.isEmpty() ? QString::fromStdString(defaultCompiler) : compilerPath);
     
-    // Validate compiler availability and update status
-    validateCompilerAvailability(compilerPath);
+    // Select the current compiler in ComboBox
+    int index = ui->compilerComboBox->findText(compilerPath);
+    if (index >= 0)
+    {
+        ui->compilerComboBox->setCurrentIndex(index);
+    }
+    else if (ui->compilerComboBox->count() > 0)
+    {
+        ui->compilerComboBox->setCurrentIndex(0);
+    }
 
     // Setup configuration table with 3 rows
     setupConfigTable(ui->configTableWidget);
@@ -331,60 +343,20 @@ QString CompilationSettingsWidget::getCompilerVersion(const QString& compilerPat
     return "";
 }
 
-void CompilationSettingsWidget::validateCompilerAvailability(const QString& compilerPath)
-{
-    QString resolvedPath;
-
-    // Try to resolve compiler path:
-    // 1. If a path was provided, check it directly
-    // 2. Otherwise, try to find it in PATH (e.g. default compiler like "gcc")
-    if (! compilerPath.isEmpty())
-    {
-        QFileInfo compilerInfo(compilerPath);
-        if (compilerInfo.exists() && compilerInfo.isExecutable())
-        {
-            resolvedPath = compilerInfo.absoluteFilePath();
-        }
-        else
-        {
-            resolvedPath = QStandardPaths::findExecutable(compilerPath);
-        }
-    }
-
-    // Compiler found
-    if (! resolvedPath.isEmpty())
-    {
-        QString compilerVersion = getCompilerVersion(resolvedPath);
-        QString compilerName = QFileInfo(resolvedPath).baseName();
-        
-        QString tooltip;
-        if (compilerVersion.isEmpty())
-        {
-            tooltip = tr("Compiler is available: %1").arg(resolvedPath);
-        }
-        else
-        {
-            tooltip = tr("Compiler: %1 %2\nPath: %3").arg(compilerName, compilerVersion, resolvedPath);
-        }
-
-        tooltip += tr("\nNOTE: To compile %1 used %2").arg(QApplication::applicationName(), QString::fromStdString(viz::plugins::CompilationConfig::getBuildCompilerInfoString()));
-
-        ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
-        ui->compilerValueLabel->setToolTip(tooltip);
-    }
-    // Compiler not found
-    else
-    {
-        ui->compilerValueLabel->setStyleSheet("color: red; background-color: #ffe6e6;");
-        ui->compilerValueLabel->setToolTip(tr("Compiler not found: %1").arg(compilerPath));
-    }
-}
-
 QString CompilationSettingsWidget::generateExampleCommand()
 {
     auto& config = viz::plugins::CompilationConfig::getInstance();
     
-    QString compiler = ui->compilerValueLabel->text();
+    // Get compiler from ComboBox
+    QString compiler;
+    if (ui->compilerComboBox->currentIndex() >= 0 && ui->compilerComboBox->currentIndex() < static_cast<int>(m_availableCompilers.size()))
+    {
+        compiler = QString::fromStdString(m_availableCompilers[ui->compilerComboBox->currentIndex()].name);
+    }
+    else
+    {
+        compiler = ui->compilerComboBox->currentText();
+    }
     QString standard = ui->cppStandardValueLabel->text();
     if (standard == "Auto-detect")
     {
@@ -491,14 +463,128 @@ void CompilationSettingsWidget::loadEnvironmentVariables()
 
 void CompilationSettingsWidget::updateCompilerStatus()
 {
-    QString compilerPath = ui->compilerValueLabel->text();
-    
-    if (compilerPath == "Not set")
-    {
-        compilerPath = QString::fromStdString(viz::plugins::CompilationConfig::getDefaultCompiler());
-    }
+    updateCompilerComboBoxStyle();
+}
 
-    validateCompilerAvailability(compilerPath);
+void CompilationSettingsWidget::populateCompilerComboBox()
+{
+    ui->compilerComboBox->clear();
+    
+    // Detect all available compilers
+    m_availableCompilers = viz::plugins::CompilationConfig::detectAvailableCompilers();
+    
+    if (m_availableCompilers.empty())
+    {
+        ui->compilerComboBox->addItem("No compiler found");
+        ui->compilerComboBox->setEnabled(false);
+        return;
+    }
+    
+    ui->compilerComboBox->setEnabled(true);
+    
+    // Add compilers to ComboBox with formatted display
+    for (const auto& compiler : m_availableCompilers)
+    {
+        QString displayText = QString::fromStdString(compiler.name);
+        if (!compiler.version.empty())
+        {
+            displayText += QString(" (%1)").arg(QString::fromStdString(compiler.version));
+        }
+        
+        // Add marker for exact/family match
+        if (compiler.isExactMatch)
+        {
+            displayText += " ✓";
+        }
+        else if (compiler.isFamilyMatch)
+        {
+            displayText += " ~";
+        }
+        
+        ui->compilerComboBox->addItem(displayText, QString::fromStdString(compiler.name));
+    }
+    
+    // Update styling
+    updateCompilerComboBoxStyle();
+}
+
+void CompilationSettingsWidget::updateCompilerComboBoxStyle()
+{
+    if (m_availableCompilers.empty() || ui->compilerComboBox->currentIndex() < 0)
+    {
+        // No compiler available - red background
+        ui->compilerComboBox->setStyleSheet(
+            "QComboBox { background-color: #ffe6e6; color: #cc0000; }"
+        );
+        ui->compilerComboBox->setToolTip(tr("No C++ compiler found in system"));
+        return;
+    }
+    
+    int currentIndex = ui->compilerComboBox->currentIndex();
+    if (currentIndex >= static_cast<int>(m_availableCompilers.size()))
+        return;
+    
+    const auto& selectedCompiler = m_availableCompilers[currentIndex];
+    auto [buildCompiler, buildVersion] = viz::plugins::CompilationConfig::getBuildCompilerInfo();
+    
+    QString tooltip = tr("Selected compiler: %1")
+        .arg(QString::fromStdString(selectedCompiler.name));
+    
+    if (!selectedCompiler.version.empty())
+    {
+        tooltip += tr("\nVersion: %1").arg(QString::fromStdString(selectedCompiler.version));
+    }
+    
+    tooltip += tr("\n\nApplication built with: %1")
+        .arg(QString::fromStdString(viz::plugins::CompilationConfig::getBuildCompilerInfoString()));
+    
+    if (selectedCompiler.isExactMatch)
+    {
+        // Exact match - green background
+        ui->compilerComboBox->setStyleSheet(
+            "QComboBox { background-color: #e6ffe6; color: #006600; }"
+        );
+        tooltip += tr("\n\n✓ Exact match: Same compiler and version");
+    }
+    else if (selectedCompiler.isFamilyMatch)
+    {
+        // Family match - yellow-green background
+        ui->compilerComboBox->setStyleSheet(
+            "QComboBox { background-color: #ffffcc; color: #666600; }"
+        );
+        tooltip += tr("\n\n~ Family match: Same compiler family, different version");
+    }
+    else
+    {
+        // Different compiler - yellow background
+        ui->compilerComboBox->setStyleSheet(
+            "QComboBox { background-color: #fff4cc; color: #996600; }"
+        );
+        tooltip += tr("\n\n⚠ Different compiler family");
+    }
+    
+    ui->compilerComboBox->setToolTip(tooltip);
+}
+
+void CompilationSettingsWidget::onCompilerSelectionChanged(int index)
+{
+    if (index < 0 || index >= static_cast<int>(m_availableCompilers.size()))
+        return;
+    
+    const auto& selectedCompiler = m_availableCompilers[index];
+    
+    // Update the module builder's compiler path
+    if (m_moduleBuilder)
+    {
+        m_moduleBuilder->setCompilerPath(selectedCompiler.name);
+    }
+    
+    // Update styling based on selection
+    updateCompilerComboBoxStyle();
+    
+    // Regenerate example command with new compiler
+    QString command = generateExampleCommand();
+    ui->commandTextEdit->setPlainText(command);
 }
 
 void CompilationSettingsWidget::detectCppStandard()
