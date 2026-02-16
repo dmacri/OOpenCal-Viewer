@@ -25,96 +25,6 @@
 #include "plugins/CppModuleBuilder.h"
 #include "plugins/CompilationConfig.h"
 
-namespace
-{
-/** @brief Get the compiler name and version used to build this application
- * @return Pair of (compiler_name, version_string) e.g. ("clang++", "15.0.7") or ("g++", "13.2.0") */
-std::pair<std::string, std::string> getBuildCompilerInfo()
-{
-#if defined(__clang__)
-    std::ostringstream version;
-    version << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
-    return {"clang++", version.str()};
-#elif defined(__GNUC__) || defined(__GNUG__)
-    std::ostringstream version;
-    version << __GNUC__ << "." << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__;
-    return {"g++", version.str()};
-#elif defined(_MSC_VER)
-    std::ostringstream version;
-    version << _MSC_VER;
-    // Decode version to readable format
-    if (_MSC_VER >= 1940)
-        version << " (VS 2022 17.10+)";
-    else if (_MSC_VER >= 1930)
-        version << " (VS 2022 17.0-17.9)";
-    else if (_MSC_VER >= 1920)
-        version << " (VS 2019)";
-    else if (_MSC_VER >= 1910)
-        version << " (VS 2017)";
-    return {"cl", version.str()};
-#else
-    return {"", ""};
-#endif
-}
-
-/** Returns the name and version of the compiler used to build this binary.
- * Works on Linux, Windows, and macOS.
- *
- * @return A string containing compiler name and version (e.g., "g++ 13.2.0" or "clang++ 15.0.7") */
-std::string getCompilerInfo()
-{
-    auto [name, version] = getBuildCompilerInfo();
-    if (name.empty())
-        return "Unknown compiler";
-    return name + " " + version;
-}
-
-/** @brief Select the best available compiler with intelligent fallback
- * 
- * Selection priority:
- * 1. Same compiler and version as used to build the application
- * 2. Same compiler family (e.g., clang++ or g++) but different version
- * 3. Other available compilers (g++, clang++, c++)
- * 
- * @return Path to best available compiler, or empty string if none found */
-std::string selectDefaultCompiler()
-{
-    auto [buildCompiler, buildVersion] = getBuildCompilerInfo();
-    
-    // Priority 1: Try exact compiler with version (e.g., "clang++-15")
-    if (!buildCompiler.empty() && !buildVersion.empty())
-    {
-        // Extract major version
-        std::string majorVersion = buildVersion.substr(0, buildVersion.find('.'));
-        std::string compilerWithVersion = buildCompiler + "-" + majorVersion;
-        
-        if (viz::plugins::isCompilerAvailable(compilerWithVersion))
-        {
-            return compilerWithVersion;
-        }
-    }
-    
-    // Priority 2: Try same compiler family without version (e.g., "clang++" or "g++")
-    if (!buildCompiler.empty() && viz::plugins::isCompilerAvailable(buildCompiler))
-    {
-        return buildCompiler;
-    }
-    
-    // Priority 3: Try other common compilers
-    const std::vector<std::string> fallbacks = {"g++", "clang++", "c++"};
-    for (const auto& compiler : fallbacks)
-    {
-        if (compiler != buildCompiler && viz::plugins::isCompilerAvailable(compiler))
-        {
-            return compiler;
-        }
-    }
-    
-    // Fallback to clang++ if nothing found (will show as unavailable in UI)
-    return "clang++";
-}
-} // namespace
-
 
 CompilationSettingsWidget::CompilationSettingsWidget(QWidget* parent)
     : QWidget(parent)
@@ -170,8 +80,8 @@ void CompilationSettingsWidget::loadCompilationSettings()
 {
     auto& config = viz::plugins::CompilationConfig::getInstance();
     
-    // Load compiler settings with intelligent default
-    std::string defaultCompiler = selectDefaultCompiler();
+    // Load compiler settings with intelligent default from CompilationConfig
+    std::string defaultCompiler = viz::plugins::CompilationConfig::getDefaultCompiler();
     QString compilerPath = QString::fromStdString(m_moduleBuilder ? m_moduleBuilder->getCompilerPath() : defaultCompiler);
     ui->compilerValueLabel->setText(compilerPath.isEmpty() ? QString::fromStdString(defaultCompiler) : compilerPath);
     
@@ -457,7 +367,7 @@ void CompilationSettingsWidget::validateCompilerAvailability(const QString& comp
             tooltip = tr("Compiler: %1 %2\nPath: %3").arg(compilerName, compilerVersion, resolvedPath);
         }
 
-        tooltip += tr("\nNOTE: To compile %1 used %2").arg(QApplication::applicationName(), QString::fromStdString(getCompilerInfo()));
+        tooltip += tr("\nNOTE: To compile %1 used %2").arg(QApplication::applicationName(), QString::fromStdString(viz::plugins::CompilationConfig::getBuildCompilerInfoString()));
 
         ui->compilerValueLabel->setStyleSheet("color: green; background-color: #e6ffe6;");
         ui->compilerValueLabel->setToolTip(tooltip);
@@ -585,7 +495,7 @@ void CompilationSettingsWidget::updateCompilerStatus()
     
     if (compilerPath == "Not set")
     {
-        compilerPath = QString::fromStdString(selectDefaultCompiler());
+        compilerPath = QString::fromStdString(viz::plugins::CompilationConfig::getDefaultCompiler());
     }
 
     validateCompilerAvailability(compilerPath);

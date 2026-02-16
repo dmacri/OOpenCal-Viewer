@@ -2,15 +2,89 @@
  * @brief Implementation of CompilationConfig singleton for managing compilation settings. */
 
 #include "CompilationConfig.h"
+#include "CppModuleBuilder.h" // for isCompilerAvailable()
 
 #include <sstream>
 #include <cstdlib>
 #include <unordered_set>
 #include <filesystem>
-#include <sstream>
+#include <vector>
 
 namespace viz::plugins
 {
+std::pair<std::string, std::string> CompilationConfig::getBuildCompilerInfo()
+{
+#if defined(__clang__)
+    std::ostringstream version;
+    version << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
+    return {"clang++", version.str()};
+#elif defined(__GNUC__) || defined(__GNUG__)
+    std::ostringstream version;
+    version << __GNUC__ << "." << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__;
+    return {"g++", version.str()};
+#elif defined(_MSC_VER)
+    std::ostringstream version;
+    version << _MSC_VER;
+    // Decode version to readable format
+    if (_MSC_VER >= 1940)
+        version << " (VS 2022 17.10+)";
+    else if (_MSC_VER >= 1930)
+        version << " (VS 2022 17.0-17.9)";
+    else if (_MSC_VER >= 1920)
+        version << " (VS 2019)";
+    else if (_MSC_VER >= 1910)
+        version << " (VS 2017)";
+    return {"cl", version.str()};
+#else
+    return {"", ""};
+#endif
+}
+
+std::string CompilationConfig::getBuildCompilerInfoString()
+{
+    auto [name, version] = getBuildCompilerInfo();
+    if (name.empty())
+        return "Unknown compiler";
+    return name + " " + version;
+}
+
+std::string CompilationConfig::getDefaultCompiler()
+{
+    auto [buildCompiler, buildVersion] = getBuildCompilerInfo();
+    
+    // Priority 1: Try exact compiler with version (e.g., "clang++-15")
+    if (!buildCompiler.empty() && !buildVersion.empty())
+    {
+        // Extract major version
+        std::string majorVersion = buildVersion.substr(0, buildVersion.find('.'));
+        std::string compilerWithVersion = buildCompiler + "-" + majorVersion;
+        
+        if (isCompilerAvailable(compilerWithVersion))
+        {
+            return compilerWithVersion;
+        }
+    }
+    
+    // Priority 2: Try same compiler family without version (e.g., "clang++" or "g++")
+    if (!buildCompiler.empty() && isCompilerAvailable(buildCompiler))
+    {
+        return buildCompiler;
+    }
+    
+    // Priority 3: Try other common compilers
+    const std::vector<std::string> fallbacks = {"g++", "clang++", "c++"};
+    for (const auto& compiler : fallbacks)
+    {
+        if (compiler != buildCompiler && isCompilerAvailable(compiler))
+        {
+            return compiler;
+        }
+    }
+    
+    // Fallback to clang++ if nothing found (will show as unavailable in UI)
+    return "clang++";
+}
+
 CompilationConfig& CompilationConfig::getInstance()
 {
     static CompilationConfig instance;

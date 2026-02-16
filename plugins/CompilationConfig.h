@@ -166,6 +166,24 @@ public:
      * @return String with all default configuration values */
     std::string getDefaultsSummary() const;
 
+    /** @brief Get the compiler name and version used to build this application
+     * @return Pair of (compiler_name, version_string) e.g. ("clang++", "15.0.7") or ("g++", "13.2.0") */
+    static std::pair<std::string, std::string> getBuildCompilerInfo();
+
+    /** @brief Get compiler info as a formatted string
+     * @return String like "g++ 13.2.0" or "clang++ 15.0.7" */
+    static std::string getBuildCompilerInfoString();
+
+    /** @brief Select the best available compiler with intelligent fallback
+     * 
+     * Selection priority:
+     * 1. Same compiler and version as used to build the application
+     * 2. Same compiler family (e.g., clang++ or g++) but different version
+     * 3. Other available compilers (g++, clang++, c++)
+     * 
+     * @return Path to best available compiler, or "clang++" as fallback */
+    static std::string getDefaultCompiler();
+
 private:
     CompilationConfig() = default;
     ~CompilationConfig() = default;

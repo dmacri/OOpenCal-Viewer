@@ -15,86 +15,15 @@ namespace fs = std::filesystem;
 
 namespace
 {
-/** @brief Get the compiler name and version used to build this application
- * @return Pair of (compiler_name, version_string) e.g. ("clang++", "15.0.7") or ("g++", "13.2.0") */
-std::pair<std::string, std::string> getBuildCompilerInfo()
-{
-#if defined(__clang__)
-    std::ostringstream version;
-    version << __clang_major__ << "." << __clang_minor__ << "." << __clang_patchlevel__;
-    return {"clang++", version.str()};
-#elif defined(__GNUC__) || defined(__GNUG__)
-    std::ostringstream version;
-    version << __GNUC__ << "." << __GNUC_MINOR__ << "." << __GNUC_PATCHLEVEL__;
-    return {"g++", version.str()};
-#elif defined(_MSC_VER)
-    std::ostringstream version;
-    version << _MSC_VER;
-    return {"cl", version.str()};
-#else
-    return {"", ""};
-#endif
-}
-
-/** @brief Select the best available compiler with intelligent fallback
- * 
- * Selection priority:
- * 1. Same compiler and version as used to build the application
- * 2. Same compiler family (e.g., clang++ or g++) but different version
- * 3. Other available compilers (g++, clang++, c++)
- * 
- * @return Path to best available compiler, or empty string if none found */
-std::string selectBestCompiler()
-{
-    auto [buildCompiler, buildVersion] = getBuildCompilerInfo();
-    
-    // Priority 1: Try exact compiler with version (e.g., "clang++-15")
-    if (!buildCompiler.empty() && !buildVersion.empty())
-    {
-        // Extract major version
-        std::string majorVersion = buildVersion.substr(0, buildVersion.find('.'));
-        std::string compilerWithVersion = buildCompiler + "-" + majorVersion;
-        
-        if (viz::plugins::isCompilerAvailable(compilerWithVersion))
-        {
-            std::cout << "Using exact compiler match: " << compilerWithVersion 
-                      << " (application built with " << buildCompiler << " " << buildVersion << ")" << std::endl;
-            return compilerWithVersion;
-        }
-    }
-    
-    // Priority 2: Try same compiler family without version (e.g., "clang++" or "g++")
-    if (!buildCompiler.empty() && viz::plugins::isCompilerAvailable(buildCompiler))
-    {
-        std::cout << "Using same compiler family: " << buildCompiler 
-                  << " (application built with " << buildCompiler << " " << buildVersion << ")" << std::endl;
-        return buildCompiler;
-    }
-    
-    // Priority 3: Try other common compilers
-    const std::vector<std::string> fallbacks = {"g++", "clang++", "c++"};
-    for (const auto& compiler : fallbacks)
-    {
-        if (compiler != buildCompiler && viz::plugins::isCompilerAvailable(compiler))
-        {
-            std::cout << "Compiler " << buildCompiler << " not found, using fallback: " << compiler
-                      << " (application built with " << buildCompiler << " " << buildVersion << ")" << std::endl;
-            return compiler;
-        }
-    }
-    
-    return ""; // No compiler found
-}
-
 /** @brief Find an available C++ compiler (legacy function for compatibility)
  * @param preferredCompiler Preferred compiler (e.g., "clang++")
  * @return Path to available compiler, or empty string if none found */
 std::string findAvailableCompiler(const std::string& preferredCompiler)
 {
-    // If no preferred compiler specified, use intelligent selection
+    // If no preferred compiler specified, use intelligent selection from CompilationConfig
     if (preferredCompiler.empty())
     {
-        return selectBestCompiler();
+        return viz::plugins::CompilationConfig::getDefaultCompiler();
     }
     
     // Try preferred compiler first
@@ -153,7 +82,7 @@ namespace viz::plugins
 {
 CppModuleBuilder::CppModuleBuilder(const std::string& compilerPath,
                                    const std::string& oopencalDir)
-    : compilerPath(compilerPath.empty() ? selectBestCompiler() : compilerPath)
+    : compilerPath(compilerPath.empty() ? CompilationConfig::getDefaultCompiler() : compilerPath)
     , oopencalDir(oopencalDir.empty() ? CompilationConfig::getInstance().getOopencalDir() : oopencalDir)
     , projectRootPath(CompilationConfig::getInstance().getViewerRootDir())
     , progressCallback(nullptr)
