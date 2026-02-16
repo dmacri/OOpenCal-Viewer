@@ -2152,13 +2152,21 @@ void MainWindow::onRecentDirectoryTriggered()
 void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
 {
     // If checkbox is being unchecked, disable 3D mode
-    if (!checked)
+    if (! checked)
     {
         // Show wait cursor during view mode change
         WaitCursorGuard waitCursor("Switching to 2D visualization...");
         
         // Disable 3D substate visualization
         ui->sceneWidget->setActiveSubstateFor3D("");
+        
+        // Clear active substate in MainWindow
+        activeSubstateFor3D = "";
+        
+        // Switch back to 2D mode
+        on2DModeRequested();
+        
+        // Refresh visualization
         ui->sceneWidget->refreshVisualization();
         return;
     }

@@ -357,7 +357,7 @@
            <string>QCheckBox { font-size: 8pt; padding: 2px; }</string>
           </property>
           <property name="text">
-           <string>Use as 3D height</string>
+           <string>Use as 3D altitude</string>
           </property>
          </widget>
         </item>
