@@ -232,7 +232,15 @@ std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppH
 {
     std::filesystem::path file(cppHeaderFile);
     const std::string baseName = file.stem().string();  // e.g. "BallCell"
+    
+#ifdef _WIN32
+    // Windows: generate DLL name (e.g., "BallCellPlugin.dll")
+    const auto sharedLibraryName = baseName + "Plugin.dll";
+#else
+    // Linux/macOS: generate shared library name (e.g., "libBallCellPlugin.so")
     const auto sharedLibraryName = "lib" + baseName + "Plugin.so";
+#endif
+    
     return file.parent_path() / sharedLibraryName;
 }
 // TODO: GB: Use QLibrary to make this multiplatform
@@ -266,67 +274,79 @@ bool ModelLoader::generateWrapper(const std::string& wrapperPath, const std::str
             return false;
         }
 
-        const std::string code = std::format(R"(/** Auto-generated wrapper for {0} model */
-#include <iostream>
-#include <memory>
-#include <string>
-#include "visualiserProxy/SceneWidgetVisualizerProxy.h"
-#include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+        // Generate single wrapper with platform detection inside
+        wrapper << "/** Auto-generated wrapper for " << modelName << " model */\n"
+                << "#include <iostream>\n"
+                << "#include <memory>\n"
+                << "#include <string>\n"
+                << "\n"
+                << "#ifdef _WIN32\n"
+                << "    #include <windows.h>\n"
+                << "#endif\n"
+                << "\n"
+                << "#include \"visualiserProxy/SceneWidgetVisualizerProxy.h\"\n"
+                << "#include \"visualiserProxy/SceneWidgetVisualizerFactory.h\"\n"
+                << "#include \"" << className << ".h\"\n"
+                << "\n"
+                << "#define MODEL_NAME \"" << modelName << "\"\n"
+                << "\n"
+                << "// Platform-specific export declarations\n"
+                << "#ifdef _WIN32\n"
+                << "    #ifdef BUILDING_DLL\n"
+                << "        #define DLL_EXPORT __declspec(dllexport)\n"
+                << "    #else\n"
+                << "        #define DLL_EXPORT __declspec(dllimport)\n"
+                << "    #endif\n"
+                << "#else\n"
+                << "    #define DLL_EXPORT __attribute__((visibility(\"default\")))\n"
+                << "#endif\n"
+                << "\n"
+                << "extern \"C\"\n"
+                << "{\n"
+                << "DLL_EXPORT void registerPlugin()\n"
+                << "{\n"
+                << "    std::cout << \"Registering \" MODEL_NAME \" plugin...\" << std::endl;\n"
+                << "\n"
+                << "    bool success = SceneWidgetVisualizerFactory::registerModel(MODEL_NAME, []() {\n"
+                << "        return std::make_unique<SceneWidgetVisualizerTemplate<" << className << ">>(MODEL_NAME);\n"
+                << "    });\n"
+                << "\n"
+                << "    if (success)\n"
+                << "    {\n"
+                << "        std::cout << \"✓ \" MODEL_NAME \" plugin registered successfully!\" << std::endl;\n"
+                << "        std::cout << \"  The model is now available in Model menu\" << std::endl;\n"
+                << "    }\n"
+                << "    else\n"
+                << "    {\n"
+                << "        std::cerr << \"✗ Failed to register \" MODEL_NAME \" - name may already exist\" << std::endl;\n"
+                << "    }\n"
+                << "}\n"
+                << "\n"
+                << "DLL_EXPORT const char* getPluginInfo()\n"
+                << "{\n"
+                << "#ifdef _WIN32\n"
+                << "    return MODEL_NAME \" Plugin v1.0\\n\"\n"
+                << "           \"Auto-generated from directory loader\\n\"\n"
+                << "           \"Compatible with: Qt-VTK-viewer 2.x (Windows)\";\n"
+                << "#else\n"
+                << "    return MODEL_NAME \" Plugin v1.0\\n\"\n"
+                << "           \"Auto-generated from directory loader\\n\"\n"
+                << "           \"Compatible with: Qt-VTK-viewer 2.x\";\n"
+                << "#endif\n"
+                << "}\n"
+                << "\n"
+                << "DLL_EXPORT int getPluginVersion()\n"
+                << "{\n"
+                << "    return 100; // Version 1.00\n"
+                << "}\n"
+                << "\n"
+                << "DLL_EXPORT const char* getModelName()\n"
+                << "{\n"
+                << "    return MODEL_NAME;\n"
+                << "}\n"
+                << "} // extern \"C\"\n";
 
-// The actual model class is defined in the compiled model header
-#include "{1}.h"
-
-#define MODEL_NAME "{0}"
-
-extern "C"
-{{
-__attribute__((visibility("default")))
-void registerPlugin()
-{{
-    std::cout << "Registering " MODEL_NAME " plugin..." << std::endl;
-
-    bool success = SceneWidgetVisualizerFactory::registerModel(MODEL_NAME, []() {{
-        return std::make_unique<SceneWidgetVisualizerTemplate<{1}>>(
-            MODEL_NAME
-        );
-    }});
-
-    if (success)
-    {{
-        std::cout << "✓ " MODEL_NAME " plugin registered successfully!" << std::endl;
-        std::cout << "  The model is now available in Model menu" << std::endl;
-    }}
-    else
-    {{
-        std::cerr << "✗ Failed to register " MODEL_NAME " - name may already exist" << std::endl;
-    }}
-}}
-
-__attribute__((visibility("default")))
-const char* getPluginInfo()
-{{
-    return MODEL_NAME " Plugin v1.0\n"
-           "Auto-generated from directory loader\n"
-           "Compatible with: Qt-VTK-viewer 2.x";
-}}
-
-__attribute__((visibility("default")))
-int getPluginVersion()
-{{
-    return 100; // Version 1.00
-}}
-
-__attribute__((visibility("default")))
-const char* getModelName()
-{{
-    return MODEL_NAME;
-}}
-}} // extern "C"
-)", modelName, className);
-
-        wrapper << code;
         wrapper.close();
-
         return true;
     }
     catch (const std::exception& e)

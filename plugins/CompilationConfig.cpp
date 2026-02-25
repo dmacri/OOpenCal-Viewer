@@ -90,7 +90,32 @@ std::string CompilationConfig::getDefaultCompiler()
 {
     auto [buildCompiler, buildVersion] = getBuildCompilerInfo();
     
-    // Priority 1: Try exact compiler with version (e.g., "clang++-15")
+#ifdef _WIN32
+    // Windows: prioritize MSVC (cl.exe) then check for clang/gcc
+    if (!buildCompiler.empty() && isCompilerAvailable(buildCompiler))
+    {
+        return buildCompiler;
+    }
+    
+    // Try cl.exe first (Visual Studio compiler)
+    if (isCompilerAvailable("cl"))
+    {
+        return "cl";
+    }
+    
+    // Fallback to clang/gcc on Windows
+    const std::vector<std::string> fallbacks = {"clang", "clang++", "gcc", "g++"};
+    for (const auto& compiler : fallbacks)
+    {
+        if (isCompilerAvailable(compiler))
+        {
+            return compiler;
+        }
+    }
+    
+    return "cl"; // Default to cl.exe (will show as unavailable if not found)
+#else
+    // Linux/macOS: Priority 1: Try exact compiler with version (e.g., "clang++-15")
     if (!buildCompiler.empty() && !buildVersion.empty())
     {
         // Extract major version
@@ -121,78 +146,106 @@ std::string CompilationConfig::getDefaultCompiler()
     
     // Fallback to clang++ if nothing found (will show as unavailable in UI)
     return "clang++";
+#endif
 }
+
+namespace
+{
+/** @brief Get platform-specific compiler families to search
+ * @return Vector of compiler family names for current platform */
+std::vector<std::string> getPlatformCompilerFamilies()
+{
+#ifdef _WIN32
+    return {"cl", "clang", "clang++", "gcc", "g++"};
+#else
+    return {"g++", "clang++", "c++"};
+#endif
+}
+
+/** @brief Check if compiler should be considered versioned on this platform
+ * @return true if platform supports versioned compiler variants (e.g., g++-11) */
+bool supportsVersionedCompilers()
+{
+#ifdef _WIN32
+    return false; // Windows typically doesn't use versioned compiler names
+#else
+    return true;  // Linux/macOS commonly use versioned compilers
+#endif
+}
+
+/** @brief Create compiler info structure for detected compiler
+ * @param name Compiler name
+ * @param buildCompiler Compiler used to build the application
+ * @param buildVersion Version of build compiler
+ * @return CompilerInfo structure */
+CompilationConfig::CompilerInfo createCompilerInfo(
+    const std::string& name,
+    const std::string& buildCompiler,
+    const std::string& buildVersion)
+{
+    CompilationConfig::CompilerInfo info;
+    info.name = name;
+    info.family = name;
+    info.fullPath = name;
+    info.isAvailable = true;
+    
+    // Determine if this is family match
+    info.isFamilyMatch = (name == buildCompiler || 
+                         (name == "cl" && buildCompiler == "cl"));
+    
+    // Extract version and determine exact match
+    info.version = extractCompilerVersion(name);
+    if (info.isFamilyMatch && !buildVersion.empty() && !info.version.empty())
+    {
+        std::string buildMajorVersion = buildVersion.substr(0, buildVersion.find('.'));
+        std::string detectedMajor = info.version.substr(0, info.version.find('.'));
+        info.isExactMatch = (detectedMajor == buildMajorVersion);
+    }
+    else
+    {
+        info.isExactMatch = info.isFamilyMatch;
+    }
+    
+    return info;
+}
+} // anonymous namespace
 
 std::vector<CompilationConfig::CompilerInfo> CompilationConfig::detectAvailableCompilers()
 {
     std::vector<CompilerInfo> compilers;
     auto [buildCompiler, buildVersion] = getBuildCompilerInfo();
-    std::string buildMajorVersion = buildVersion.empty() ? "" : buildVersion.substr(0, buildVersion.find('.'));
     
-    // Define compiler families to search
-    const std::vector<std::string> families = {"g++", "clang++", "c++"};
+    const std::vector<std::string> families = getPlatformCompilerFamilies();
+    const bool useVersionedVariants = supportsVersionedCompilers();
     
-    // For each family, try to find versioned variants
-    // We'll check versions from 8 to 20 (covering most modern compilers)
     for (const auto& family : families)
     {
-        // First, try the base compiler (e.g., "g++", "clang++")
         if (isCompilerAvailable(family))
         {
-            CompilerInfo info;
-            info.name = family;
-            info.family = family;
-            info.fullPath = family; // Will be resolved by system PATH
-            info.isAvailable = true;
-            info.isFamilyMatch = (family == buildCompiler);
-            info.isExactMatch = false;
-            
-            // Extract version using helper function
-            info.version = extractCompilerVersion(family);
-            
-            // Check if exact match
-            if (info.isFamilyMatch && !buildVersion.empty() && !info.version.empty())
-            {
-                std::string detectedMajor = info.version.substr(0, info.version.find('.'));
-                info.isExactMatch = (detectedMajor == buildMajorVersion);
-            }
-            
-            compilers.push_back(info);
+            compilers.push_back(createCompilerInfo(family, buildCompiler, buildVersion));
         }
         
-        // Now try versioned variants (e.g., "g++-11", "g++-12", "clang++-15")
-        for (int version = 8; version <= 20; ++version)
+        // Add versioned variants only on platforms that support them
+        if (useVersionedVariants)
         {
-            std::string versionedCompiler = family + "-" + std::to_string(version);
-            
-            if (isCompilerAvailable(versionedCompiler))
+            for (int version = 8; version <= 20; ++version)
             {
-                CompilerInfo info;
-                info.name = versionedCompiler;
-                info.family = family;
-                info.fullPath = versionedCompiler;
-                info.isAvailable = true;
-                info.isFamilyMatch = (family == buildCompiler);
-                info.isExactMatch = (family == buildCompiler && std::to_string(version) == buildMajorVersion);
+                std::string versionedCompiler = family + "-" + std::to_string(version);
                 
-                // Extract version using helper function
-                info.version = extractCompilerVersion(versionedCompiler);
-                
-                compilers.push_back(info);
+                if (isCompilerAvailable(versionedCompiler))
+                {
+                    compilers.push_back(createCompilerInfo(versionedCompiler, buildCompiler, buildVersion));
+                }
             }
         }
     }
     
-    // Sort compilers by priority:
-    // 1. Exact match (same family and version)
-    // 2. Family match (same family, different version) - newest first
-    // 3. Other compilers
+    // Sort compilers by priority: exact match > family match > others (newest first)
     std::sort(compilers.begin(), compilers.end(), [](const CompilerInfo& a, const CompilerInfo& b) {
         if (a.isExactMatch != b.isExactMatch)
             return a.isExactMatch > b.isExactMatch;
         if (a.isFamilyMatch != b.isFamilyMatch)
             return a.isFamilyMatch > b.isFamilyMatch;
-        // Within same category, sort by version (descending)
         return a.version > b.version;
     });
     
@@ -216,7 +269,13 @@ std::string CompilationConfig::getCompilationFlags() const
 
 std::string CompilationConfig::getDefaultCompilationFlags() const
 {
+#ifdef _WIN32
+    // Windows: Use DLL export flags for Visual Studio
+    return "/LD /DBUILDING_DLL /EHsc";
+#else
+    // Linux/macOS: Use shared library flags
     return "-shared -fPIC";
+#endif
 }
 
 void CompilationConfig::setCompilationFlags(const std::string& flags)
