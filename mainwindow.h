@@ -74,6 +74,8 @@ private slots: // menu actions
     // Settings submenu
     void onColorSettingsRequested();
     void onCompilationSettingsRequested();
+    void onCellRenderingToggled(bool checked);
+    void syncCellRenderingCheckbox();
 
     // Help submenu:
     void showAboutThisApplicationDialog();
@@ -88,7 +90,7 @@ private slots: // menu actions
     void onCameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw);
     void syncCameraSliders();
 
-    void onUse3rdDimensionRequested(const std::string& fieldName);
+    void onUse3dStateChanged(const std::string& fieldName, bool checked);
     void onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
     void onDeactivateRequested();
 

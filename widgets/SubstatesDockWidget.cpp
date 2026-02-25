@@ -91,7 +91,7 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
         }
 
         // Connect signals
-        connect(widget, &SubstateDisplayWidget::use3rdDimensionRequested, this, &SubstatesDockWidget::use3rdDimensionRequested);
+        connect(widget, &SubstateDisplayWidget::use3dStateChanged, this, &SubstatesDockWidget::onUse3DStateChanged);
         connect(widget, &SubstateDisplayWidget::useSubstateColorringRequested, this, &SubstatesDockWidget::onUseSubstateColorringRequested);
         connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged), this, &SubstatesDockWidget::onMinMaxValuesChanged);
         connect(widget, &SubstateDisplayWidget::calculateMinimumRequested, this, &SubstatesDockWidget::onCalculateMinimumRequested);
@@ -595,4 +595,26 @@ void SubstatesDockWidget::saveFieldOrder()
             it->second.order = static_cast<int>(i);
         }
     }
+}
+
+void SubstatesDockWidget::onUse3DStateChanged(const std::string& fieldName, bool checked)
+{
+    // If a checkbox is being checked, uncheck all other 3D checkboxes (mutual exclusion)
+    if (checked)
+    {
+        for (auto& [name, widget] : m_substateWidgets)
+        {
+            // Skip the widget that was just checked
+            if (name != fieldName)
+            {
+                // Temporarily block signals to avoid recursive calls
+                widget->blockSignals(true);
+                widget->setUse3DChecked(false);
+                widget->blockSignals(false);
+            }
+        }
+    }
+    
+    // Forward the signal to parent (e.g., MainWindow)
+    emit use3dStateChanged(fieldName, checked);
 }

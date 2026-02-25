@@ -40,7 +40,7 @@
 #include <iostream>
 #include <memory> // std::unique_ptr
 #include EXPAND_AND_STRINGIFY(PLUGIN_CELL_CLASS.h)
-#include "visualiserProxy/SceneWidgetVisualizerAdapter.h"
+#include "visualiserProxy/SceneWidgetVisualizerProxy.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
 
 
@@ -54,7 +54,7 @@ void registerPlugin()
     
     // Register the custom model with the factory
     bool success = SceneWidgetVisualizerFactory::registerModel(PLUGIN_MODEL_NAME, []() {
-        return std::make_unique<SceneWidgetVisualizerAdapter<PLUGIN_CELL_CLASS>>(
+        return std::make_unique<SceneWidgetVisualizerTemplate<PLUGIN_CELL_CLASS>>(
             PLUGIN_MODEL_NAME  // - this will appear in the menu
         );
     });

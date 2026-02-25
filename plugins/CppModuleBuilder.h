@@ -43,9 +43,9 @@ public:
     /// Callback type for progress reporting
     using ProgressCallback = std::function<void(const std::string&)>;
     /** @brief Create a new CppModuleBuilder instance
-     * @param compilerPath Path to the compiler (e.g., "clang++"). If empty, uses system PATH.
+     * @param compilerPath Path to the compiler (e.g., "clang++"). If empty, intelligently selects the best available compiler (preferring the one used to build the application).
      * @param oopencalDir Path to OOpenCAL base directory for includes. If empty, uses OOPENCAL_DIR env var. */
-    explicit CppModuleBuilder(const std::string& compilerPath = "clang++",
+    explicit CppModuleBuilder(const std::string& compilerPath = "",
                               const std::string& oopencalDir = "");
 
     /** @brief Check if a compiled module already exists

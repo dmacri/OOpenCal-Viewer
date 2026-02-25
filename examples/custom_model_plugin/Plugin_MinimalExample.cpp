@@ -20,11 +20,11 @@
 class ISceneWidgetVisualizer {};
 
 template<typename CellType>
-class SceneWidgetVisualizerAdapter : public ISceneWidgetVisualizer {
+class SceneWidgetVisualizerTemplate : public ISceneWidgetVisualizer {
 public:
-    explicit SceneWidgetVisualizerAdapter(const std::string& modelName)
+    explicit SceneWidgetVisualizerTemplate(const std::string& modelName)
     {
-        std::cout << "[Adapter] Creating visualizer for model: " << modelName << std::endl;
+        std::cout << "[Template] Creating visualizer for model: " << modelName << std::endl;
     }
 };
 
@@ -76,7 +76,7 @@ extern "C" {
         bool ok = SceneWidgetVisualizerFactory::registerModel(
             PLUGIN_MODEL_NAME,
             []() {
-                return std::make_unique<SceneWidgetVisualizerAdapter<PLUGIN_CELL_CLASS>>(PLUGIN_MODEL_NAME);
+                return std::make_unique<SceneWidgetVisualizerTemplate<PLUGIN_CELL_CLASS>>(PLUGIN_MODEL_NAME);
             });
 
         if (ok)

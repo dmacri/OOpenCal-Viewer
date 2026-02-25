@@ -15,11 +15,17 @@ namespace fs = std::filesystem;
 
 namespace
 {
-/** @brief Find an available C++ compiler
+/** @brief Find an available C++ compiler (legacy function for compatibility)
  * @param preferredCompiler Preferred compiler (e.g., "clang++")
  * @return Path to available compiler, or empty string if none found */
 std::string findAvailableCompiler(const std::string& preferredCompiler)
 {
+    // If no preferred compiler specified, use intelligent selection from CompilationConfig
+    if (preferredCompiler.empty())
+    {
+        return viz::plugins::CompilationConfig::getDefaultCompiler();
+    }
+    
     // Try preferred compiler first
     if (viz::plugins::isCompilerAvailable(preferredCompiler))
         return preferredCompiler;
@@ -76,11 +82,20 @@ namespace viz::plugins
 {
 CppModuleBuilder::CppModuleBuilder(const std::string& compilerPath,
                                    const std::string& oopencalDir)
-    : compilerPath(compilerPath)
+    : compilerPath(compilerPath.empty() ? CompilationConfig::getDefaultCompiler() : compilerPath)
     , oopencalDir(oopencalDir.empty() ? CompilationConfig::getInstance().getOopencalDir() : oopencalDir)
     , projectRootPath(CompilationConfig::getInstance().getViewerRootDir())
     , progressCallback(nullptr)
 {
+    // Log the selected compiler
+    if (!this->compilerPath.empty())
+    {
+        std::cout << "CppModuleBuilder initialized with compiler: " << this->compilerPath << std::endl;
+    }
+    else
+    {
+        std::cerr << "WARNING: No C++ compiler found during CppModuleBuilder initialization" << std::endl;
+    }
 }
 
 bool CppModuleBuilder::moduleExists(const std::string& outputPath)
@@ -263,12 +278,37 @@ std::string detectCppStandard(const std::string &userStandard)
     return "c++14";
 }
 
-bool isCompilerAvailable(const std::string &compiler)
+namespace
+{
+/** @brief Build platform-specific compiler version check command
+ * @param compiler Name or path to compiler executable
+ * @return Command string to check compiler availability */
+std::string buildCompilerCheckCommand(const std::string& compiler)
+{
+#ifdef _WIN32
+    if (compiler == "cl")
+    {
+        // MSVC: use a simple version check
+        return "cl 2>nul >nul";
+    }
+    else
+    {
+        // Other compilers on Windows
+        return compiler + " --version >nul 2>&1";
+    }
+#else
+    // Linux/macOS: Try to run compiler with --version
+    return compiler + " --version > /dev/null 2>&1";
+#endif
+}
+
+/** @brief Execute compiler availability check command
+ * @param command Command to execute
+ * @return true if compiler is available, false otherwise */
+bool executeCompilerCheck(const std::string& command)
 {
     try
     {
-        // Try to run compiler with --version
-        std::string command = compiler + " --version > /dev/null 2>&1";
         int exitCode = system(command.c_str());
         return exitCode == 0;
     }
@@ -276,6 +316,13 @@ bool isCompilerAvailable(const std::string &compiler)
     {
         return false;
     }
+}
+} // anonymous namespace
+
+bool isCompilerAvailable(const std::string &compiler)
+{
+    const std::string command = buildCompilerCheckCommand(compiler);
+    return executeCompilerCheck(command);
 }
 
 std::string getOopencalDir()

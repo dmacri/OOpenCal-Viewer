@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <utility>
 
 namespace viz::plugins
 {
@@ -165,6 +166,45 @@ public:
     /** @brief Get all default values for comparison
      * @return String with all default configuration values */
     std::string getDefaultsSummary() const;
+
+    /** @brief Get the compiler name and version used to build this application
+     * @return Pair of (compiler_name, version_string) e.g. ("clang++", "15.0.7") or ("g++", "13.2.0") */
+    static std::pair<std::string, std::string> getBuildCompilerInfo();
+
+    /** @brief Get compiler info as a formatted string
+     * @return String like "g++ 13.2.0" or "clang++ 15.0.7" */
+    static std::string getBuildCompilerInfoString();
+
+    /** @brief Select the best available compiler with intelligent fallback
+     * 
+     * Selection priority:
+     * 1. Same compiler and version as used to build the application
+     * 2. Same compiler family (e.g., clang++ or g++) but different version
+     * 3. Other available compilers (g++, clang++, c++)
+     * 
+     * @return Path to best available compiler, or "clang++" as fallback */
+    static std::string getDefaultCompiler();
+
+    /** @brief Compiler information structure */
+    struct CompilerInfo
+    {
+        std::string name;           ///< Compiler executable name (e.g., "g++-15", "clang++")
+        std::string family;         ///< Compiler family ("g++", "clang++", "cl")
+        std::string version;        ///< Version string (e.g., "15.2.0")
+        std::string fullPath;       ///< Full path to compiler executable
+        bool isExactMatch;          ///< True if exact match with build compiler
+        bool isFamilyMatch;         ///< True if same family as build compiler
+        bool isAvailable;           ///< True if compiler is available in system
+    };
+
+    /** @brief Detect all available compilers in the system
+     * 
+     * This function searches for common C++ compilers (g++, clang++, c++) and their
+     * versioned variants (e.g., g++-11, g++-12, clang++-15, etc.).
+     * 
+     * @return Vector of CompilerInfo structures, sorted by priority (exact match first,
+     *         then family matches, then other compilers) */
+    static std::vector<CompilerInfo> detectAvailableCompilers();
 
 private:
     CompilationConfig() = default;

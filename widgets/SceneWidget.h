@@ -139,6 +139,16 @@ public:
         return gridLinesVisible;
     }
 
+    /// @brief Set cell rendering mode (high quality vs fast point-based)
+    /// @param useCellRendering If true, uses cell-based rendering (better quality); if false, uses point-based (faster)
+    void setUseCellRendering(bool useCellRendering);
+
+    /// @brief Get the current cell rendering mode
+    bool getUseCellRendering() const
+    {
+        return useCellRendering;
+    }
+
     /// @brief Set camera azimuth (rotation around Z axis) in degrees
     void setCameraAzimuth(double angle);
 
@@ -527,6 +537,9 @@ protected:
 
     /// @brief Flat scene background visibility state (shown in 3D mode)
     bool flatSceneBackgroundVisible = true;
+
+    /// @brief Cell rendering mode (true = high quality cell-based, false = fast point-based)
+    bool useCellRendering = false;
 
     /// @brief Name of the substate field currently used for 3D visualization (empty if none)
     std::string activeSubstateFor3D;

@@ -73,10 +73,11 @@ public:
     class SubstateDisplayWidget* getActiveSubstateWidget() const;
 
 signals:
-    /** @brief Signal emitted when a field is requested to be used as 3rd dimension.
+    /** @brief Signal emitted when a field's 3D state changes.
      * 
-     * @param fieldName The name of the field */
-    void use3rdDimensionRequested(const std::string& fieldName);
+     * @param fieldName The name of the field
+     * @param checked True if 3D is now enabled, false if disabled */
+    void use3dStateChanged(const std::string& fieldName, bool checked);
 
     /// @brief Signal emitted when a field is requested to be used in colorring. It is returning names of all selected substates
     void useSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
@@ -143,6 +144,14 @@ private slots:
      * 
      * @param fieldName The name of the field whose checkbox changed */
     void onUse2DCheckboxChanged(const std::string& fieldName);
+
+    /** @brief Handle 3D checkbox state changes - ensures only one substate can be 3D at a time.
+     * 
+     * When a checkbox is checked, unchecks all other 3D checkboxes (mutual exclusion).
+     * 
+     * @param fieldName The name of the field whose 3D checkbox changed
+     * @param checked True if checkbox is now checked, false if unchecked */
+    void onUse3DStateChanged(const std::string& fieldName, bool checked);
 
 public slots:
     /// @brief Uncheck all use2D checkboxes. */

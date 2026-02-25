@@ -316,6 +316,9 @@
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
+            <property name="maximum">
+             <double>999.990000000000009</double>
+            </property>
            </widget>
           </item>
          </layout>
@@ -340,18 +343,21 @@
          <number>0</number>
         </property>
         <item>
-         <widget class="QPushButton" name="use3dButton">
+         <widget class="QCheckBox" name="use3dCheckBox">
           <property name="maximumSize">
            <size>
             <width>16777215</width>
             <height>22</height>
            </size>
           </property>
+          <property name="toolTip">
+           <string>Use this field as 3rd dimension in 3D visualization (only one substate can be 3D at a time)</string>
+          </property>
           <property name="styleSheet">
-           <string>QPushButton { font-size: 8pt; padding: 2px; }</string>
+           <string>QCheckBox { font-size: 8pt; padding: 2px; }</string>
           </property>
           <property name="text">
-           <string>Use as 3rd dimension</string>
+           <string>Use as 3D altitude</string>
           </property>
          </widget>
         </item>

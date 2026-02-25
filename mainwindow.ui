@@ -703,6 +703,8 @@
     <addaction name="separator"/>
     <addaction name="actionColor_settings"/>
     <addaction name="actionCompilation_settings"/>
+    <addaction name="separator"/>
+    <addaction name="actionCellRendering"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuModel"/>
@@ -911,6 +913,20 @@
    </property>
    <property name="toolTip">
     <string>Suppress confirmation dialogs during automation (uncheck for loud mode)</string>
+   </property>
+  </action>
+  <action name="actionCellRendering">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Cell Rendering (High Quality)</string>
+   </property>
+   <property name="toolTip">
+    <string>Use cell-based rendering for better quality (slower for large grids). Uncheck for faster point-based rendering.</string>
    </property>
   </action>
  </widget>
