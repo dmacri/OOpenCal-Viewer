@@ -1,0 +1,81 @@
+name: Windows Build
+
+on:
+  push:
+    branches:
+      - '**'
+  release:
+    types: [created]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { build_type: "Debug", generator: "Visual Studio 17 2022" }
+          - { build_type: "Release", generator: "Visual Studio 17 2022" }
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    ################### checkout OOpenCAL ###################
+    - name: Checkout OOpenCAL dependency
+      uses: actions/checkout@v4
+      with:
+        repository: alessioderango/OOpenCAL
+        path: deps/OOpenCAL
+        token: ${{ secrets.VisualizerOpenCal }}
+
+    - name: Install CMake and Ninja
+      uses: lukka/get-cmake@latest
+      with:
+        cmakeVersion: "~3.27"
+        ninjaVersion: "^1.11"
+
+    - name: Setup vcpkg
+      shell: bash
+      run: |
+        # Clone vcpkg
+        cd ${{ runner.temp }}
+        git clone https://github.com/Microsoft/vcpkg.git --depth=1
+        cd vcpkg
+        
+        # Bootstrap vcpkg
+        ./bootstrap-vcpkg.bat -disableMetrics
+        
+        # Install VTK with Qt and OpenGL support
+        echo "Installing VTK with Qt and OpenGL support..."
+        ./vcpkg.exe install vtk[qt,opengl]:x64-windows --recurse
+        
+        # Make vcpkg root available for next steps
+        echo "VCPKG_ROOT=${{ runner.temp }}/vcpkg" >> $GITHUB_ENV
+
+    - name: Configure CMake
+      shell: bash
+      run: |
+        mkdir -p build
+        cd build
+        
+        cmake -G "${{ matrix.generator }}" \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
+          -DUSE_QT6=ON \
+          ..
+
+    - name: Build project
+      shell: bash
+      run: |
+        cd build
+        cmake --build . --config ${{ matrix.build_type }} --target OOpenCal-Viewer
+
+    - name: Upload build artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: OOpenCal-Viewer-${{ matrix.build_type }}
+        path: build/Desktop_Qt_*_MSVC*_64bit-${{ matrix.build_type }}/OOpenCal-Viewer.exe
+        if-no-files-found: warn

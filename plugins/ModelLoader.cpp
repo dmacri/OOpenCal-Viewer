@@ -123,9 +123,9 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             if (! compilationResult.success)
             {
                 std::cerr << "Compilation failed with exit code: " << compilationResult.exitCode << std::endl;
-                if (!compilationResult.stderr.empty())
+                if (!compilationResult.stdErr.empty())
                 {
-                    std::cerr << "Error output:\n" << compilationResult.stderr << std::endl;
+                    std::cerr << "Error output:\n" << compilationResult.stdErr << std::endl;
                 }
                 result.success = false;
                 result.compilationResult = compilationResult;

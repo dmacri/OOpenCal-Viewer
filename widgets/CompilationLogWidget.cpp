@@ -100,7 +100,7 @@ void CompilationLogWidget::displayCompilationResult(const viz::plugins::Compilat
     else
     {
         // Check if this is a compiler not found error
-        if (result.stderr.find("No C++ compiler found") != std::string::npos)
+        if (result.stdErr.find("No C++ compiler found") != std::string::npos)
         {
             statusText->setText("<span style='color: red; font-weight: bold;'>✗ C++ Compiler Not Found</span>");
         }
@@ -119,10 +119,10 @@ void CompilationLogWidget::displayCompilationResult(const viz::plugins::Compilat
 
     // --- Output formatting ---
     QString output;
-    if (! result.stdout.empty())
+    if (! result.stdOut.empty())
     {
         output += "<b>=== Standard Output ===</b><br>";
-        QString stdoutFormatted = QString::fromStdString(result.stdout);
+        QString stdoutFormatted = QString::fromStdString(result.stdOut);
         stdoutFormatted.replace("&", "&amp;");
         stdoutFormatted.replace("<", "&lt;");
         stdoutFormatted.replace(">", "&gt;");
@@ -130,10 +130,10 @@ void CompilationLogWidget::displayCompilationResult(const viz::plugins::Compilat
         output += "<pre style='font-family: monospace;'>" + stdoutFormatted + "</pre><br>";
     }
 
-    if (!result.stderr.empty())
+    if (!result.stdErr.empty())
     {
         output += "<b>=== Error Output ===</b><br>";
-        output += formatErrorOutput(result.stderr);
+        output += formatErrorOutput(result.stdErr);
     }
 
     if (output.isEmpty())

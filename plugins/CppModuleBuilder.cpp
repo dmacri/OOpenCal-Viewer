@@ -115,7 +115,7 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     if (! fs::exists(sourceFile))
     {
         lastResult->success = false;
-        lastResult->stderr = "Source file does not exist: " + sourceFile;
+        lastResult->stdErr = "Source file does not exist: " + sourceFile;
         return *lastResult;
     }
 
@@ -128,7 +128,7 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     if (availableCompiler.empty())
     {
         lastResult->success = false;
-        lastResult->stderr = "No C++ compiler found. Please install clang++, g++, or c++.";
+        lastResult->stdErr = "No C++ compiler found. Please install clang++, g++, or c++.";
         lastResult->compileCommand = compilerPath + " (not found)";
         if (progressCallback)
             progressCallback("ERROR: No C++ compiler found");
@@ -163,13 +163,13 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     lastResult->exitCode = executeCommand(
         lastResult->compileCommand,
         [this, &lineCount](const std::string& line) { 
-            lastResult->stdout += line + "\n";
+            lastResult->stdOut += line + "\n";
             // Report compilation progress every 5 lines to avoid too many updates
             if (progressCallback && !line.empty() && (++lineCount % 5 == 0))
                 progressCallback("Compiling... (" + std::to_string(lineCount) + " lines)");
         },
         [this](const std::string& line) { 
-            lastResult->stderr += line + "\n";
+            lastResult->stdErr += line + "\n";
             // Report compilation errors immediately
             if (progressCallback && !line.empty())
                 progressCallback("Error: " + line);
@@ -185,9 +185,9 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     {
         lastResult->success = false;
         std::cerr << "✗ Compilation failed with exit code: " << lastResult->exitCode << std::endl;
-        if (!lastResult->stderr.empty())
+        if (!lastResult->stdErr.empty())
         {
-            std::cerr << "Error output:\n" << lastResult->stderr << std::endl;
+            std::cerr << "Error output:\n" << lastResult->stdErr << std::endl;
         }
     }
 

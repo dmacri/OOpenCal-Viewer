@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <unordered_set>
 #include <filesystem>
+#include <sstream>
 #include <vector>
 #include <QProcess>
 #include <QString>
