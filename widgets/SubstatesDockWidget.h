@@ -16,7 +16,7 @@ class QDragEnterEvent;
 class QDropEvent;
 
 class SubstateDisplayWidget;
-class SettingParameter;
+struct SettingParameter;
 
 /** @class SubstatesDockWidget
  * @brief Dockable widget for managing substate field display.

@@ -432,7 +432,7 @@ std::optional<Color> Visualizer::calculateCellColorOptional(int row, int column,
         const char* fieldNamePtr = (substateInfo && !substateInfo->name.empty())
                                        ? substateInfo->name.c_str()
                                        : nullptr;
-        return p[row][column].outputValue(fieldNamePtr);
+        return p[row][column].outputValue(fieldNamePtr, /*GlobalValueManager* gvm=*/nullptr);
     }
 }
 

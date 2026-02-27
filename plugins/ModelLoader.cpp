@@ -123,9 +123,9 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             if (! compilationResult.success)
             {
                 std::cerr << "Compilation failed with exit code: " << compilationResult.exitCode << std::endl;
-                if (!compilationResult.stderr.empty())
+                if (!compilationResult.stdErr.empty())
                 {
-                    std::cerr << "Error output:\n" << compilationResult.stderr << std::endl;
+                    std::cerr << "Error output:\n" << compilationResult.stdErr << std::endl;
                 }
                 result.success = false;
                 result.compilationResult = compilationResult;
@@ -233,7 +233,7 @@ std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppH
     std::filesystem::path file(cppHeaderFile);
     const std::string baseName = file.stem().string();  // e.g. "BallCell"
     const auto sharedLibraryName = "lib" + baseName + "Plugin.so";
-    return file.parent_path() / sharedLibraryName;
+    return (file.parent_path() / sharedLibraryName).string();
 }
 // TODO: GB: Use QLibrary to make this multiplatform
 // std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppHeaderFile)
@@ -285,11 +285,7 @@ void registerPlugin()
 {{
     std::cout << "Registering " MODEL_NAME " plugin..." << std::endl;
 
-    bool success = SceneWidgetVisualizerFactory::registerModel(MODEL_NAME, []() {{
-        return std::make_unique<SceneWidgetVisualizerAdapter<{1}>>(
-            MODEL_NAME
-        );
-    }});
+    bool success = SceneWidgetVisualizerFactory::registerModel<{1}>(MODEL_NAME);
 
     if (success)
     {{

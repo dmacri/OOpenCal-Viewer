@@ -23,8 +23,8 @@
 #include "core/types.h"
 
 // Forward declarations
-class SettingParameter;
-class Line;
+struct SettingParameter;
+struct Line;
 class Visualizer;
 struct SubstateInfo;
 

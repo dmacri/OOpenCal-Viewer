@@ -352,9 +352,9 @@ bool CustomDirectoryDialog::DirectorySortProxy::lessThan(const QModelIndex &left
 CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::CustomDirectoryDialog)
+    , m_hasCompiledLibrary(false)
     , m_fileSystemModel(new CustomFileSystemModel(this))
     , m_sortProxy(new DirectorySortProxy(this))
-    , m_hasCompiledLibrary(false)
 {
     ui->setupUi(this);
 
@@ -734,7 +734,7 @@ CustomDirectoryDialog::HeaderInfo CustomDirectoryDialog::parseHeaderFile(const Q
         // Mark as valid if we got at least some data
         info.isValid = (info.numberNodeX > 0 || info.numberNodeY > 0 || !info.mode.isEmpty());
     }
-    catch (const std::exception& e)
+    catch (const std::exception& /*e*/)
     {
         // Return invalid info on exception
         info.isValid = false;

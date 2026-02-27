@@ -58,6 +58,7 @@ QtVtkViewer_autogen/mocs_compilation.cpp
 build/
 .cache
 .vscode/
+.qtcreator/
 
 # Plugin binaries (but keep examples source code)
 plugins/*.so

@@ -80,7 +80,7 @@ public:
 
     /** Determine the output color based on the cell value
      * Blue (0) -> Cyan -> Green -> Yellow -> Red (255) */
-    Color outputValue(const char* /*str*/) const override
+    Color outputValue(const char* /*str*/, GlobalValueManager* /*gvm*/) const override
     {
         Color outputColor{ 128, 128, 128 };
 

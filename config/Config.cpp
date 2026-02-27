@@ -246,7 +246,7 @@ void Config::readConfigFileInOOpenCalFormat()
                     if (!line.empty() && line.back() == ':')
                     {
                         // This is a new category, process it in the next iteration
-                        file.seekg(-(line.length() + 1), std::ios_base::cur);
+                        file.seekg(-(line.length() + 1), std::ios_base::cur); // TODO: GB: Is it really working? this is -unsigned?
                     }
                     break;
                 }

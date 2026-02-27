@@ -20,8 +20,8 @@
 #include "ISceneWidgetVisualizer.h"
 #include "SceneWidgetVisualizerProxy.h"
 
-class Line;
-class SettingParameter;
+struct Line;
+struct SettingParameter;
 
 /** @class SceneWidgetVisualizerAdapter
  * @brief Adapter that makes template-based visualizers work with the ISceneWidgetVisualizer interface.

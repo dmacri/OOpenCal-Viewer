@@ -22,21 +22,12 @@ void SceneWidgetVisualizerFactory::initializeBuiltInModels()
         return;
     }
 
-    // Register built-in models
-    registerModel("Ball",
-                  []()
-                  {
-                      return std::make_unique<SceneWidgetVisualizerAdapter<BallCell>>("Ball");
-                  });
-
-    registerModel("SciddicaT",
-                  []()
-                  {
-                      return std::make_unique<SceneWidgetVisualizerAdapter<SciddicaTCell>>("SciddicaT");
-                  });
+    registerModel<BallCell>("Ball");
+    registerModel<SciddicaTCell>("SciddicaT");
 
     isInitializedWithBuildInModels = true;
 }
+
 
 std::unique_ptr<ISceneWidgetVisualizer> SceneWidgetVisualizerFactory::create(const std::string& modelName)
 {

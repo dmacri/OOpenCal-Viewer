@@ -271,7 +271,7 @@ if(NOT VTK_FOUND)
     message(FATAL_ERROR
         "VTK not found! VTK is too large for automatic download and compilation.\n"
         "Please install VTK using one of these methods:\n"
-        "  - vcpkg: vcpkg install vtk[qt,opengl]\n"
+        "  - vcpkg: `vcpkg install vtk[qt,opengl]`, but you can also use scripts/bootstrap-vcpkg.{sh,bat}\n"
         "  - Ubuntu/Debian: sudo apt install libvtk9-dev libvtk9-qt-dev\n"
         "  - Arch: sudo pacman -S vtk\n"
         "  - Fedora: sudo dnf install vtk-devel\n"
@@ -358,6 +358,7 @@ if(OOPENCAL_DIR)
         target_include_directories(${PROJECT_NAME} PRIVATE
             ${OOPENCAL_DIR_ABS}
             ${OOPENCAL_DIR_ABS}/OOpenCAL
+            ${OOPENCAL_DIR_ABS}/OOpenCAL/base
         )
 
         # Define OOPENCAL_DIR for use in C++ code (use absolute path)
@@ -452,9 +453,17 @@ FetchContent_MakeAvailable(tiny_process_library)
 
 FetchContent_GetProperties(tiny_process_library)
 if(tiny_process_library_SOURCE_DIR)
-    target_sources(${PROJECT_NAME} PRIVATE
-        ${tiny_process_library_SOURCE_DIR}/process.cpp
-    )
+    if(WIN32)
+        target_sources(${PROJECT_NAME} PRIVATE
+            ${tiny_process_library_SOURCE_DIR}/process.cpp
+            ${tiny_process_library_SOURCE_DIR}/process_win.cpp
+        )
+    else()
+        target_sources(${PROJECT_NAME} PRIVATE
+            ${tiny_process_library_SOURCE_DIR}/process.cpp
+        )
+    endif()
+
     target_include_directories(${PROJECT_NAME} PRIVATE
         ${tiny_process_library_SOURCE_DIR}
     )
@@ -484,9 +493,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     tiny-process-library
 )
 
-# Export symbols for plugins to use
+# Export symbols for plugins to use (Unix-like systems only)
 # This allows plugins to call functions from the main executable
-target_link_options(${PROJECT_NAME} PRIVATE -rdynamic)
+if(NOT WIN32)
+    target_link_options(${PROJECT_NAME} PRIVATE -rdynamic)
+endif()
 
 vtk_module_autoinit(
     TARGETS ${PROJECT_NAME}
