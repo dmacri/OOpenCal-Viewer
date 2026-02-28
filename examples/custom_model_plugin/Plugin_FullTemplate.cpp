@@ -52,12 +52,7 @@ void registerPlugin()
 {
     std::cout << "Registering " PLUGIN_MODEL_NAME " plugin..." << std::endl;
     
-    // Register the custom model with the factory
-    bool success = SceneWidgetVisualizerFactory::registerModel(PLUGIN_MODEL_NAME, []() {
-        return std::make_unique<SceneWidgetVisualizerTemplate<PLUGIN_CELL_CLASS>>(
-            PLUGIN_MODEL_NAME  // - this will appear in the menu
-        );
-    });
+    bool success = SceneWidgetVisualizerFactory::registerModel<PLUGIN_CELL_CLASS>(PLUGIN_MODEL_NAME);
     
     if (success)
     {

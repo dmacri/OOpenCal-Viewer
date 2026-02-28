@@ -73,11 +73,7 @@ extern "C" {
     {
         std::cout << "🧩 Loading plugin: " << PLUGIN_MODEL_NAME << std::endl;
 
-        bool ok = SceneWidgetVisualizerFactory::registerModel(
-            PLUGIN_MODEL_NAME,
-            []() {
-                return std::make_unique<SceneWidgetVisualizerTemplate<PLUGIN_CELL_CLASS>>(PLUGIN_MODEL_NAME);
-            });
+        bool ok = SceneWidgetVisualizerFactory::registerModel<PLUGIN_CELL_CLASS>>(PLUGIN_MODEL_NAME);
 
         if (ok)
             std::cout << "✅ Plugin '" << PLUGIN_MODEL_NAME << "' registered successfully.\n";

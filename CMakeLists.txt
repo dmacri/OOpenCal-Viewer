@@ -453,9 +453,17 @@ FetchContent_MakeAvailable(tiny_process_library)
 
 FetchContent_GetProperties(tiny_process_library)
 if(tiny_process_library_SOURCE_DIR)
-    target_sources(${PROJECT_NAME} PRIVATE
-        ${tiny_process_library_SOURCE_DIR}/process.cpp
-    )
+    if(WIN32)
+        target_sources(${PROJECT_NAME} PRIVATE
+            ${tiny_process_library_SOURCE_DIR}/process.cpp
+            ${tiny_process_library_SOURCE_DIR}/process_win.cpp
+        )
+    else()
+        target_sources(${PROJECT_NAME} PRIVATE
+            ${tiny_process_library_SOURCE_DIR}/process.cpp
+        )
+    endif()
+
     target_include_directories(${PROJECT_NAME} PRIVATE
         ${tiny_process_library_SOURCE_DIR}
     )

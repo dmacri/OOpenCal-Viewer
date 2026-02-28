@@ -240,8 +240,8 @@ std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppH
     // Linux/macOS: generate shared library name (e.g., "libBallCellPlugin.so")
     const auto sharedLibraryName = "lib" + baseName + "Plugin.so";
 #endif
-    
-    return file.parent_path() / sharedLibraryName;
+
+    return (file.parent_path() / sharedLibraryName).string();
 }
 // TODO: GB: Use QLibrary to make this multiplatform
 // std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppHeaderFile)
@@ -307,9 +307,7 @@ bool ModelLoader::generateWrapper(const std::string& wrapperPath, const std::str
                 << "{\n"
                 << "    std::cout << \"Registering \" MODEL_NAME \" plugin...\" << std::endl;\n"
                 << "\n"
-                << "    bool success = SceneWidgetVisualizerFactory::registerModel(MODEL_NAME, []() {\n"
-                << "        return std::make_unique<SceneWidgetVisualizerTemplate<" << className << ">>(MODEL_NAME);\n"
-                << "    });\n"
+                << "    bool success = SceneWidgetVisualizerFactory::registerModel<" << className << ">(MODEL_NAM);\n"
                 << "\n"
                 << "    if (success)\n"
                 << "    {\n"
