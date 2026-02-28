@@ -189,7 +189,7 @@ std::vector<std::string> SettingParameter::getSubstateFields() const
     auto parsedFields = parseSubstates();
     
     // Create a vector of pairs (order, fieldName) for sorting
-    std::vector<std::pair<int, std::string>> orderedFields;
+    std::vector<std::pair<std::size_t, std::string>> orderedFields;
     
     for (const auto& [name, info] : parsedFields)
     {

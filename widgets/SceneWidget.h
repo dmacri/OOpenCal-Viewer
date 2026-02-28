@@ -24,7 +24,7 @@
 
 // Forward declarations
 class SubstatesDockWidget;
-class SettingParameter;
+struct SettingParameter;
 
 /** @enum ViewMode
  * @brief Defines the camera view mode for the scene.
