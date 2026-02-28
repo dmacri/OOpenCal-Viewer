@@ -303,7 +303,12 @@ void SceneWidget::updateCameraPivotFromBounds()
 
 void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 {
-    if (settingParameter && settingParameter->numberOfLines > 0)
+    if (! settingParameter)
+    {
+        return;
+    }
+
+    if (settingParameter->numberOfLines > 0)
     {
         // Resize lines vector to match expected number of lines
         lines.resize(settingParameter->numberOfLines);
@@ -1219,6 +1224,9 @@ void SceneWidget::clearScene()
 
     // Clear stage data
     sceneWidgetVisualizerProxy->clearStage();
+
+    // Reset setting parameters to avoid stale data
+    settingParameter = std::make_unique<SettingParameter>();
 
     // Reset VTK actors
     gridActor = vtkSmartPointer<vtkActor>::New();
