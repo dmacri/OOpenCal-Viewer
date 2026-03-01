@@ -106,6 +106,14 @@ jobs:
             cp -r visualiserProxy/* AppDir/usr/include/visualiserProxy/ || true
           fi
 
+      - name: Copy OOpenCAL headers
+        run: |
+          # Copy OOpenCAL headers (required for plugin compilation)
+          if [ -d "deps/OOpenCAL" ]; then
+            mkdir -p AppDir/usr/include/OOpenCAL/base
+            cp -r deps/OOpenCAL/base/* AppDir/usr/include/OOpenCAL/base/ || true
+          fi
+
       - name: Copy VTK headers
         run: |
           # Copy VTK headers
@@ -222,6 +230,12 @@ jobs:
 
           # Set OOPENCAL_VIEWER_ROOT to point to AppImage include directory
           export OOPENCAL_VIEWER_ROOT="\${HERE}/usr/include"
+
+          # Set OOPENCAL_DIR to point to AppImage include directory (for plugin compilation)
+          export OOPENCAL_DIR="\${HERE}/usr/include"
+
+          # Set VTK_INCLUDES to point to VTK headers in AppImage
+          export VTK_INCLUDES="\${HERE}/usr/include/vtk"
 
           # Disable Qt's automatic high DPI scaling (user can set QT_AUTO_SCREEN_SCALE_FACTOR=1 if needed)
           export QT_AUTO_SCREEN_SCALE_FACTOR=0
