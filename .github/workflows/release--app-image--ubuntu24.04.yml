@@ -88,9 +88,15 @@ jobs:
         run: |
           # Copy headers from project directories with directory structure
           mkdir -p AppDir/usr/include/core
+          mkdir -p AppDir/usr/include/data
           mkdir -p AppDir/usr/include/utilities
           mkdir -p AppDir/usr/include/visualiser
           mkdir -p AppDir/usr/include/visualiserProxy
+
+          # Copy all headers from data/
+          if [ -d "data" ]; then
+            cp -r data/* AppDir/usr/include/data/ || true
+          fi
 
           # Copy all headers from core/
           if [ -d "core" ]; then
