@@ -307,7 +307,7 @@ bool ModelLoader::generateWrapper(const std::string& wrapperPath, const std::str
                 << "{\n"
                 << "    std::cout << \"Registering \" MODEL_NAME \" plugin...\" << std::endl;\n"
                 << "\n"
-                << "    bool success = SceneWidgetVisualizerFactory::registerModel<" << className << ">(MODEL_NAM);\n"
+                << "    bool success = SceneWidgetVisualizerFactory::registerModel<" << className << ">(MODEL_NAME);\n"
                 << "\n"
                 << "    if (success)\n"
                 << "    {\n"
