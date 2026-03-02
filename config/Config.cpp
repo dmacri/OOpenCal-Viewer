@@ -51,6 +51,7 @@ void Config::setUpConfigCategories()
         {
             {PARAM_NUMBER_OF_COLUMNS, "610",  ConfigParameter::int_par},
             {PARAM_NUMBER_OF_ROWS,    "496",  ConfigParameter::int_par},
+            {PARAM_NUMBER_OF_SLICES,  "1",    ConfigParameter::int_par},
             {PARAM_NUMBER_STEPS,      "4000", ConfigParameter::int_par},
             {PARAM_OUTPUT_FILE_NAME,  "sciddicaTout", ConfigParameter::string_par}
         }
@@ -61,8 +62,10 @@ void Config::setUpConfigCategories()
         {
             {PARAM_BORDER_SIZE_X, "1", ConfigParameter::int_par},
             {PARAM_BORDER_SIZE_Y, "1", ConfigParameter::int_par},
+            {PARAM_BORDER_SIZE_Z, "1", ConfigParameter::int_par},
             {PARAM_NUMBER_NODE_X, "4", ConfigParameter::int_par},
-            {PARAM_NUMBER_NODE_Y, "4", ConfigParameter::int_par}
+            {PARAM_NUMBER_NODE_Y, "4", ConfigParameter::int_par},
+            {PARAM_NUMBER_NODE_Z, "1", ConfigParameter::int_par}
         }
     });
 
@@ -217,85 +220,59 @@ void Config::readConfigFileInOOpenCalFormat()
     }
 
     std::string line;
+    ConfigCategory* currentCategory = nullptr;
+    
     while (std::getline(file, line))
     {
         if (line.empty())
             continue;
 
-        if (line.back() != ':')
+        // Check if this is a category line (ends with ':')
+        if (line.back() == ':')
+        {
+            line.pop_back(); // removing ':' from the end
+            remove_spaces(line);
+
+            currentCategory = getConfigCategory(line);
+            if (! currentCategory)
+            {
+                if (printWarnings)
+                    std::cerr << "WARNING: Unknown config category '" << line << "' - parameters will be skipped" << std::endl;
+            }
+            continue;
+        }
+
+        // This is a parameter line
+        auto pos = line.find('=');
+        if (pos == std::string::npos)
         {
             if (printWarnings)
-                std::cerr << "WARNING: Category name must end with ':' character, skipping line: " << line << std::endl;
+                std::cerr << "WARNING: Invalid parameter line (no '=' found): '" << line << "'" << std::endl;
             continue;
         }
 
-        line.pop_back(); // removing ':' from the end
-        remove_spaces(line);
-
-        ConfigCategory* configCategory = getConfigCategory(line);
-        if (! configCategory)
+        if (! currentCategory)
         {
-            std::cerr << "WARNING: Unknown config category '" << line << "' - skipping" << std::endl;
-            // Skip parameters for unknown category
-            while (std::getline(file, line))
-            {
-                if (line.empty() || line.back() == ':')
-                {
-                    // Put the line back by seeking back (not ideal, but works for this case)
-                    // Actually, we can't easily put it back, so we'll just process it in the next iteration
-                    if (!line.empty() && line.back() == ':')
-                    {
-                        // This is a new category, process it in the next iteration
-                        file.seekg(-(line.length() + 1), std::ios_base::cur); // TODO: GB: Is it really working? this is -unsigned?
-                    }
-                    break;
-                }
-            }
+            if (printWarnings)
+                std::cerr << "WARNING: Parameter line found before any category: '" << line << "'" << std::endl;
             continue;
         }
 
-        for (int i{}; i < configCategory->getSize(); ++i)
+        std::string parName = line.substr(0, pos);
+        std::string valueStr = line.substr(pos + 1);
+
+        remove_spaces(parName);
+        remove_spaces(valueStr);
+
+        try
         {
-            if (! std::getline(file, line))
-            {
-                if (printWarnings)
-                    std::cerr << "WARNING: Unexpected end of file while reading parameters for category '"  << configCategory->getName() << "'" << std::endl;
-                break;
-            }
-
-            if (line.empty())
-            {
-                if (printWarnings)
-                    std::cerr << "WARNING: Empty parameter line in category '" << configCategory->getName() << "'" << std::endl;
-                i--; // Don't count this as a parameter
-                continue;
-            }
-
-            auto pos = line.find('=');
-            if (pos == std::string::npos)
-            {
-                if (printWarnings)
-                    std::cerr << "WARNING: Invalid parameter line (no '=' found): '" << line << "'" << std::endl;
-                i--; // Don't count this as a parameter
-                continue;
-            }
-
-            std::string parName = line.substr(0, pos);
-            std::string valueStr = line.substr(pos + 1);
-
-            remove_spaces(parName);
-            remove_spaces(valueStr);
-
-            try
-            {
-                configCategory->setConfigParameterValue(parName, valueStr);
-            }
-            catch (const std::exception& e)
-            {
-                if (printWarnings)
-                    std::cerr << "WARNING: Failed to set parameter '" << parName << "' in category '"
-                              << configCategory->getName() << "': " << e.what() << std::endl;
-            }
+            currentCategory->setConfigParameterValue(parName, valueStr);
+        }
+        catch (const std::exception& e)
+        {
+            if (printWarnings)
+                std::cerr << "WARNING: Failed to set parameter '" << parName << "' in category '"
+                          << currentCategory->getName() << "': " << e.what() << std::endl;
         }
     }
 }

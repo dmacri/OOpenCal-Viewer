@@ -55,10 +55,11 @@ public:
      * the specified dimensions.
      * 
      * @param nNodeX Number of nodes along the X axis
-     * @param nNodeY Number of nodes along the Y axis */
-    void prepareStage(NodeIndex nNodeX, NodeIndex nNodeY)
+     * @param nNodeY Number of nodes along the Y axis
+     * @param nNodeZ Number of nodes along the Z axis (defaults to 1 for 2D models) */
+    void prepareStage(NodeIndex nNodeX, NodeIndex nNodeY, NodeIndex nNodeZ = 1)
     {
-        nodeStepOffsets.resize(nNodeX * nNodeY);
+        nodeStepOffsets.resize(nNodeX * nNodeY * nNodeZ);
     }
 
     /// @brief Clears the current stage and releases associated resources.
@@ -93,10 +94,11 @@ public:
      *
      * @param nNodeX Number of nodes along the X axis
      * @param nNodeY Number of nodes along the Y axis
+     * @param nNodeZ Number of nodes along the Z axis (defaults to 1 for 2D models)
      * @param filename Name of the file containing the step offsets
      *
      * @throws std::runtime_error If the file cannot be opened or has an invalid format */
-    void readStepsOffsetsForAllNodesFromFiles(NodeIndex nNodeX, NodeIndex nNodeY, const std::string& filename);
+    void readStepsOffsetsForAllNodesFromFiles(NodeIndex nNodeX, NodeIndex nNodeY, NodeIndex nNodeZ, const std::string& filename);
 
     /** @brief Returns a sorted list of all available simulation steps.
      *
@@ -431,10 +433,10 @@ std::vector<ColumnAndRow> ModelReader<Cell>::giveMeLocalColsAndRowsForAllSteps(S
 }
 
 template<CellLike Cell>
-void ModelReader<Cell>::readStepsOffsetsForAllNodesFromFiles(NodeIndex nNodeX, NodeIndex nNodeY, const std::string& filename)
+void ModelReader<Cell>::readStepsOffsetsForAllNodesFromFiles(NodeIndex nNodeX, NodeIndex nNodeY, NodeIndex nNodeZ, const std::string& filename)
 {
-    const auto totalNodes = nNodeX * nNodeY;
-    prepareStage(nNodeX, nNodeY);
+    const auto totalNodes = nNodeX * nNodeY * nNodeZ;
+    prepareStage(nNodeX, nNodeY, nNodeZ);
 
     for (NodeIndex node = 0; node < totalNodes; ++node)
     {

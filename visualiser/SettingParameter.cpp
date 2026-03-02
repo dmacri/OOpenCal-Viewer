@@ -226,8 +226,10 @@ std::ostream& operator<<(std::ostream& os, const SettingParameter& sp)
     os << "SettingParameter{"
        << "numberOfColumnX=" << sp.numberOfColumnX << ", "
        << "numberOfRowsY=" << sp.numberOfRowsY << ", "
+       << "numberOfSlicesZ=" << sp.numberOfSlicesZ << ", "
        << "nNodeX=" << sp.nNodeX << ", "
        << "nNodeY=" << sp.nNodeY << ", "
+       << "nNodeZ=" << sp.nNodeZ << ", "
        << "outputFileName=" << sp.outputFileName << "}";
     return os;
 }

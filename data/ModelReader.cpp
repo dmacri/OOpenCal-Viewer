@@ -3,20 +3,37 @@
 
 ColumnAndRow ReaderHelpers::getColumnAndRowFromLine(const std::string& line)
 {
-    /// input format: "C-R" where C and R are numbers
+    /// input format: "C-R" for 2D or "C-R-S" for 3D where C, R, and S are numbers
+    /// For 3D models, we only extract C and R (columns and rows), ignoring slices
     if (line.empty())
     {
         throw std::invalid_argument("Line is empty, but it should contain columns and row!");
     }
 
-    const auto delimiterPos = line.find('-');
-    if (delimiterPos == std::string::npos)
+    const auto firstDelimiterPos = line.find('-');
+    if (firstDelimiterPos == std::string::npos)
     {
         throw std::runtime_error("No delimiter '-' found in the line: >" + line + "<");
     }
 
-    const auto x = std::stoi(line.substr(0, delimiterPos));
-    const auto y = std::stoi(line.substr(delimiterPos + 1));
+    const auto x = std::stoi(line.substr(0, firstDelimiterPos));
+    
+    // Find second delimiter to check if this is 3D format (C-R-S)
+    const auto secondDelimiterPos = line.find('-', firstDelimiterPos + 1);
+    
+    int y;
+    if (secondDelimiterPos != std::string::npos)
+    {
+        // 3D format: C-R-S, extract R from between first and second delimiter
+        y = std::stoi(line.substr(firstDelimiterPos + 1, secondDelimiterPos - firstDelimiterPos - 1));
+        // Note: We ignore the slice count (S) here as it's handled separately
+    }
+    else
+    {
+        // 2D format: C-R
+        y = std::stoi(line.substr(firstDelimiterPos + 1));
+    }
+    
     return ColumnAndRow::xy(x, y);
 }
 
