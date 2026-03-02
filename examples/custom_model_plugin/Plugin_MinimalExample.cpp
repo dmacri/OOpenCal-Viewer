@@ -1,6 +1,6 @@
 /** Plugin_MinimalExample.cpp
  *
- * Minimal example plugin for OOpenCAL / Qt-VTK Viewer.
+ * Minimal example plugin for OOpenCAL / OOpenCal-Visualiser.
  * Demonstrates how to register a new model plugin without depending
  * on full library headers. This is a teaching / template version.
  *

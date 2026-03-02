@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Qt-VTK-viewer now supports loading OOpenCAL models directly from a directory. This feature automatically:
+The OOpenCal-Visualiser now supports loading OOpenCAL models directly from a directory. This feature automatically:
 
 1. Reads the model configuration from `Header.txt`
 2. Finds the C++ model source file (`.h`)
@@ -108,7 +108,7 @@ If compilation fails:
 
 ### Via GUI
 
-1. Open the Qt-VTK-viewer application
+1. Open the OOpenCal-Visualiser application
 2. Go to **File** menu → **Load Model from Directory...**
 3. Select the directory containing your model
 4. The application will:

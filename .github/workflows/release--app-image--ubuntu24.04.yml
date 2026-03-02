@@ -1,4 +1,4 @@
-name: Build Qt-VTK Viewer AppImage
+name: Build OOpenCal-Visualiser AppImage
 
 on:
   push:

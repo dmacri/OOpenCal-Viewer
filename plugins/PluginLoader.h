@@ -1,7 +1,7 @@
 /** @file PluginLoader.h
  * @brief Plugin management system for dynamic model loading.
  *
- * This class handles loading, managing, and querying plugins for the Qt-VTK Viewer.
+ * This class handles loading, managing, and querying plugins for the OOpenCal-Visualiser.
  * Plugins are shared libraries (.so) that register custom cell models at runtime. */
 
 #pragma once

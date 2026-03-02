@@ -1,11 +1,11 @@
 /** @file main.cpp
- * @brief Main entry point for the Qt-VTK Viewer application.
+ * @brief Main entry point for the OOpenCal-Visualiser application.
  *
  * This file initializes the Qt application, sets up the main window,
  * handles command-line arguments for loading initial configurations,
  * and loads model plugins from the plugins directory.
  *
- * @mainpage Qt-VTK Viewer
+ * @mainpage OOpenCal-Visualiser
  * @tableofcontents
  *
  * @section intro_sec Introduction
