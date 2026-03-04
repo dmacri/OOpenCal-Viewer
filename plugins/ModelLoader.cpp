@@ -123,9 +123,9 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             if (! compilationResult.success)
             {
                 std::cerr << "Compilation failed with exit code: " << compilationResult.exitCode << std::endl;
-                if (!compilationResult.stderr.empty())
+                if (!compilationResult.stdErr.empty())
                 {
-                    std::cerr << "Error output:\n" << compilationResult.stderr << std::endl;
+                    std::cerr << "Error output:\n" << compilationResult.stdErr << std::endl;
                 }
                 result.success = false;
                 result.compilationResult = compilationResult;
@@ -240,8 +240,8 @@ std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppH
     // Linux/macOS: generate shared library name (e.g., "libBallCellPlugin.so")
     const auto sharedLibraryName = "lib" + baseName + "Plugin.so";
 #endif
-    
-    return file.parent_path() / sharedLibraryName;
+
+    return (file.parent_path() / sharedLibraryName).string();
 }
 // TODO: GB: Use QLibrary to make this multiplatform
 // std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppHeaderFile)
@@ -307,9 +307,7 @@ bool ModelLoader::generateWrapper(const std::string& wrapperPath, const std::str
                 << "{\n"
                 << "    std::cout << \"Registering \" MODEL_NAME \" plugin...\" << std::endl;\n"
                 << "\n"
-                << "    bool success = SceneWidgetVisualizerFactory::registerModel(MODEL_NAME, []() {\n"
-                << "        return std::make_unique<SceneWidgetVisualizerTemplate<" << className << ">>(MODEL_NAME);\n"
-                << "    });\n"
+                << "    bool success = SceneWidgetVisualizerFactory::registerModel<" << className << ">(MODEL_NAME);\n"
                 << "\n"
                 << "    if (success)\n"
                 << "    {\n"
@@ -324,15 +322,9 @@ bool ModelLoader::generateWrapper(const std::string& wrapperPath, const std::str
                 << "\n"
                 << "DLL_EXPORT const char* getPluginInfo()\n"
                 << "{\n"
-                << "#ifdef _WIN32\n"
                 << "    return MODEL_NAME \" Plugin v1.0\\n\"\n"
                 << "           \"Auto-generated from directory loader\\n\"\n"
-                << "           \"Compatible with: Qt-VTK-viewer 2.x (Windows)\";\n"
-                << "#else\n"
-                << "    return MODEL_NAME \" Plugin v1.0\\n\"\n"
-                << "           \"Auto-generated from directory loader\\n\"\n"
-                << "           \"Compatible with: Qt-VTK-viewer 2.x\";\n"
-                << "#endif\n"
+                << "           \"Compatible with: OOpenCal-Visualiser 2.x\";\n"
                 << "}\n"
                 << "\n"
                 << "DLL_EXPORT int getPluginVersion()\n"

@@ -12,7 +12,7 @@ class QLineEdit;
 class QLabel;
 class QDoubleSpinBox;
 class QPushButton;
-class SettingParameter;
+struct SettingParameter;
 
 namespace Ui
 {

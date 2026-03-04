@@ -10,6 +10,12 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+# Disable IWYU for GoogleTest targets to avoid warnings from system headers
+set_target_properties(gtest PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "")
+set_target_properties(gtest_main PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "")
+set_target_properties(gmock PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "")
+set_target_properties(gmock_main PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "")
+
 # ============================================
 # OOpenCAL include directory (optional)
 # ============================================

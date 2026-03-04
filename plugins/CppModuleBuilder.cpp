@@ -5,6 +5,10 @@
 #include <iostream>
 #include <sstream>
 
+#ifdef _WIN32
+    #include <windows.h>
+#endif
+
 #include "CppModuleBuilder.h"
 #include "CompilationConfig.h"
 #include "process.hpp" // tiny process library
@@ -12,9 +16,26 @@
 
 namespace fs = std::filesystem;
 
-
+// Helper function to convert std::string to TinyProcessLib::Process::string_type
 namespace
 {
+inline TinyProcessLib::Process::string_type toProcessString(const std::string& str)
+{
+#ifdef _WIN32
+    // On Windows, TinyProcessLib uses std::wstring
+    if (str.empty())
+        return TinyProcessLib::Process::string_type();
+    
+    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+    TinyProcessLib::Process::string_type wstr(size_needed, 0);
+    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0], size_needed);
+    return wstr;
+#else
+    // On Unix-like systems, TinyProcessLib uses std::string
+    return str;
+#endif
+}
+
 /** @brief Find an available C++ compiler (legacy function for compatibility)
  * @param preferredCompiler Preferred compiler (e.g., "clang++")
  * @return Path to available compiler, or empty string if none found */
@@ -115,7 +136,7 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     if (! fs::exists(sourceFile))
     {
         lastResult->success = false;
-        lastResult->stderr = "Source file does not exist: " + sourceFile;
+        lastResult->stdErr = "Source file does not exist: " + sourceFile;
         return *lastResult;
     }
 
@@ -128,7 +149,7 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     if (availableCompiler.empty())
     {
         lastResult->success = false;
-        lastResult->stderr = "No C++ compiler found. Please install clang++, g++, or c++.";
+        lastResult->stdErr = "No C++ compiler found. Please install clang++, g++, or c++.";
         lastResult->compileCommand = compilerPath + " (not found)";
         if (progressCallback)
             progressCallback("ERROR: No C++ compiler found");
@@ -163,13 +184,13 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     lastResult->exitCode = executeCommand(
         lastResult->compileCommand,
         [this, &lineCount](const std::string& line) { 
-            lastResult->stdout += line + "\n";
+            lastResult->stdOut += line + "\n";
             // Report compilation progress every 5 lines to avoid too many updates
             if (progressCallback && !line.empty() && (++lineCount % 5 == 0))
                 progressCallback("Compiling... (" + std::to_string(lineCount) + " lines)");
         },
         [this](const std::string& line) { 
-            lastResult->stderr += line + "\n";
+            lastResult->stdErr += line + "\n";
             // Report compilation errors immediately
             if (progressCallback && !line.empty())
                 progressCallback("Error: " + line);
@@ -185,9 +206,9 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     {
         lastResult->success = false;
         std::cerr << "✗ Compilation failed with exit code: " << lastResult->exitCode << std::endl;
-        if (!lastResult->stderr.empty())
+        if (!lastResult->stdErr.empty())
         {
-            std::cerr << "Error output:\n" << lastResult->stderr << std::endl;
+            std::cerr << "Error output:\n" << lastResult->stdErr << std::endl;
         }
     }
 
@@ -234,8 +255,8 @@ int CppModuleBuilder::executeCommand(const std::string& command,
     try
     {
         TinyProcessLib::Process process(
-            command,
-            "",
+            toProcessString(command),
+            toProcessString(std::string()),
             [&stdout_callback](const char* bytes, size_t n) {
                 if (stdout_callback)
                 {

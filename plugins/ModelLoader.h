@@ -22,8 +22,8 @@ struct CompilationResult
 {
     bool success = false;       ///< Whether compilation succeeded
     int exitCode = -1;          ///< Compiler exit code
-    std::string stdout;         ///< Compiler standard output
-    std::string stderr;         ///< Compiler error output
+    std::string stdOut;         ///< Compiler standard output
+    std::string stdErr;         ///< Compiler error output
     std::string sourceFile;     ///< Source file that was compiled
     std::string outputFile;     ///< Output .so file path
     std::string compileCommand; ///< The actual compile command used

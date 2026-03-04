@@ -88,7 +88,7 @@ Tests for the `initializeSubstateInfo()` function that populates the substateInf
 ### Build Tests
 
 ```bash
-cd /home/agh/Pulpit/ItaliaSoftware/Qt-VTK-viewer
+cd /home/agh/Pulpit/ItaliaSoftware/OOpenCal-Visualiser
 cmake --build build -j4
 ```
 

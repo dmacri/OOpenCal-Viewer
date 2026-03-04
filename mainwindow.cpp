@@ -1208,6 +1208,9 @@ void MainWindow::loadModelDataWithExistingModel(const QString& modelDirectory, c
             return;
         }
 
+        // Clear scene before loading new configuration to avoid stale data
+        ui->sceneWidget->clearScene();
+
         switchToModel(existingModelName);
 
         // Build path to Header.txt in the model directory

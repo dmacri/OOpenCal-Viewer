@@ -11,7 +11,7 @@
  * recompiling the application. Models are identified by their string names.
  * 
  * @see ISceneWidgetVisualizer
- * @see SceneWidgetVisualizerTemplate
+ * @see SceneWidgetVisualizerAdapter
  * @see doc/CHANGELOG_RUNTIME_MODELS.md for architectural details */
 
 #pragma once
@@ -21,6 +21,7 @@
 #include <memory> // std::unique_ptr<>
 #include <string>
 #include <vector>
+#include "visualiserProxy/SceneWidgetVisualizerProxy.h"
 
 class ISceneWidgetVisualizer;
 
@@ -66,6 +67,21 @@ public:
      * @param creator Function that creates a new instance of the visualizer
      * @return true if registration succeeded, false if model already exists */
     static bool registerModel(const std::string& modelName, ModelCreator creator);
+
+    /** @brief Register a new model with the factory.
+     *
+     * This method allows adding new models at runtime. The creator function will be
+     * called whenever a visualizer for this model is requested.
+     *
+     * @param modelName The unique name of the model
+     * @return true if registration succeeded, false if model already exists */
+    template<typename Cell>
+    static bool registerModel(const std::string& name)
+    {
+        return registerModel(name, [name]() {
+                                 return std::make_unique<SceneWidgetVisualizerTemplate<Cell>>(name);
+        });
+    }
 
     /// @brief Get all available model names
     static std::vector<std::string> getAvailableModels();
