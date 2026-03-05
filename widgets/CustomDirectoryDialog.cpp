@@ -41,7 +41,8 @@ enum ColumnIndex
     ColumnDirectory = 0,
     ColumnX = 1,
     ColumnY = 2,
-    ColumnM = 3,
+    ColumnZ = 3,
+    ColumnM = 4,
 
     ColumnCount
 };
@@ -75,6 +76,7 @@ struct CustomDirectoryDialog::HeaderInfo
 {
     int numberNodeX = -1;
     int numberNodeY = -1;
+    int numberNodeZ = -1;
     QString mode; // "binary" or "text"
     bool isValid = false;
 };
@@ -128,6 +130,8 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
                     return info.numberNodeX > 0 ? QString::number(info.numberNodeX) : QString();
                 case ColumnY: // y column (number_node_y)
                     return info.numberNodeY > 0 ? QString::number(info.numberNodeY) : QString();
+                case ColumnZ: // z column (number_node_z)
+                    return info.numberNodeZ > 0 ? QString::number(info.numberNodeZ) : QString();
                 case ColumnM: // m column (mode)
                     return info.mode;
                 }
@@ -181,6 +185,8 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Q
             return tr("X");
         case ColumnY: 
             return tr("Y");
+        case ColumnZ:
+            return tr("Z");
         case ColumnM: 
             return tr("M");
         }
@@ -229,6 +235,11 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Q
         case ColumnY:
             return tr("<html><b>Y</b><br/>"
                       "Number of nodes in Y direction<br/>"
+                      "Extracted from Header.txt file<br/>"
+                      "Only shown for directories with Header.txt</html>");
+        case ColumnZ:
+            return tr("<html><b>Z</b><br/>"
+                      "Number of nodes in Z direction (3D)<br/>"
                       "Extracted from Header.txt file<br/>"
                       "Only shown for directories with Header.txt</html>");
         case ColumnM:
@@ -378,15 +389,17 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     // Set column resize modes with fixed percentages
     QHeaderView* header = ui->m_treeView->header();
     header->setSectionResizeMode(ColumnDirectory, QHeaderView::Interactive);  // 70% for directory column
-    header->setSectionResizeMode(ColumnX, QHeaderView::Fixed);  // 10% for X column
-    header->setSectionResizeMode(ColumnY, QHeaderView::Fixed);  // 10% for Y column
-    header->setSectionResizeMode(ColumnM, QHeaderView::Fixed);  // 10% for M column
+    header->setSectionResizeMode(ColumnX, QHeaderView::Fixed);  // 7.5% for X column
+    header->setSectionResizeMode(ColumnY, QHeaderView::Fixed);  // 7.5% for Y column
+    header->setSectionResizeMode(ColumnZ, QHeaderView::Fixed);  // 7.5% for Z column
+    header->setSectionResizeMode(ColumnM, QHeaderView::Fixed);  // 7.5% for M column
     header->setStretchLastSection(false);
     
     // Set initial column widths (will be adjusted to percentages when widget is shown)
     ui->m_treeView->setColumnWidth(ColumnDirectory, 400);  // Initial width for directory column
     ui->m_treeView->setColumnWidth(ColumnX, 20);   // Initial width for X column
     ui->m_treeView->setColumnWidth(ColumnY, 20);   // Initial width for Y column
+    ui->m_treeView->setColumnWidth(ColumnZ, 20);   // Initial width for Z column
     ui->m_treeView->setColumnWidth(ColumnM, 20);   // Initial width for M column
     
     // Apply percentage-based widths after widget is shown
@@ -394,10 +407,11 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
         QHeaderView* header = ui->m_treeView->header();
         int totalWidth = ui->m_treeView->header()->viewport()->width();
         
-        header->resizeSection(ColumnDirectory, totalWidth * 0.7);  // 70% for directory
-        header->resizeSection(ColumnX, totalWidth * 0.1);         // 10% for X
-        header->resizeSection(ColumnY, totalWidth * 0.1);         // 10% for Y
-        header->resizeSection(ColumnM, totalWidth * 0.1);         // 10% for M
+        header->resizeSection(ColumnDirectory, totalWidth * 0.7);   // 70% for directory
+        header->resizeSection(ColumnX, totalWidth * 0.075);        // 7.5% for X
+        header->resizeSection(ColumnY, totalWidth * 0.075);        // 7.5% for Y
+        header->resizeSection(ColumnZ, totalWidth * 0.075);        // 7.5% for Z
+        header->resizeSection(ColumnM, totalWidth * 0.075);        // 7.5% for M
     });
     
     ui->m_treeView->setSortingEnabled(true);
@@ -712,6 +726,12 @@ CustomDirectoryDialog::HeaderInfo CustomDirectoryDialog::parseHeaderFile(const Q
             {
                 info.numberNodeY = std::stoi(paramY->getDefaultValue());
             }
+            
+            const ConfigParameter* paramZ = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Z);
+            if (paramZ)
+            {
+                info.numberNodeZ = std::stoi(paramZ->getDefaultValue());
+            }
         }
         
         // Get mode from VISUALIZATION category
@@ -732,7 +752,7 @@ CustomDirectoryDialog::HeaderInfo CustomDirectoryDialog::parseHeaderFile(const Q
         }
         
         // Mark as valid if we got at least some data
-        info.isValid = (info.numberNodeX > 0 || info.numberNodeY > 0 || !info.mode.isEmpty());
+        info.isValid = (info.numberNodeX > 0 || info.numberNodeY > 0 || info.numberNodeZ > 0 || !info.mode.isEmpty());
     }
     catch (const std::exception& /*e*/)
     {
