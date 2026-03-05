@@ -382,16 +382,15 @@ jobs:
           export LDLIBS="-L${HERE}/compiler/lib"
           export LD_RPATH_SEARCH_PATHS="${HERE}/compiler/lib:${HERE}/usr/lib"
 
-          # Find and execute the main application binary
-          APPBIN=$(find "${HERE}/usr/bin" -maxdepth 1 -type f -executable ! -name "*.so*" 2>/dev/null | head -1)
-          if [ -z "$APPBIN" ]; then
-            echo "Error: No executable found in ${HERE}/usr/bin"
-            exit 1
-          fi
-          exec "$APPBIN" "$@"
+          # Execute the application
+          exec "${HERE}/usr/bin/___APP_EXECUTABLE_NAME___" "$@"
           EOF
 
           chmod +x AppDir/AppRun
+
+      - name: Insert executable name into AppRun
+        run: |
+          sed -i "s|___APP_EXECUTABLE_NAME___|${PROJECT_NAME}|g" AppDir/AppRun
 
       - name: Fix RPATH for all binaries and libraries
         run: |

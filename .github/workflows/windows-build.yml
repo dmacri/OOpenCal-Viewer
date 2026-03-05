@@ -69,7 +69,7 @@ jobs:
         
         # Install VTK with Qt and OpenGL support
         Write-Host "Installing/updating VTK with Qt and OpenGL support..."
-        & "$vcpkg_exe" install vtk[qt,opengl]:x64-windows --verbose
+        & "$vcpkg_exe" install vtk[qt,opengl]:x64-windows --recurse
         
         # Make vcpkg root available for next steps
         Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$vcpkg_root"
