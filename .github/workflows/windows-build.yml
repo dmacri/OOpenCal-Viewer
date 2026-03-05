@@ -36,15 +36,15 @@ jobs:
         cmakeVersion: "~3.27"
         ninjaVersion: "^1.11"
 
-    - name: Cache vcpkg packages
+    - name: Cache vcpkg and packages
       uses: actions/cache@v4
       with:
         path: |
           ${{ runner.temp }}/vcpkg
-          C:\vcpkg-cache
-        key: vcpkg-${{ runner.os }}-x64-windows-${{ hashFiles('.vcpkg-version') }}
+          C:\vcpkg
+        key: vcpkg-vtk-${{ runner.os }}-x64-windows-v2
         restore-keys: |
-          vcpkg-${{ runner.os }}-x64-windows-
+          vcpkg-vtk-${{ runner.os }}-x64-windows-
 
     - name: Setup vcpkg
       shell: pwsh
@@ -52,15 +52,24 @@ jobs:
         # Clone vcpkg
         $vcpkg_root = "${{ runner.temp }}/vcpkg"
         if (-not (Test-Path $vcpkg_root)) {
+          Write-Host "Cloning vcpkg..."
           git clone https://github.com/Microsoft/vcpkg.git --depth=1 "$vcpkg_root"
+        } else {
+          Write-Host "vcpkg already cached, skipping clone"
         }
         
-        # Bootstrap vcpkg
-        & "$vcpkg_root/bootstrap-vcpkg.bat" -disableMetrics
+        # Bootstrap vcpkg (only if not already done)
+        $vcpkg_exe = Join-Path $vcpkg_root "vcpkg.exe"
+        if (-not (Test-Path $vcpkg_exe)) {
+          Write-Host "Bootstrapping vcpkg..."
+          & "$vcpkg_root/bootstrap-vcpkg.bat" -disableMetrics
+        } else {
+          Write-Host "vcpkg already bootstrapped"
+        }
         
         # Install VTK with Qt and OpenGL support
-        Write-Host "Installing VTK with Qt and OpenGL support..."
-        & "$vcpkg_root/vcpkg.exe" install vtk[qt,opengl]:x64-windows --recurse
+        Write-Host "Installing/updating VTK with Qt and OpenGL support..."
+        & "$vcpkg_exe" install vtk[qt,opengl]:x64-windows --verbose
         
         # Make vcpkg root available for next steps
         Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$vcpkg_root"
