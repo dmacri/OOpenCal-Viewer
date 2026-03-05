@@ -720,16 +720,31 @@ void CustomDirectoryDialog::loadAvailableModels()
 
 void CustomDirectoryDialog::setStartDirectory(const QString &path)
 {
-    if (QDir(path).exists())
+    QString targetPath = path;
+    
+    // If path doesn't exist or is empty, try to find a valid prefix or fall back to current working directory
+    if (targetPath.isEmpty() || !QDir(targetPath).exists())
     {
-        QModelIndex sourceIndex = m_fileSystemModel->index(path);
-        QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
-        if (proxyIndex.isValid())
+        // Try to find the longest valid prefix
+        PathValidationResult validation = validateAndSplitPath(targetPath);
+        if (!validation.validPrefix.isEmpty() && QDir(validation.validPrefix).exists())
         {
-            ui->m_treeView->setCurrentIndex(proxyIndex);
-            ui->m_treeView->scrollTo(proxyIndex, QTreeView::EnsureVisible);
-            onTreeViewClicked(proxyIndex);
+            targetPath = validation.validPrefix;
         }
+        else
+        {
+            // Fall back to current working directory (useful for AppImage deployments)
+            targetPath = QDir::currentPath();
+        }
+    }
+    
+    QModelIndex sourceIndex = m_fileSystemModel->index(targetPath);
+    QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
+    if (proxyIndex.isValid())
+    {
+        ui->m_treeView->setCurrentIndex(proxyIndex);
+        ui->m_treeView->scrollTo(proxyIndex, QTreeView::EnsureVisible);
+        onTreeViewClicked(proxyIndex);
     }
 }
 
