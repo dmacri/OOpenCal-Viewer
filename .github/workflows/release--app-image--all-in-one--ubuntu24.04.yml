@@ -34,7 +34,6 @@ jobs:
             cmake \
             ninja-build \
             clang \
-            clang++ \
             lld \
             llvm \
             libc++-dev \

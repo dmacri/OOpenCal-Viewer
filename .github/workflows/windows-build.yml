@@ -27,7 +27,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: alessioderango/OOpenCAL
-        path: ../OOpenCAL
+        path: deps/OOpenCAL
         token: ${{ secrets.VisualizerOpenCal }}
 
     - name: Install CMake and Ninja
@@ -71,10 +71,10 @@ jobs:
         $vcpkg_root = "${{ runner.temp }}/vcpkg"
         $toolchain_file = "$vcpkg_root/scripts/buildsystems/vcpkg.cmake"
         $project_root = $env:GITHUB_WORKSPACE
-        $oopencal_parent = Split-Path -Parent $project_root
+        $oopencal_dir = Join-Path $project_root "deps"
         
         Write-Host "Project root: $project_root"
-        Write-Host "OOpenCAL parent (OOPENCAL_DIR): $oopencal_parent"
+        Write-Host "OOpenCAL parent (OOPENCAL_DIR): $oopencal_dir"
         
         mkdir -p build
         cd build
@@ -82,7 +82,7 @@ jobs:
         cmake -G "${{ matrix.generator }}" `
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
           -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" `
-          -DOOPENCAL_DIR="$oopencal_parent" `
+          -DOOPENCAL_DIR="$oopencal_dir" `
           -DUSE_QT6=ON `
           ..
 
