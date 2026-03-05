@@ -46,6 +46,50 @@ enum ColumnIndex
 
     ColumnCount
 };
+
+bool is3DModel(Config& config)
+{
+    // Determine if this is a 3D model by checking number_of_slices from GENERAL category
+    ConfigCategory* generalCat = config.getConfigCategory(ConfigConstants::CATEGORY_GENERAL, /*ignoreCase=*/true);
+    if (generalCat)
+    {
+        const ConfigParameter* paramSlices = generalCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_SLICES);
+        if (paramSlices)
+        {
+            try
+            {
+                int numberOfSlices = std::stoi(paramSlices->getDefaultValue());
+                return (numberOfSlices > 1);
+            }
+            catch (...)
+            {
+                return false;
+            }
+        }
+    }
+    return false;
+}
+
+QString readFileModeFromConfig(Config& config)
+{
+    // Get mode from VISUALIZATION category
+    ConfigCategory* visualizationCat = config.getConfigCategory(ConfigConstants::CATEGORY_VISUALIZATION, /*ignoreCase=*/true);
+    if (visualizationCat)
+    {
+        const ConfigParameter* paramMode = visualizationCat->getConfigParameter(ConfigConstants::PARAM_MODE);
+        if (paramMode)
+        {
+            QString mode = QString::fromStdString(paramMode->getDefaultValue()).toLower();
+            if (mode == "binary")
+                return "b";
+            else if (mode == "text")
+                return "t";
+            else
+                return mode.left(1); // Take first letter as fallback
+        }
+    }
+    return QString();
+}
 } // namespace
 
 namespace Icons
@@ -72,12 +116,14 @@ QIcon grayIcon()
 }
 } // namespace icons
 
+
 struct CustomDirectoryDialog::HeaderInfo
 {
     int numberNodeX = -1;
     int numberNodeY = -1;
     int numberNodeZ = -1;
     QString mode; // "binary" or "text"
+    bool is3DModel = false;  // True if model has Z dimension > 1 or number_of_slices > 1
     bool isValid = false;
 };
 
@@ -130,8 +176,8 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
                     return info.numberNodeX > 0 ? QString::number(info.numberNodeX) : QString();
                 case ColumnY: // y column (number_node_y)
                     return info.numberNodeY > 0 ? QString::number(info.numberNodeY) : QString();
-                case ColumnZ: // z column (number_node_z)
-                    return info.numberNodeZ > 0 ? QString::number(info.numberNodeZ) : QString();
+                case ColumnZ: // z column (number_node_z) - only show for 3D models
+                    return info.is3DModel ? QString::number(info.numberNodeZ) : QString();
                 case ColumnM: // m column (mode)
                     return info.mode;
                 }
@@ -710,49 +756,15 @@ CustomDirectoryDialog::HeaderInfo CustomDirectoryDialog::parseHeaderFile(const Q
     try
     {
         Config config(headerPath.toStdString(), /*printWarnings=*/false);
-        
-        // Get number_node_x from DISTRIBUTED category
-        ConfigCategory* distributedCat = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED, /*ignoreCase=*/true);
-        if (distributedCat)
-        {
-            const ConfigParameter* paramX = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_X);
-            if (paramX)
-            {
-                info.numberNodeX = std::stoi(paramX->getDefaultValue());
-            }
-            
-            const ConfigParameter* paramY = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Y);
-            if (paramY)
-            {
-                info.numberNodeY = std::stoi(paramY->getDefaultValue());
-            }
-            
-            const ConfigParameter* paramZ = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Z);
-            if (paramZ)
-            {
-                info.numberNodeZ = std::stoi(paramZ->getDefaultValue());
-            }
-        }
-        
-        // Get mode from VISUALIZATION category
-        ConfigCategory* visualizationCat = config.getConfigCategory(ConfigConstants::CATEGORY_VISUALIZATION, /*ignoreCase=*/true);
-        if (visualizationCat)
-        {
-            const ConfigParameter* paramMode = visualizationCat->getConfigParameter(ConfigConstants::PARAM_MODE);
-            if (paramMode)
-            {
-                info.mode = QString::fromStdString(paramMode->getDefaultValue()).toLower();
-                if (info.mode == "binary")
-                    info.mode = "b";
-                else if (info.mode == "text")
-                    info.mode = "t";
-                else
-                    info.mode = info.mode.left(1); // Take first letter as fallback
-            }
-        }
+
+        readNodeNumbersFromConfig(config, info);
+
+        info.is3DModel = is3DModel(config);
+
+        info.mode = readFileModeFromConfig(config);
         
         // Mark as valid if we got at least some data
-        info.isValid = (info.numberNodeX > 0 || info.numberNodeY > 0 || info.numberNodeZ > 0 || !info.mode.isEmpty());
+        info.isValid = (info.numberNodeX > 0 || info.numberNodeY > 0 || info.numberNodeZ > 0 || ! info.mode.isEmpty());
     }
     catch (const std::exception& /*e*/)
     {
@@ -761,6 +773,31 @@ CustomDirectoryDialog::HeaderInfo CustomDirectoryDialog::parseHeaderFile(const Q
     }
     
     return info;
+}
+void CustomDirectoryDialog::readNodeNumbersFromConfig(Config& config, CustomDirectoryDialog::HeaderInfo& info) const
+{
+    // Get number_node_{x,y,z} from DISTRIBUTED category
+    ConfigCategory* distributedCat = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED, /*ignoreCase=*/true);
+    if (distributedCat)
+    {
+        const ConfigParameter* paramX = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_X);
+        if (paramX)
+        {
+            info.numberNodeX = std::stoi(paramX->getDefaultValue());
+        }
+
+        const ConfigParameter* paramY = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Y);
+        if (paramY)
+        {
+            info.numberNodeY = std::stoi(paramY->getDefaultValue());
+        }
+
+        const ConfigParameter* paramZ = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Z);
+        if (paramZ)
+        {
+            info.numberNodeZ = std::stoi(paramZ->getDefaultValue());
+        }
+    }
 }
 
 CustomDirectoryDialog::DirectoryType CustomDirectoryDialog::analyzeDirectory(const QString &path) const

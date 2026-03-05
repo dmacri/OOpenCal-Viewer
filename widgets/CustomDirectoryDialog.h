@@ -21,7 +21,7 @@ class QLabel;
 class QCheckBox;
 class QPushButton;
 class QTreeView;
-class QTreeView;
+class Config;
 
 namespace Ui
 {
@@ -170,6 +170,9 @@ private:
 
     /// Finds and selects matching model in the available modules combo box
     void selectMatchingModel(const QString &expectedModelName);
+
+    /// reads from loaded config: number_number_{x,y,z}
+    void readNodeNumbersFromConfig(/*const*/Config &config, CustomDirectoryDialog::HeaderInfo& info) const;
 
 private:
     /// Generated UI object

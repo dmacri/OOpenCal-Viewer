@@ -2,7 +2,6 @@
  * @brief Implementation of CompilationSettingsWidget for displaying C++ compilation settings. */
 
 #include <string>
-#include <sstream>
 #include <cstdlib>
 #include <QTableWidgetItem>
 #include <QHeaderView>
