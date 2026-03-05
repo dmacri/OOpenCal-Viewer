@@ -36,38 +36,52 @@ jobs:
         cmakeVersion: "~3.27"
         ninjaVersion: "^1.11"
 
+    - name: Cache vcpkg packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ runner.temp }}/vcpkg
+          C:\vcpkg-cache
+        key: vcpkg-${{ runner.os }}-x64-windows-${{ hashFiles('.vcpkg-version') }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-x64-windows-
+
     - name: Setup vcpkg
-      shell: bash
+      shell: pwsh
       run: |
         # Clone vcpkg
-        cd ${{ runner.temp }}
-        git clone https://github.com/Microsoft/vcpkg.git --depth=1
-        cd vcpkg
+        $vcpkg_root = "${{ runner.temp }}/vcpkg"
+        if (-not (Test-Path $vcpkg_root)) {
+          git clone https://github.com/Microsoft/vcpkg.git --depth=1 "$vcpkg_root"
+        }
         
         # Bootstrap vcpkg
-        ./bootstrap-vcpkg.bat -disableMetrics
+        & "$vcpkg_root/bootstrap-vcpkg.bat" -disableMetrics
         
         # Install VTK with Qt and OpenGL support
-        echo "Installing VTK with Qt and OpenGL support..."
-        ./vcpkg.exe install vtk[qt,opengl]:x64-windows --recurse
+        Write-Host "Installing VTK with Qt and OpenGL support..."
+        & "$vcpkg_root/vcpkg.exe" install vtk[qt,opengl]:x64-windows --recurse
         
         # Make vcpkg root available for next steps
-        echo "VCPKG_ROOT=${{ runner.temp }}/vcpkg" >> $GITHUB_ENV
+        Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$vcpkg_root"
 
     - name: Configure CMake
-      shell: bash
+      shell: pwsh
       run: |
+        $vcpkg_root = "${{ runner.temp }}/vcpkg"
+        $toolchain_file = "$vcpkg_root/scripts/buildsystems/vcpkg.cmake"
+        
         mkdir -p build
         cd build
         
-        cmake -G "${{ matrix.generator }}" \
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-          -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
-          -DUSE_QT6=ON \
+        cmake -G "${{ matrix.generator }}" `
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+          -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" `
+          -DUSE_QT6=ON `
           ..
 
     - name: Build project
-      shell: bash
+      shell: pwsh
       run: |
         cd build
         cmake --build . --config ${{ matrix.build_type }} --target OOpenCal-Viewer
