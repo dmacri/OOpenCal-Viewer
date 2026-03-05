@@ -480,6 +480,7 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     connect(ui->m_treeView, &QTreeView::clicked, this, &CustomDirectoryDialog::onTreeViewClicked);
     connect(ui->m_treeView, &QTreeView::doubleClicked, this, &CustomDirectoryDialog::onTreeViewDoubleClicked);
     connect(ui->m_showHiddenCheckBox, &QCheckBox::toggled, this, &CustomDirectoryDialog::onHiddenDirectoriesToggled);
+    connect(ui->m_pathInputLineEdit, &QLineEdit::textChanged, this, &CustomDirectoryDialog::onPathInputChanged);
     connect(ui->m_okButton, &QPushButton::clicked, this, &CustomDirectoryDialog::onOkButtonClicked);
     connect(ui->m_cancelButton, &QPushButton::clicked, this, &CustomDirectoryDialog::onCancelButtonClicked);
     
@@ -917,6 +918,9 @@ void CustomDirectoryDialog::onTreeViewClicked(const QModelIndex &index)
     {
         updateDirectoryAppearance(path);
         
+        // Update path input field to reflect tree selection
+        updatePathInputFromTree(path);
+        
         const DirectoryType type = analyzeDirectory(path);
         const bool hasHeader = (type == DirectoryType::WithHeader);
         ui->m_okButton->setEnabled(hasHeader);
@@ -1180,4 +1184,147 @@ void CustomDirectoryDialog::onHiddenDirectoriesToggled(bool checked)
         filters |= QDir::Hidden;
     }
     m_fileSystemModel->setFilter(filters);
+}
+
+void CustomDirectoryDialog::updatePathInputFromTree(const QString &path)
+{
+    // Block signals to avoid circular updates
+    ui->m_pathInputLineEdit->blockSignals(true);
+    ui->m_pathInputLineEdit->setText(path);
+    
+    // Clear error styling if path now exists
+    QDir dir(path);
+    if (dir.exists())
+    {
+        ui->m_pathInputLineEdit->setStyleSheet("");
+        ui->m_pathInputLineEdit->setToolTip(QString());
+    }
+    
+    ui->m_pathInputLineEdit->blockSignals(false);
+}
+
+CustomDirectoryDialog::PathValidationResult CustomDirectoryDialog::validateAndSplitPath(const QString &path) const
+{
+    PathValidationResult result;
+    result.isComplete = false;
+    result.validPrefix = QString();
+    result.invalidPart = path;
+    
+    if (path.isEmpty())
+    {
+        return result;
+    }
+    
+    // Split path into parts
+    QStringList parts = path.split(QDir::separator(), Qt::SkipEmptyParts);
+    if (parts.isEmpty())
+    {
+        return result;
+    }
+    
+    // Check if path is absolute (for Unix/Linux this means starting with /)
+    bool isAbsolute = path.startsWith(QDir::separator());
+    
+    // Rebuild path progressively and check existence
+    QString currentPath = isAbsolute ? QString(QDir::separator()) : QString();
+    QString validPrefix = currentPath;
+    
+    for (int i = 0; i < parts.size(); ++i)
+    {
+        currentPath = QDir(currentPath).filePath(parts[i]);
+        QDir dir(currentPath);
+        
+        if (dir.exists())
+        {
+            validPrefix = currentPath;
+            result.validPrefix = currentPath;
+        }
+        else
+        {
+            // Found first invalid part - build the invalid suffix
+            QStringList invalidParts = parts.mid(i);
+            result.invalidPart = invalidParts.join(QDir::separator());
+            return result;
+        }
+    }
+    
+    // All parts are valid
+    result.isComplete = true;
+    result.validPrefix = currentPath;
+    result.invalidPart = QString();
+    
+    return result;
+}
+
+void CustomDirectoryDialog::navigateTreeToPath(const QString &path)
+{
+    if (path.isEmpty())
+    {
+        return;
+    }
+    
+    PathValidationResult validation = validateAndSplitPath(path);
+    
+    if (validation.isComplete)
+    {
+        // Path is completely valid
+        QModelIndex sourceIndex = m_fileSystemModel->index(validation.validPrefix);
+        QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
+        if (proxyIndex.isValid())
+        {
+            ui->m_treeView->setCurrentIndex(proxyIndex);
+            ui->m_treeView->scrollTo(proxyIndex, QTreeView::EnsureVisible);
+            onTreeViewClicked(proxyIndex);
+        }
+        
+        // Clear error styling
+        ui->m_pathInputLineEdit->setStyleSheet("");
+        ui->m_pathInputLineEdit->setToolTip(QString());
+    }
+    else
+    {
+        // Path is partially invalid
+        if (!validation.validPrefix.isEmpty())
+        {
+            // Navigate to valid prefix
+            QModelIndex sourceIndex = m_fileSystemModel->index(validation.validPrefix);
+            QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
+            if (proxyIndex.isValid())
+            {
+                ui->m_treeView->setCurrentIndex(proxyIndex);
+                ui->m_treeView->scrollTo(proxyIndex, QTreeView::EnsureVisible);
+                onTreeViewClicked(proxyIndex);
+            }
+        }
+        
+        // Set error styling with tooltip
+        ui->m_pathInputLineEdit->setStyleSheet("QLineEdit { background-color: #ffcccc; }");
+        
+        QString tooltipText = tr("Invalid path!\n\n");
+        if (!validation.validPrefix.isEmpty())
+        {
+            tooltipText += tr("Valid prefix: %1\n").arg(validation.validPrefix);
+            tooltipText += tr("Does not contain: %1\n").arg(validation.invalidPart);
+            tooltipText += tr("Full path: %1").arg(path);
+        }
+        else
+        {
+            tooltipText = tr("Path does not exist: %1").arg(path);
+        }
+        
+        ui->m_pathInputLineEdit->setToolTip(tooltipText);
+    }
+}
+
+void CustomDirectoryDialog::onPathInputChanged(const QString &path)
+{
+    // Ignore empty input
+    if (path.isEmpty())
+    {
+        ui->m_pathInputLineEdit->setStyleSheet("");
+        ui->m_pathInputLineEdit->setToolTip(QString());
+        return;
+    }
+    
+    navigateTreeToPath(path);
 }
