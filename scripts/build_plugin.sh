@@ -2,7 +2,7 @@
 # ==============================================================
 # build_plugin.sh
 #
-# Helper script to build a plugin module for OOpenCAL / Qt-VTK Viewer.
+# Helper script to build a plugin module for OOpenCAL / OOpenCal-Visualiser.
 #
 # Features:
 #   - Automatically prepares build directory near the provided header

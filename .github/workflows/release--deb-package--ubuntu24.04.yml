@@ -1,4 +1,4 @@
-name: Build Qt-VTK-viewer (.deb only, system deps) [on push and release]
+name: Build OOpenCal-Visualiser (.deb only, system deps) [on push and release]
 
 on:
   push:

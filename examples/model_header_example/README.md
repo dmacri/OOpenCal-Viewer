@@ -1,6 +1,6 @@
 # Model Header Example
 
-This directory contains an example of the `Header.txt` file format used by the Qt-VTK-viewer's "Load Model from Directory" feature.
+This directory contains an example of the `Header.txt` file format used by the OOpenCal-Visualiser's "Load Model from Directory" feature.
 
 ## File Structure
 
@@ -81,7 +81,7 @@ VISUALIZATION:
    cp path/to/MyModelCell.h MyModel/
    ```
 
-4. Open Qt-VTK-viewer and select Model → Load Model from Directory...
+4. Open OOpenCal-Visualiser and select Model → Load Model from Directory...
 
 5. Select your `MyModel` directory
 

@@ -27,7 +27,7 @@ public:
      * @param configuration_path Path to the configuration file to load
      * @param printWarnings when true it will print warnings to std::cerr, otherwise silent mode
      * @throws std::runtime_error If the file cannot be opened or has an invalid format */
-    explicit Config(const std::string& configuration_path, bool printWarnings=true);
+    explicit Config(const std::string& configuration_path, bool printWarnings = true);
 
     /** @brief Sets the path to the configuration file.
      * 

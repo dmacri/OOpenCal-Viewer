@@ -7,6 +7,8 @@
 #include <memory>
 #include <format>
 #include <string>
+#include <QString>
+#include <QLibrary>
 
 #include "ModelLoader.h"
 #include "config/Config.h"
@@ -18,36 +20,6 @@
 namespace
 {
 namespace fs = std::filesystem;
-
-/// Get the directory containing this executable (project root)
-static std::string getProjectRootPath()
-{
-    // 1. Prefer environment variable first
-    if (const char* envPath = std::getenv("OOPENCAL_VIEWER_ROOT"))
-    {
-        if (! std::string(envPath).empty())
-        {
-            return envPath;
-        }
-    }
-
-// 2. Use compile-time define provided by CMake (if exists and directory is valid)
-#ifdef OOPENCAL_VIEWER_ROOT
-    {
-        const std::string viewerPath = OOPENCAL_VIEWER_ROOT;
-
-        // Only use it if it points to an existing directory
-        std::error_code ec; // this is used to use version which does not throw
-        if (std::filesystem::exists(viewerPath, ec) && std::filesystem::is_directory(viewerPath, ec))
-        {
-            return viewerPath;
-        }
-    }
-#endif
-
-    // 3. Fallback: nothing available → return empty string
-    return "";
-}
 
 /** Check if file `a` is newer than file `b`.
  *  Returns:
@@ -68,14 +40,6 @@ bool isFileNewer(const std::filesystem::path& a, const std::filesystem::path& b)
     return fs::last_write_time(a) > fs::last_write_time(b);
 }
 
-std::string generateModuleNameForSourceFile(const std::string& cppHeaderFile)
-{
-    std::filesystem::path file(cppHeaderFile);
-    const std::string base = file.stem().string();  // e.g. "BallCell"
-    const auto sharedLibraryName = "lib" + base + "Plugin.so";
-    return file.parent_path() / sharedLibraryName;
-}
-
 std::string generateClassNameFromCppHeaderFileName(const std::string& cppHeaderFile)
 {
     std::filesystem::path file(cppHeaderFile);
@@ -88,17 +52,12 @@ std::string generateClassNameFromCppHeaderFileName(const std::string& cppHeaderF
 ModelLoader::ModelLoader()
     : builder(std::make_unique<viz::plugins::CppModuleBuilder>())
 {
-    std::string projectRoot = getProjectRootPath();
-    if (! projectRoot.empty())
-    {
-        builder->setProjectRootPath(projectRoot);
-    }
 }
 
 ModelLoader::~ModelLoader() = default;
 
 
-ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& modelDirectory)
+ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& modelDirectory, bool forceCompilation)
 {
     LoadResult result;
 
@@ -116,24 +75,16 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
         result.config = std::make_shared<Config>(headerPath);
         result.config->readConfigFile();
 
-        // Get model name from output_file_name parameter
-        ConfigCategory* generalCat = result.config->getConfigCategory(ConfigConstants::CATEGORY_GENERAL, true);
-        if (!generalCat)
+        try
         {
-            std::cerr << "Error: GENERAL section not found in Header.txt" << std::endl;
+            result.outputFileName = readOutputFileName(result.config.get());
+        }
+        catch(const std::invalid_argument& e)
+        {
+            std::cerr << "Error: " << e.what() << std::endl;
             result.success = false;
             return result;
         }
-
-        ConfigParameter* outputParam = generalCat->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME);
-        if (!outputParam)
-        {
-            std::cerr << "Error: output_file_name not found in GENERAL section" << std::endl;
-            result.success = false;
-            return result;
-        }
-
-        result.outputFileName = outputParam->getValue<std::string>();
 
         // Find C++ header file
         std::string sourceFile = findHeaderFile(modelDirectory);
@@ -144,26 +95,18 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             return result;
         }
 
-        std::cout << "Found header file: '" << sourceFile << "'\n";
+        std::cout << "[DEBUG] Found header file: '" << sourceFile << "'\n";
 
         // Determine output file path
         const std::string moduleFileName = generateModuleNameForSourceFile(sourceFile);
-        std::cout << "Trying to open: " << moduleFileName << "'\t, source never than compiled?: " << std::boolalpha << isFileNewer(sourceFile, moduleFileName) << std::endl;
 
         // Check if compilation is needed
-        if (moduleExists(moduleFileName))
-        {
-            std::cout << "Module '" << moduleFileName << "' already exists" << std::endl;
-            if (isFileNewer(sourceFile, moduleFileName))
-            {
-                std::cerr << "[WARNING] C++ source file '" << sourceFile << "' is never than module file '" << moduleFileName << "'" << std::endl;
-            }
-        }
-        else // if module does not exist
+        const bool compilationNecessarily = ! moduleExists(moduleFileName) || forceCompilation;
+        if (compilationNecessarily)
         {
             const std::string wrapperSource = modelDirectory + "/" + result.outputFileName + std::string(DirectoryConstants::WRAPPER_FILE_SUFFIX);
 
-            std::cout << "Compiling module: " << sourceFile << std::endl;
+            std::cout << "[DEBUG] Compiling module: " << sourceFile << std::endl;
 
             // Generate wrapper code
             const auto className = generateClassNameFromCppHeaderFileName(sourceFile);
@@ -180,9 +123,9 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
             if (! compilationResult.success)
             {
                 std::cerr << "Compilation failed with exit code: " << compilationResult.exitCode << std::endl;
-                if (!compilationResult.stderr.empty())
+                if (!compilationResult.stdErr.empty())
                 {
-                    std::cerr << "Error output:\n" << compilationResult.stderr << std::endl;
+                    std::cerr << "Error output:\n" << compilationResult.stdErr << std::endl;
                 }
                 result.success = false;
                 result.compilationResult = compilationResult;
@@ -205,6 +148,14 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
                     std::cerr << "Warning: Failed to remove wrapper file: " << e.what() << std::endl;
                     // Don't fail the build if wrapper removal fails
                 }
+            }
+        }
+        else
+        {
+            std::cout << "Module '" << moduleFileName << "' already exists" << std::endl;
+            if (isFileNewer(sourceFile, moduleFileName))
+            {
+                std::cerr << "[WARNING] C++ source file '" << sourceFile << "' is never than module file '" << moduleFileName << "'" << std::endl;
             }
         }
 
@@ -259,6 +210,54 @@ std::string ModelLoader::findHeaderFile(const std::string& modelDirectory)
     return {};
 }
 
+std::string ModelLoader::readOutputFileName(Config* config)
+{
+    // Get model name from output_file_name parameter
+    ConfigCategory* generalCat = config->getConfigCategory(ConfigConstants::CATEGORY_GENERAL, /*ignoreCase=*/true);
+    if (! generalCat)
+    {
+        throw std::invalid_argument(std::string("Error: GENERAL section not found in ") + DirectoryConstants::HEADER_FILE_NAME);
+    }
+
+    const ConfigParameter* outputParam = generalCat->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME);
+    if (! outputParam)
+    {
+        throw std::invalid_argument("Error: output_file_name not found in GENERAL section");
+    }
+
+    return outputParam->getValue<std::string>();
+}
+
+std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppHeaderFile)
+{
+    std::filesystem::path file(cppHeaderFile);
+    const std::string baseName = file.stem().string();  // e.g. "BallCell"
+    
+#ifdef _WIN32
+    // Windows: generate DLL name (e.g., "BallCellPlugin.dll")
+    const auto sharedLibraryName = baseName + "Plugin.dll";
+#else
+    // Linux/macOS: generate shared library name (e.g., "libBallCellPlugin.so")
+    const auto sharedLibraryName = "lib" + baseName + "Plugin.so";
+#endif
+
+    return (file.parent_path() / sharedLibraryName).string();
+}
+// TODO: GB: Use QLibrary to make this multiplatform
+// std::string ModelLoader::generateModuleNameForSourceFile(const std::string& cppHeaderFile)
+// {
+//     std::filesystem::path file(cppHeaderFile);
+//     const auto baseName = QString::fromStdString(file.stem().string()) + "Plugin";
+
+//     // QLibrary handles platform-specific prefixes and suffixes
+//     QLibrary lib(baseName);
+
+//     // Force only filename generation, do not load
+//     const auto libFileName = lib.fileName();
+
+//     return file.parent_path() / libFileName.toStdString();
+// }
+
 bool ModelLoader::moduleExists(const std::string& outputPath)
 {
     return fs::exists(outputPath) && fs::is_regular_file(outputPath);
@@ -275,67 +274,71 @@ bool ModelLoader::generateWrapper(const std::string& wrapperPath, const std::str
             return false;
         }
 
-        const std::string code = std::format(R"(/** Auto-generated wrapper for {0} model */
-#include <iostream>
-#include <memory>
-#include <string>
-#include "visualiserProxy/SceneWidgetVisualizerAdapter.h"
-#include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+        // Generate single wrapper with platform detection inside
+        wrapper << "/** Auto-generated wrapper for " << modelName << " model */\n"
+                << "#include <iostream>\n"
+                << "#include <memory>\n"
+                << "#include <string>\n"
+                << "\n"
+                << "#ifdef _WIN32\n"
+                << "    #include <windows.h>\n"
+                << "#endif\n"
+                << "\n"
+                << "#include \"visualiserProxy/SceneWidgetVisualizerProxy.h\"\n"
+                << "#include \"visualiserProxy/SceneWidgetVisualizerFactory.h\"\n"
+                << "#include \"" << className << ".h\"\n"
+                << "\n"
+                << "#define MODEL_NAME \"" << modelName << "\"\n"
+                << "\n"
+                << "// Platform-specific export declarations\n"
+                << "#ifdef _WIN32\n"
+                << "    #ifdef BUILDING_DLL\n"
+                << "        #define DLL_EXPORT __declspec(dllexport)\n"
+                << "    #else\n"
+                << "        #define DLL_EXPORT __declspec(dllimport)\n"
+                << "    #endif\n"
+                << "#else\n"
+                << "    #define DLL_EXPORT __attribute__((visibility(\"default\")))\n"
+                << "#endif\n"
+                << "\n"
+                << "extern \"C\"\n"
+                << "{\n"
+                << "DLL_EXPORT void registerPlugin()\n"
+                << "{\n"
+                << "    std::cout << \"Registering \" MODEL_NAME \" plugin...\" << std::endl;\n"
+                << "\n"
+                << "    bool success = SceneWidgetVisualizerFactory::registerModel<" << className << ">(MODEL_NAME);\n"
+                << "\n"
+                << "    if (success)\n"
+                << "    {\n"
+                << "        std::cout << \"✓ \" MODEL_NAME \" plugin registered successfully!\" << std::endl;\n"
+                << "        std::cout << \"  The model is now available in Model menu\" << std::endl;\n"
+                << "    }\n"
+                << "    else\n"
+                << "    {\n"
+                << "        std::cerr << \"✗ Failed to register \" MODEL_NAME \" - name may already exist\" << std::endl;\n"
+                << "    }\n"
+                << "}\n"
+                << "\n"
+                << "DLL_EXPORT const char* getPluginInfo()\n"
+                << "{\n"
+                << "    return MODEL_NAME \" Plugin v1.0\\n\"\n"
+                << "           \"Auto-generated from directory loader\\n\"\n"
+                << "           \"Compatible with: OOpenCal-Visualiser 2.x\";\n"
+                << "}\n"
+                << "\n"
+                << "DLL_EXPORT int getPluginVersion()\n"
+                << "{\n"
+                << "    return 100; // Version 1.00\n"
+                << "}\n"
+                << "\n"
+                << "DLL_EXPORT const char* getModelName()\n"
+                << "{\n"
+                << "    return MODEL_NAME;\n"
+                << "}\n"
+                << "} // extern \"C\"\n";
 
-// The actual model class is defined in the compiled model header
-#include "{1}.h"
-
-#define MODEL_NAME "{0}"
-
-extern "C"
-{{
-__attribute__((visibility("default")))
-void registerPlugin()
-{{
-    std::cout << "Registering " MODEL_NAME " plugin..." << std::endl;
-
-    bool success = SceneWidgetVisualizerFactory::registerModel(MODEL_NAME, []() {{
-        return std::make_unique<SceneWidgetVisualizerAdapter<{1}>>(
-            MODEL_NAME
-        );
-    }});
-
-    if (success)
-    {{
-        std::cout << "✓ " MODEL_NAME " plugin registered successfully!" << std::endl;
-        std::cout << "  The model is now available in Model menu" << std::endl;
-    }}
-    else
-    {{
-        std::cerr << "✗ Failed to register " MODEL_NAME " - name may already exist" << std::endl;
-    }}
-}}
-
-__attribute__((visibility("default")))
-const char* getPluginInfo()
-{{
-    return MODEL_NAME " Plugin v1.0\n"
-           "Auto-generated from directory loader\n"
-           "Compatible with: Qt-VTK-viewer 2.x";
-}}
-
-__attribute__((visibility("default")))
-int getPluginVersion()
-{{
-    return 100; // Version 1.00
-}}
-
-__attribute__((visibility("default")))
-const char* getModelName()
-{{
-    return MODEL_NAME;
-}}
-}} // extern "C"
-)", modelName, className);
-
-        wrapper << code;
         wrapper.close();
-
         return true;
     }
     catch (const std::exception& e)

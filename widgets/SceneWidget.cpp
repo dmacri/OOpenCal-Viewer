@@ -303,7 +303,12 @@ void SceneWidget::updateCameraPivotFromBounds()
 
 void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 {
-    if (settingParameter && settingParameter->numberOfLines > 0)
+    if (! settingParameter)
+    {
+        return;
+    }
+
+    if (settingParameter->numberOfLines > 0)
     {
         // Resize lines vector to match expected number of lines
         lines.resize(settingParameter->numberOfLines);
@@ -408,7 +413,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
 
     // Fallback to regular 2D visualization
     const auto colorSubstateInfos = getColorSubstateInfos();
-    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, colorSubstateInfos);
+    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, colorSubstateInfos, useCellRendering);
     updateCameraPivotFromBounds();
 }
 
@@ -582,6 +587,8 @@ void SceneWidget::setupVtkScene()
     renderWindow()->AddRenderer(renderer);
     interactor()->SetRenderWindow(renderWindow());
 
+    // Enable anti-aliasing for better visual quality, especially for small grids
+    renderWindow()->SetMultiSamples(16);
     renderWindow()->SetSize(settingParameter->numberOfColumnX, settingParameter->numberOfRowsY + 10);
 
     /// Use custom interactor style that zooms towards cursor position.
@@ -1218,6 +1225,9 @@ void SceneWidget::clearScene()
     // Clear stage data
     sceneWidgetVisualizerProxy->clearStage();
 
+    // Reset setting parameters to avoid stale data
+    settingParameter = std::make_unique<SettingParameter>();
+
     // Reset VTK actors
     gridActor = vtkSmartPointer<vtkActor>::New();
     backgroundActor = vtkSmartPointer<vtkActor>::New();
@@ -1423,9 +1433,16 @@ void SceneWidget::setFlatSceneBackgroundVisible(bool visible)
     // Update background actor visibility
     if (backgroundActor)
     {
-        backgroundActor->SetVisibility(visible);
-        triggerRenderUpdate();
+        backgroundActor->SetVisibility(visible && currentViewMode == ViewMode::Mode3D);
     }
+    
+    triggerRenderUpdate();
+}
+
+void SceneWidget::setUseCellRendering(bool useCellRenderingMode)
+{
+    useCellRendering = useCellRenderingMode;
+    // No need to trigger render update here - caller will call refreshVisualization
 }
 
 void SceneWidget::setActiveSubstateFor3D(const std::string& fieldName)

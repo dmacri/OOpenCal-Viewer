@@ -43,9 +43,9 @@ public:
     /// Callback type for progress reporting
     using ProgressCallback = std::function<void(const std::string&)>;
     /** @brief Create a new CppModuleBuilder instance
-     * @param compilerPath Path to the compiler (e.g., "clang++"). If empty, uses system PATH.
+     * @param compilerPath Path to the compiler (e.g., "clang++"). If empty, intelligently selects the best available compiler (preferring the one used to build the application).
      * @param oopencalDir Path to OOpenCAL base directory for includes. If empty, uses OOPENCAL_DIR env var. */
-    explicit CppModuleBuilder(const std::string& compilerPath = "clang++",
+    explicit CppModuleBuilder(const std::string& compilerPath = "",
                               const std::string& oopencalDir = "");
 
     /** @brief Check if a compiled module already exists
@@ -92,14 +92,14 @@ public:
     /** @brief Get the project root path */
     const std::string& getProjectRootPath() const
     {
-         return projectRootPath; 
+        return projectRootPath;
     }
 
     /** @brief Set progress callback for compilation updates
      * @param callback Function to call with progress messages */
     void setProgressCallback(ProgressCallback callback)
     {
-        progressCallback = callback; 
+        progressCallback = callback;
     }
 
 private:
@@ -127,4 +127,18 @@ private:
                        std::function<void(const std::string&)> stdout_callback,
                        std::function<void(const std::string&)> stderr_callback);
 };
+
+/** @brief Detect C++ standard from compiler
+ * @param userStandard User-provided standard (if empty, auto-detect)
+ * @return C++ standard string (e.g., "c++17", "c++23") */
+std::string detectCppStandard(const std::string& userStandard={});
+
+/** @brief Check if a compiler is available in PATH
+ * @param compiler Compiler name (e.g., "clang++", "g++")
+ * @return true if compiler is available */
+bool isCompilerAvailable(const std::string& compiler);
+
+std::string getOopencalDir();
+
+std::string getProjectRootPath();
 } // namespace viz::plugins

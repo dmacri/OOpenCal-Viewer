@@ -16,7 +16,7 @@ class QDragEnterEvent;
 class QDropEvent;
 
 class SubstateDisplayWidget;
-class SettingParameter;
+struct SettingParameter;
 
 /** @class SubstatesDockWidget
  * @brief Dockable widget for managing substate field display.
@@ -73,10 +73,11 @@ public:
     class SubstateDisplayWidget* getActiveSubstateWidget() const;
 
 signals:
-    /** @brief Signal emitted when a field is requested to be used as 3rd dimension.
+    /** @brief Signal emitted when a field's 3D state changes.
      * 
-     * @param fieldName The name of the field */
-    void use3rdDimensionRequested(const std::string& fieldName);
+     * @param fieldName The name of the field
+     * @param checked True if 3D is now enabled, false if disabled */
+    void use3dStateChanged(const std::string& fieldName, bool checked);
 
     /// @brief Signal emitted when a field is requested to be used in colorring. It is returning names of all selected substates
     void useSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
@@ -144,30 +145,38 @@ private slots:
      * @param fieldName The name of the field whose checkbox changed */
     void onUse2DCheckboxChanged(const std::string& fieldName);
 
+    /** @brief Handle 3D checkbox state changes - ensures only one substate can be 3D at a time.
+     * 
+     * When a checkbox is checked, unchecks all other 3D checkboxes (mutual exclusion).
+     * 
+     * @param fieldName The name of the field whose 3D checkbox changed
+     * @param checked True if checkbox is now checked, false if unchecked */
+    void onUse3DStateChanged(const std::string& fieldName, bool checked);
+
 public slots:
     /// @brief Uncheck all use2D checkboxes. */
     void uncheckAllUse2DCheckboxes();
 
     /// @brief Informs about changes in substat colloring
-    void onUseSubstateColorringRequested(const std::string &fieldName);
+    void onUseSubstateColorringRequested(const std::string& fieldName);
 
 protected:
     /// @brief Override drag enter event for drag-and-drop support
     void dragEnterEvent(QDragEnterEvent* event) override;
-    
-    /// @brief Override drop event for drag-and-drop support  
+
+    /// @brief Override drop event for drag-and-drop support
     void dropEvent(QDropEvent* event) override;
 
 private:
     /// @brief Clear all substate widgets.
     void clearWidgets();
-    
+
     /** @brief Reorder widgets based on drag and drop operation.
      * 
      * @param draggedField The field name being dragged
      * @param dropPosition The position where the widget was dropped */
     void reorderWidgets(const std::string& draggedField, const QPoint& dropPosition);
-    
+
     /** @brief Save the current field order to SettingParameter.
      * 
      * Updates the order field in SubstateInfo based on current widget layout. */

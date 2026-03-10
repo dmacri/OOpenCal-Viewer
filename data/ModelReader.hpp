@@ -449,7 +449,8 @@ void ModelReader<Cell>::readStepsOffsetsForAllNodesFromFiles(NodeIndex nNodeX, N
         std::string line;
         while (std::getline(file, line))
         {
-            if (line.empty()) continue;
+            if (line.empty())
+                continue;
 
             std::istringstream iss(line);
             StepIndex stepNumber{};

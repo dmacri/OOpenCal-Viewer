@@ -36,7 +36,12 @@ public:
     /// @param config is optional, if not provided: data will be read from file
     void openConfigurationFile(const QString& configFileName, std::shared_ptr<Config> optionalConfig={});
     void applyCommandLineOptions(const CommandLineParser& cmdParser);
-    void loadModelFromDirectory(const QString& modelDirectory);
+    void loadModelFromDirectory(const QString& modelDirectory, bool forceCompilation=false);
+    
+    /// @brief Load model data using an existing model from the system
+    /// @param modelDirectory Directory containing Header.txt and data files
+    /// @param existingModelName Name of the existing model to use for visualization
+    void loadModelDataWithExistingModel(const QString& modelDirectory, const QString& existingModelName);
 
     /// @brief Get the name of the substate field currently used for 3D visualization
     /// @return Field name (e.g., "h", "z") or empty string if no 3D substate is active
@@ -68,6 +73,9 @@ private slots: // menu actions
 
     // Settings submenu
     void onColorSettingsRequested();
+    void onCompilationSettingsRequested();
+    void onCellRenderingToggled(bool checked);
+    void syncCellRenderingCheckbox();
 
     // Help submenu:
     void showAboutThisApplicationDialog();
@@ -82,7 +90,7 @@ private slots: // menu actions
     void onCameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw);
     void syncCameraSliders();
 
-    void onUse3rdDimensionRequested(const std::string& fieldName);
+    void onUse3dStateChanged(const std::string& fieldName, bool checked);
     void onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
     void onDeactivateRequested();
 

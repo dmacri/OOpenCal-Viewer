@@ -5,66 +5,57 @@
 #include <iostream>
 #include <sstream>
 
+#ifdef _WIN32
+    #include <windows.h>
+#endif
+
 #include "CppModuleBuilder.h"
+#include "CompilationConfig.h"
 #include "process.hpp" // tiny process library
 #include "ModelLoader.h"
 
 namespace fs = std::filesystem;
 
-
+// Helper function to convert std::string to TinyProcessLib::Process::string_type
 namespace
 {
-/** @brief Detect C++ standard from compiler
- * @param userStandard User-provided standard (if empty, auto-detect)
- * @return C++ standard string (e.g., "c++17", "c++23") */
-std::string detectCppStandard(const std::string& userStandard)
+inline TinyProcessLib::Process::string_type toProcessString(const std::string& str)
 {
-    if (! userStandard.empty())
-        return userStandard;
-
-#ifdef __cplusplus
-    if (__cplusplus >= 202302L)
-        return "c++23";
-    else if (__cplusplus >= 202002L)
-        return "c++20";
-    else if (__cplusplus >= 201703L)
-        return "c++17";
+#ifdef _WIN32
+    // On Windows, TinyProcessLib uses std::wstring
+    if (str.empty())
+        return TinyProcessLib::Process::string_type();
+    
+    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+    TinyProcessLib::Process::string_type wstr(size_needed, 0);
+    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0], size_needed);
+    return wstr;
+#else
+    // On Unix-like systems, TinyProcessLib uses std::string
+    return str;
 #endif
-    return "c++14";
 }
 
-/** @brief Check if a compiler is available in PATH
- * @param compiler Compiler name (e.g., "clang++", "g++")
- * @return true if compiler is available */
-bool isCompilerAvailable(const std::string& compiler)
-{
-    try
-    {
-        // Try to run compiler with --version
-        std::string command = compiler + " --version > /dev/null 2>&1";
-        int exitCode = system(command.c_str());
-        return exitCode == 0;
-    }
-    catch (...)
-    {
-        return false;
-    }
-}
-
-/** @brief Find an available C++ compiler
+/** @brief Find an available C++ compiler (legacy function for compatibility)
  * @param preferredCompiler Preferred compiler (e.g., "clang++")
  * @return Path to available compiler, or empty string if none found */
 std::string findAvailableCompiler(const std::string& preferredCompiler)
 {
+    // If no preferred compiler specified, use intelligent selection from CompilationConfig
+    if (preferredCompiler.empty())
+    {
+        return viz::plugins::CompilationConfig::getDefaultCompiler();
+    }
+    
     // Try preferred compiler first
-    if (isCompilerAvailable(preferredCompiler))
+    if (viz::plugins::isCompilerAvailable(preferredCompiler))
         return preferredCompiler;
 
     // Fallback compilers in order of preference
     const std::vector<std::string> fallbacks = {"g++", "clang++", "c++"};
     for (const auto& compiler : fallbacks)
     {
-        if (compiler != preferredCompiler && isCompilerAvailable(compiler))
+        if (compiler != preferredCompiler && viz::plugins::isCompilerAvailable(compiler))
         {
             std::cout << "Preferred compiler '" << preferredCompiler << "' not found, using '"
                       << compiler << "' instead" << std::endl;
@@ -74,6 +65,37 @@ std::string findAvailableCompiler(const std::string& preferredCompiler)
 
     return ""; // No compiler found
 }
+
+/// Resolve directory path using environment variable and CMake define
+static std::string resolveDirectoryPath(const char* envVarName, const char* cmakeDefineValue)
+{
+    // 1. Prefer environment variable
+    if (envVarName)
+    {
+        if (const char* envPath = std::getenv(envVarName))
+        {
+            if (*envPath != '\0')
+            {
+                return envPath;
+            }
+        }
+    }
+
+    // 2. Use CMake-provided define if available and valid
+    if (cmakeDefineValue && *cmakeDefineValue != '\0')
+    {
+        const std::string path = cmakeDefineValue;
+
+        std::error_code ec;
+        if (std::filesystem::exists(path, ec) && std::filesystem::is_directory(path, ec))
+        {
+            return path;
+        }
+    }
+
+    // 3. Nothing available
+    return "";
+}
 } // namespace
 
 
@@ -81,22 +103,19 @@ namespace viz::plugins
 {
 CppModuleBuilder::CppModuleBuilder(const std::string& compilerPath,
                                    const std::string& oopencalDir)
-    : compilerPath(compilerPath)
-    , oopencalDir(oopencalDir)
+    : compilerPath(compilerPath.empty() ? CompilationConfig::getDefaultCompiler() : compilerPath)
+    , oopencalDir(oopencalDir.empty() ? CompilationConfig::getInstance().getOopencalDir() : oopencalDir)
+    , projectRootPath(CompilationConfig::getInstance().getViewerRootDir())
     , progressCallback(nullptr)
 {
-    // If oopencalDir is empty, try to get it from environment variable
-    if (this->oopencalDir.empty())
+    // Log the selected compiler
+    if (!this->compilerPath.empty())
     {
-        const char* envDir = std::getenv("OOPENCAL_DIR");
-        if (envDir)
-        {
-            this->oopencalDir = envDir;
-        }
-        else
-        {
-            this->oopencalDir = OOPENCAL_DIR; // defined in CMake
-        }
+        std::cout << "CppModuleBuilder initialized with compiler: " << this->compilerPath << std::endl;
+    }
+    else
+    {
+        std::cerr << "WARNING: No C++ compiler found during CppModuleBuilder initialization" << std::endl;
     }
 }
 
@@ -117,7 +136,7 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     if (! fs::exists(sourceFile))
     {
         lastResult->success = false;
-        lastResult->stderr = "Source file does not exist: " + sourceFile;
+        lastResult->stdErr = "Source file does not exist: " + sourceFile;
         return *lastResult;
     }
 
@@ -130,7 +149,7 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     if (availableCompiler.empty())
     {
         lastResult->success = false;
-        lastResult->stderr = "No C++ compiler found. Please install clang++, g++, or c++.";
+        lastResult->stdErr = "No C++ compiler found. Please install clang++, g++, or c++.";
         lastResult->compileCommand = compilerPath + " (not found)";
         if (progressCallback)
             progressCallback("ERROR: No C++ compiler found");
@@ -165,13 +184,13 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     lastResult->exitCode = executeCommand(
         lastResult->compileCommand,
         [this, &lineCount](const std::string& line) { 
-            lastResult->stdout += line + "\n";
+            lastResult->stdOut += line + "\n";
             // Report compilation progress every 5 lines to avoid too many updates
             if (progressCallback && !line.empty() && (++lineCount % 5 == 0))
                 progressCallback("Compiling... (" + std::to_string(lineCount) + " lines)");
         },
         [this](const std::string& line) { 
-            lastResult->stderr += line + "\n";
+            lastResult->stdErr += line + "\n";
             // Report compilation errors immediately
             if (progressCallback && !line.empty())
                 progressCallback("Error: " + line);
@@ -187,9 +206,9 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     {
         lastResult->success = false;
         std::cerr << "✗ Compilation failed with exit code: " << lastResult->exitCode << std::endl;
-        if (!lastResult->stderr.empty())
+        if (!lastResult->stdErr.empty())
         {
-            std::cerr << "Error output:\n" << lastResult->stderr << std::endl;
+            std::cerr << "Error output:\n" << lastResult->stdErr << std::endl;
         }
     }
 
@@ -203,45 +222,41 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
     // Auto-detect C++ standard if not provided
     std::string standard = detectCppStandard(cppStandard);
 
+    // Get configuration from singleton
+    auto& config = CompilationConfig::getInstance();
+    
     std::ostringstream cmd;
     cmd << compilerPath
-        << " -shared"
-        << " -fPIC"
+        << " " << config.getCompilationFlags()
         << " -std=" << standard;
 
-    // Add OOpenCAL include path if available
-    if (! oopencalDir.empty())
-    {
-        cmd << " -I\"" << oopencalDir << "/OOpenCAL/base\"";
-        cmd << " -I\"" << oopencalDir << '"';
+    // Add include paths from configuration
+    auto includePaths = config.getIncludePaths();
+    for (const auto& path : includePaths) {
+        cmd << " " << path;
     }
 
-    // Add Qt-VTK-viewer project include paths if available
-    if (! projectRootPath.empty())
+    // Add VTK flags from configuration
+    std::string vtkFlags = config.getVtkFlags();
+    if (! vtkFlags.empty())
     {
-        std::cout << "Project root path: " << projectRootPath << std::endl;
-        cmd << " -I\"" << projectRootPath << "\"";
-        cmd << " -I\"" << projectRootPath << "/visualiserProxy\"";
-        cmd << " -I\"" << projectRootPath << "/config\"";
+        cmd << " " << vtkFlags;
     }
 
-    cmd << " " << VTK_COMPILE_FLAGS; // this is set from CMake, temporary solution (#61)
-
-    cmd << " \"" << sourceFile << "\""
-        << " -o \"" << outputFile << "\"";
+    cmd << " \"" << sourceFile << "\"" << " -o \"" << outputFile << "\"";
 
     return cmd.str();
 }
 
 int CppModuleBuilder::executeCommand(const std::string& command,
-                                      std::function<void(const std::string&)> stdout_callback,
-                                      std::function<void(const std::string&)> stderr_callback)
+                                     std::function<void(const std::string&)> stdout_callback,
+                                     std::function<void(const std::string&)> stderr_callback)
 {
     try
     {
         TinyProcessLib::Process process(
-            command,
-            "",
+            toProcessString(command),
+            toProcessString(std::string()),
             [&stdout_callback](const char* bytes, size_t n) {
                 if (stdout_callback)
                 {
@@ -262,5 +277,91 @@ int CppModuleBuilder::executeCommand(const std::string& command,
         std::cerr << "Process execution error: " << e.what() << std::endl;
         return -1;
     }
+}
+
+std::string detectCppStandard(const std::string &userStandard)
+{
+    if (! userStandard.empty())
+        return userStandard;
+
+#ifdef __cplusplus
+    if (__cplusplus >= 202302L)
+        return "c++23";
+    else if (__cplusplus >= 202002L)
+        return "c++20";
+    else if (__cplusplus >= 201703L)
+        return "c++17";
+    else if (__cplusplus >= 201402L)
+        return "c++14";
+    else if (__cplusplus >= 201103L)
+        return "c++11";
+#endif
+    return "c++14";
+}
+
+namespace
+{
+/** @brief Build platform-specific compiler version check command
+ * @param compiler Name or path to compiler executable
+ * @return Command string to check compiler availability */
+std::string buildCompilerCheckCommand(const std::string& compiler)
+{
+#ifdef _WIN32
+    if (compiler == "cl")
+    {
+        // MSVC: use a simple version check
+        return "cl 2>nul >nul";
+    }
+    else
+    {
+        // Other compilers on Windows
+        return compiler + " --version >nul 2>&1";
+    }
+#else
+    // Linux/macOS: Try to run compiler with --version
+    return compiler + " --version > /dev/null 2>&1";
+#endif
+}
+
+/** @brief Execute compiler availability check command
+ * @param command Command to execute
+ * @return true if compiler is available, false otherwise */
+bool executeCompilerCheck(const std::string& command)
+{
+    try
+    {
+        int exitCode = system(command.c_str());
+        return exitCode == 0;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+} // anonymous namespace
+
+bool isCompilerAvailable(const std::string &compiler)
+{
+    const std::string command = buildCompilerCheckCommand(compiler);
+    return executeCompilerCheck(command);
+}
+
+std::string getOopencalDir()
+{
+#ifdef OOPENCAL_DIR
+    return resolveDirectoryPath("OOPENCAL_DIR", OOPENCAL_DIR);
+#else
+    return resolveDirectoryPath("OOPENCAL_DIR", nullptr);
+#endif
+}
+
+/// Get the directory containing this executable (project root)
+std::string getProjectRootPath()
+{
+#ifdef OOPENCAL_VIEWER_ROOT
+    return resolveDirectoryPath("OOPENCAL_VIEWER_ROOT", OOPENCAL_VIEWER_ROOT);
+#else
+    return resolveDirectoryPath("OOPENCAL_VIEWER_ROOT", nullptr);
+#endif
 }
 } // namespace viz::plugins

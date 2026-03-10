@@ -2,5 +2,9 @@
   { "include": ["<bits/mofunc_impl.h>", "private", "<functional>", "public"] },
   { "include": ["\"bits/mofunc_impl.h\"", "private", "<functional>", "public"] },
   { "include": ["<bits/unicode-data.h>", "private", "<format>", "public"] },
-  { "include": ["\"bits/unicode-data.h\"", "private", "<format>", "public"] }
+  { "include": ["\"bits/unicode-data.h\"", "private", "<format>", "public"] },
+  { "include": ["@<bits/mofunc_impl.h>", "private", "<functional>", "public"] },
+  { "include": ["@<bits/unicode-data.h>", "private", "<format>", "public"] },
+  { "include": ["@\"/usr/include/c++/.*/bits/mofunc_impl.h\"", "private", "<functional>", "public"] },
+  { "include": ["@\"/usr/include/c++/.*/bits/unicode-data.h\"", "private", "<format>", "public"] }
 ]

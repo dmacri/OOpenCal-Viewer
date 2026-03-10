@@ -1,4 +1,4 @@
-name: Build Qt-VTK Viewer AppImage
+name: Build OOpenCal-Visualiser AppImage
 
 on:
   push:
@@ -87,9 +87,27 @@ jobs:
       - name: Copy project headers
         run: |
           # Copy headers from project directories with directory structure
+          mkdir -p AppDir/usr/include/core
+          mkdir -p AppDir/usr/include/data
+          mkdir -p AppDir/usr/include/plugins
           mkdir -p AppDir/usr/include/utilities
           mkdir -p AppDir/usr/include/visualiser
           mkdir -p AppDir/usr/include/visualiserProxy
+
+          # Copy all headers from core/
+          if [ -d "core" ]; then
+            cp -r core/* AppDir/usr/include/core/ || true
+          fi
+
+          # Copy all headers from data/
+          if [ -d "data" ]; then
+            cp -r data/* AppDir/usr/include/data/ || true
+          fi
+
+          # Copy all headers from plugins/
+          if [ -d "plugins" ]; then
+            cp -r plugins/* AppDir/usr/include/plugins/ || true
+          fi
 
           # Copy all headers from utilities/
           if [ -d "utilities" ]; then
@@ -104,6 +122,14 @@ jobs:
           # Copy all headers from visualiserProxy/
           if [ -d "visualiserProxy" ]; then
             cp -r visualiserProxy/* AppDir/usr/include/visualiserProxy/ || true
+          fi
+
+      - name: Copy OOpenCAL headers
+        run: |
+          # Copy OOpenCAL headers (required for plugin compilation)
+          if [ -d "deps/OOpenCAL" ]; then
+            mkdir -p AppDir/usr/include/OOpenCAL/base
+            cp -r deps/OOpenCAL/base/* AppDir/usr/include/OOpenCAL/base/ || true
           fi
 
       - name: Copy VTK headers
@@ -222,6 +248,12 @@ jobs:
 
           # Set OOPENCAL_VIEWER_ROOT to point to AppImage include directory
           export OOPENCAL_VIEWER_ROOT="\${HERE}/usr/include"
+
+          # Set OOPENCAL_DIR to point to AppImage include directory (for plugin compilation)
+          export OOPENCAL_DIR="\${HERE}/usr/include"
+
+          # Set VTK_INCLUDES to point to VTK headers in AppImage
+          export VTK_INCLUDES="\${HERE}/usr/include/vtk"
 
           # Disable Qt's automatic high DPI scaling (user can set QT_AUTO_SCREEN_SCALE_FACTOR=1 if needed)
           export QT_AUTO_SCREEN_SCALE_FACTOR=0

@@ -6,10 +6,11 @@
 
 /// @brief Concept verifying that a type satisfies the Cell interface
 template <typename Cell>
-concept CellLike = requires(Cell cell, char* str, const char* cstr, int step) {
+concept CellLike = requires(Cell cell, char* str, const char* cstr, int step, GlobalValueManager* gvm)
+{
     // must provide methods:
     { cell.composeElement(str) } -> std::same_as<void>;
     { cell.stringEncoding(cstr) } -> std::convertible_to<std::string>;
-    { cell.outputValue(cstr) } -> std::convertible_to<Color>;
+    { cell.outputValue(cstr, gvm) } -> std::convertible_to<Color>;
     { cell.startStep(step) } -> std::same_as<void>;
 };

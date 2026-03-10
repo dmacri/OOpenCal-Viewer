@@ -24,7 +24,7 @@
 
 // Forward declarations
 class SubstatesDockWidget;
-class SettingParameter;
+struct SettingParameter;
 
 /** @enum ViewMode
  * @brief Defines the camera view mode for the scene.
@@ -139,6 +139,16 @@ public:
         return gridLinesVisible;
     }
 
+    /// @brief Set cell rendering mode (high quality vs fast point-based)
+    /// @param useCellRendering If true, uses cell-based rendering (better quality); if false, uses point-based (faster)
+    void setUseCellRendering(bool useCellRendering);
+
+    /// @brief Get the current cell rendering mode
+    bool getUseCellRendering() const
+    {
+        return useCellRendering;
+    }
+
     /// @brief Set camera azimuth (rotation around Z axis) in degrees
     void setCameraAzimuth(double angle);
 
@@ -197,48 +207,51 @@ public:
     }
 
     /// @brief Reset camera zoom to default level (fit all objects in view).
-    /// 
+    ///
     /// This method resets the camera distance to its default position, fitting all
     /// scene objects in the viewport. The camera orientation (rotation angles) is preserved.
     void resetCameraZoom();
 
     /// @brief Set the substate dock widget for displaying cell information.
-    /// 
+    ///
     /// @param dockWidget Pointer to the SubstatesDockWidget
     void setSubstatesDockWidget(SubstatesDockWidget* dockWidget);
 
     /// @brief Set the active substate field for 3D visualization.
-    /// 
+    ///
     /// When a substate is set as active for 3D, the visualization will use that field's values
     /// to determine the height of each cell in 3D mode.
-    /// 
+    ///
     /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to disable
     void setActiveSubstateFor3D(const std::string& fieldName);
 
     /// @brief Set the active substate field for colorring.
-    /// 
+    ///
     /// When a substate is set as active for 2D, the visualization will use that field's values
     /// to determine the color of each cell in 2D mode via outputValue(fieldName.c_str()).
-    /// 
+    ///
     /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to use default
     void setActiveSubstatesForColorring(const std::vector<std::string>& fieldNames);
 
     /// @brief Get the active substate fields for 2D visualization.
     ///
     /// @return The vector of active substate field names in order (empty if using default)
-    std::vector<std::string> getActiveSubstatesForColorring() const { return activeSubstatesForColorring; }
+    std::vector<std::string> getActiveSubstatesForColorring() const
+    {
+        return activeSubstatesForColorring;
+    }
 
     /// @brief Refresh the visualization for the current step.
-    /// 
+    ///
     /// This method immediately updates the visualization with the current active substate settings.
     /// It's useful when you want to see changes immediately without waiting for step changes.
     void refreshVisualization();
 
     /// @brief Initialize and draw 3D substate visualization for the current step.
-    /// 
+    ///
     /// This method should be called when activating 3D substate visualization to initialize
     /// the scene with the quad mesh surface. Subsequent step updates will use refresh instead.
-    /// 
+    ///
     /// @note Call this after setActiveSubstateFor3D() to actually render the visualization
     void initializeAndDraw3DSubstateVisualization();
 
@@ -455,7 +468,7 @@ protected:
      * settings from settingParameter. It's called during initialization and when
      * reloading data. */
     void prepareStageWithCurrentNodeConfiguration();
-    
+
     /// @brief Returns part of ToolTip for specific position (it contains cell value with substates)
     QString cellValueAtThisPositionAsText() const;
 
@@ -524,6 +537,9 @@ protected:
 
     /// @brief Flat scene background visibility state (shown in 3D mode)
     bool flatSceneBackgroundVisible = true;
+
+    /// @brief Cell rendering mode (true = high quality cell-based, false = fast point-based)
+    bool useCellRendering = false;
 
     /// @brief Name of the substate field currently used for 3D visualization (empty if none)
     std::string activeSubstateFor3D;

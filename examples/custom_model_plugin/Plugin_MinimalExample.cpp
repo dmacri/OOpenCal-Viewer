@@ -1,6 +1,6 @@
 /** Plugin_MinimalExample.cpp
  *
- * Minimal example plugin for OOpenCAL / Qt-VTK Viewer.
+ * Minimal example plugin for OOpenCAL / OOpenCal-Visualiser.
  * Demonstrates how to register a new model plugin without depending
  * on full library headers. This is a teaching / template version.
  *
@@ -20,11 +20,11 @@
 class ISceneWidgetVisualizer {};
 
 template<typename CellType>
-class SceneWidgetVisualizerAdapter : public ISceneWidgetVisualizer {
+class SceneWidgetVisualizerTemplate : public ISceneWidgetVisualizer {
 public:
-    explicit SceneWidgetVisualizerAdapter(const std::string& modelName)
+    explicit SceneWidgetVisualizerTemplate(const std::string& modelName)
     {
-        std::cout << "[Adapter] Creating visualizer for model: " << modelName << std::endl;
+        std::cout << "[Template] Creating visualizer for model: " << modelName << std::endl;
     }
 };
 
@@ -73,11 +73,7 @@ extern "C" {
     {
         std::cout << "🧩 Loading plugin: " << PLUGIN_MODEL_NAME << std::endl;
 
-        bool ok = SceneWidgetVisualizerFactory::registerModel(
-            PLUGIN_MODEL_NAME,
-            []() {
-                return std::make_unique<SceneWidgetVisualizerAdapter<PLUGIN_CELL_CLASS>>(PLUGIN_MODEL_NAME);
-            });
+        bool ok = SceneWidgetVisualizerFactory::registerModel<PLUGIN_CELL_CLASS>>(PLUGIN_MODEL_NAME);
 
         if (ok)
             std::cout << "✅ Plugin '" << PLUGIN_MODEL_NAME << "' registered successfully.\n";

@@ -702,6 +702,9 @@
     </property>
     <addaction name="separator"/>
     <addaction name="actionColor_settings"/>
+    <addaction name="actionCompilation_settings"/>
+    <addaction name="separator"/>
+    <addaction name="actionCellRendering"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuModel"/>
@@ -823,6 +826,17 @@
     <string>Color settings</string>
    </property>
   </action>
+  <action name="actionCompilation_settings">
+   <property name="icon">
+    <iconset theme="QIcon::ThemeIcon::DocumentProperties"/>
+   </property>
+   <property name="text">
+    <string>Compilation settings</string>
+   </property>
+   <property name="toolTip">
+    <string>Show C++ module compilation settings and environment variables</string>
+   </property>
+  </action>
   <action name="action2DMode">
    <property name="checkable">
     <bool>true</bool>
@@ -899,6 +913,20 @@
    </property>
    <property name="toolTip">
     <string>Suppress confirmation dialogs during automation (uncheck for loud mode)</string>
+   </property>
+  </action>
+  <action name="actionCellRendering">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Cell Rendering (High Quality)</string>
+   </property>
+   <property name="toolTip">
+    <string>Use cell-based rendering for better quality (slower for large grids). Uncheck for faster point-based rendering.</string>
    </property>
   </action>
  </widget>

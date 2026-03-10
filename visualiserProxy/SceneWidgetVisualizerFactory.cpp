@@ -2,11 +2,9 @@
 
 #include <stdexcept> // std::invalid_argument
 
-#include <OOpenCAL/models/Ball/BallCell.h>
-#include <OOpenCAL/models/SciddicaT/SciddicaTCell.h>
+
 
 #include "ISceneWidgetVisualizer.h"
-#include "SceneWidgetVisualizerAdapter.h"
 
 
 std::map<std::string, SceneWidgetVisualizerFactory::ModelCreator>& SceneWidgetVisualizerFactory::getRegistry()
@@ -17,23 +15,13 @@ std::map<std::string, SceneWidgetVisualizerFactory::ModelCreator>& SceneWidgetVi
 
 void SceneWidgetVisualizerFactory::initializeBuiltInModels()
 {
-    if (isInitializedWithBuildInModels)
-    {
-        return;
-    }
+    // if (isInitializedWithBuildInModels)
+    // {
+    //     return;
+    // }
 
-    // Register built-in models
-    registerModel("Ball",
-                  []()
-                  {
-                      return std::make_unique<SceneWidgetVisualizerAdapter<BallCell>>("Ball");
-                  });
-
-    registerModel("SciddicaT",
-                  []()
-                  {
-                      return std::make_unique<SceneWidgetVisualizerAdapter<SciddicaTCell>>("SciddicaT");
-                  });
+    // registerModel<BallCell>("Ball");
+    // registerModel<SciddicaTCell>("SciddicaT");
 
     isInitializedWithBuildInModels = true;
 }
