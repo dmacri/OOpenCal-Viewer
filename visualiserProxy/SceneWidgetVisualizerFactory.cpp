@@ -2,9 +2,6 @@
 
 #include <stdexcept> // std::invalid_argument
 
-#include <OOpenCAL/models/Ball/BallCell.h>
-#include <OOpenCAL/models/SciddicaT/SciddicaTCell.h>
-
 #include "ISceneWidgetVisualizer.h"
 
 
@@ -14,24 +11,8 @@ std::map<std::string, SceneWidgetVisualizerFactory::ModelCreator>& SceneWidgetVi
     return registry;
 }
 
-void SceneWidgetVisualizerFactory::initializeBuiltInModels()
-{
-    if (isInitializedWithBuildInModels)
-    {
-        return;
-    }
-
-    registerModel<BallCell>("Ball");
-    registerModel<SciddicaTCell>("SciddicaT");
-
-    isInitializedWithBuildInModels = true;
-}
-
 std::unique_ptr<ISceneWidgetVisualizer> SceneWidgetVisualizerFactory::create(const std::string& modelName)
 {
-    // Ensure built-in models are registered
-    initializeBuiltInModels();
-
     auto& registry = getRegistry();
     auto it = registry.find(modelName);
 
@@ -45,13 +26,10 @@ std::unique_ptr<ISceneWidgetVisualizer> SceneWidgetVisualizerFactory::create(con
 
 std::unique_ptr<ISceneWidgetVisualizer> SceneWidgetVisualizerFactory::defaultModel()
 {
-    // Ensure built-in models are registered
-    initializeBuiltInModels();
-
     auto registry = getRegistry();
     if (registry.empty())
     {
-        throw std::runtime_error("No models!");
+        throw std::runtime_error("No models registered.");
     }
 
     auto firstModel = registry.begin();
@@ -75,9 +53,6 @@ bool SceneWidgetVisualizerFactory::registerModel(const std::string& modelName, M
 
 std::vector<std::string> SceneWidgetVisualizerFactory::getAvailableModels()
 {
-    // Ensure built-in models are registered
-    initializeBuiltInModels();
-
     std::vector<std::string> models;
     auto& registry = getRegistry();
 
@@ -91,9 +66,6 @@ std::vector<std::string> SceneWidgetVisualizerFactory::getAvailableModels()
 
 bool SceneWidgetVisualizerFactory::isModelRegistered(const std::string& modelName)
 {
-    // Ensure built-in models are registered
-    initializeBuiltInModels();
-
     auto& registry = getRegistry();
     return registry.find(modelName) != registry.end();
 }

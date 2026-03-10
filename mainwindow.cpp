@@ -859,6 +859,17 @@ void MainWindow::onReloadDataRequested()
 
 void MainWindow::onOpenConfigurationRequested()
 {
+    if (SceneWidgetVisualizerFactory::getAvailableModels().empty())
+    {
+        QMessageBox::information(this,
+                                 tr("No Models Loaded"),
+                                 tr("No models are currently loaded.\n\n"
+                                    "Load a model first using:\n"
+                                    "• Model → Load Plugin...\n"
+                                    "• File → Load Model from Directory..."));
+        return;
+    }
+
     // Open file dialog to select configuration file
     QString configFileName = QFileDialog::getOpenFileName(
         this,
@@ -879,6 +890,17 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
 {
     try
     {
+        if (SceneWidgetVisualizerFactory::getAvailableModels().empty())
+        {
+            QMessageBox::information(this,
+                                     tr("No Models Loaded"),
+                                     tr("No models are currently loaded.\n\n"
+                                        "Load a model first using:\n"
+                                        "• Model → Load Plugin...\n"
+                                        "• File → Load Model from Directory..."));
+            return;
+        }
+
         // Stop any ongoing playback
         playbackTimer.stop();
 
@@ -979,7 +1001,14 @@ void MainWindow::enterNoConfigurationFileMode()
 
     // Set UI to show no configuration loaded
     ui->inputFilePathLabel->setFileName("");
-    ui->inputFilePathLabel->setText(tr("No configuration loaded - use File → Open Configuration"));
+    if (SceneWidgetVisualizerFactory::getAvailableModels().empty())
+    {
+        ui->inputFilePathLabel->setText(tr("No models loaded - use Model → Load Plugin or File → Load Model from Directory"));
+    }
+    else
+    {
+        ui->inputFilePathLabel->setText(tr("No configuration loaded - use File → Open Configuration"));
+    }
 
     totalStepsNumberChanged(0);
     currentStep = 0;
@@ -994,12 +1023,6 @@ void MainWindow::recreateModelMenuActions()
 {
     const auto availableModels = SceneWidgetVisualizerFactory::getAvailableModels();
 
-    if (availableModels.empty())
-    {
-        std::cerr << "Warning: No models available from factory!" << std::endl;
-        return;
-    }
-
     // Create action group for exclusive selection
     modelActionGroup = new QActionGroup(this);
     modelActionGroup->setExclusive(true);
@@ -1007,28 +1030,37 @@ void MainWindow::recreateModelMenuActions()
     // Clear existing model actions from menu (if any from .ui file)
     ui->menuModel->clear();
 
-    // Create action for each model
-    for (const auto& modelName : availableModels)
+    if (availableModels.empty())
     {
-        QAction* action = new QAction(QString::fromStdString(modelName), this);
-        action->setCheckable(true);
-
-        // First model is checked by default
-        if (modelName == availableModels[0])
+        QAction* noModelsAction = ui->menuModel->addAction(tr("No models loaded"));
+        noModelsAction->setEnabled(false);
+    }
+    else
+    {
+        // Create action for each model
+        for (const auto& modelName : availableModels)
         {
-            action->setChecked(true);
+            QAction* action = new QAction(QString::fromStdString(modelName), this);
+            action->setCheckable(true);
+
+            // First model is checked by default
+            if (modelName == availableModels[0])
+            {
+                action->setChecked(true);
+            }
+
+            modelActionGroup->addAction(action);
+            ui->menuModel->addAction(action);
+
+            connect(action, &QAction::triggered, this, &MainWindow::onModelSelected);
+            cout << "+ Model: " << modelName << endl;
         }
-
-        modelActionGroup->addAction(action);
-        ui->menuModel->addAction(action);
-
-        connect(action, &QAction::triggered, this, &MainWindow::onModelSelected);
-        cout << "+ Model: " << modelName << endl;
     }
 
     // Add separator and actions
     ui->menuModel->addSeparator();
     ui->menuModel->addAction(ui->actionLoadPlugin);
+    ui->menuModel->addAction(ui->actionLoadModelFromDirectory);
     ui->menuModel->addAction(ui->actionReloadData);
 
     std::cout << "Created " << availableModels.size() << " model menu actions" << std::endl;
@@ -2228,4 +2260,3 @@ void MainWindow::onDeactivateRequested()
     
     // Cursor restored automatically by WaitCursorGuard destructor
 }
-

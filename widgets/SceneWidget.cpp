@@ -63,6 +63,45 @@ enum class InteractorVariant
  * - InteractorVariant::PolymorphicWaitCursor: New polymorphic variant */
 constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::Custom;
 
+class NullSceneWidgetVisualizer final : public ISceneWidgetVisualizer
+{
+public:
+    void initMatrix(int, int) override {}
+    void prepareStage(int, int, int) override {}
+    void clearStage() override {}
+    void readStepsOffsetsForAllNodesFromFiles(int, int, int, const std::string&) override {}
+    void readStageStateFromFilesForStep(SettingParameter*, Line*) override {}
+    void drawWithVTK(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, bool) override {}
+    void refreshWindowsVTK(int, int, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&) override {}
+    void drawWithVTK3DSubstate(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&) override {}
+    void refreshWindowsVTK3DSubstate(int, int, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&) override {}
+    void drawFlatSceneBackground(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>) override {}
+    void refreshFlatSceneBackground(int, int, vtkSmartPointer<vtkActor>) override {}
+    void drawGridLinesOn3DSurface(int, int, const std::vector<Line>&, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double) override {}
+    void refreshGridLinesOn3DSurface(int, int, const std::vector<Line>&, vtkSmartPointer<vtkActor>, const std::string&, double, double) override {}
+
+    Visualizer& getVisualizer() override
+    {
+        static Visualizer visualizer;
+        return visualizer;
+    }
+
+    std::string getModelName() const override
+    {
+        return {};
+    }
+
+    std::vector<StepIndex> availableSteps() const override
+    {
+        return {};
+    }
+
+    std::string getCellStringEncoding(int, int, const char*) const override
+    {
+        return {};
+    }
+};
+
 /** @brief Checks if the given directory already contains data files matching the output name pattern
  *  @param configDir Directory to check
  *  @param outputFileNameFromCfg Base output filename to look for
@@ -127,7 +166,7 @@ vtkColor3d toVtkColor(QColor color)
 
 SceneWidget::SceneWidget(QWidget* parent)
     : QVTKOpenGLNativeWidget(parent)
-    , sceneWidgetVisualizerProxy{ SceneWidgetVisualizerFactory::defaultModel() }
+    , sceneWidgetVisualizerProxy{ std::make_unique<NullSceneWidgetVisualizer>() }
     , settingParameter{ std::make_unique<SettingParameter>() }
     , currentModelName{ sceneWidgetVisualizerProxy->getModelName() }
     , gridActor{ vtkSmartPointer<vtkActor>::New() }

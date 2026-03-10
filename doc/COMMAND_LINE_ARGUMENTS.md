@@ -29,7 +29,7 @@ Load a custom model plugin from the specified path. This argument can be repeate
 ```
 
 ### `--startingModel=<NAME>`
-Start the visualizer with a specific model. The model name must match a registered model (either built-in or loaded via `--loadModel`).
+Start the visualizer with a specific model. The model name must match a registered model (loaded via `--loadModel` or loaded from a model directory).
 
 **Example:**
 ```bash
@@ -78,9 +78,9 @@ Exit the application after processing the last step. This is particularly useful
 
 ### Example 1: Load configuration and start with specific model
 ```bash
-./OOpenCal-Viewer config.txt --startingModel=Ball
+./OOpenCal-Viewer config.txt --startingModel=MyCustomModel
 ```
-This loads the configuration file and automatically selects the "Ball" model.
+This loads the configuration file and automatically selects the "MyCustomModel" model.
 
 ### Example 2: Generate a movie for testing
 ```bash

@@ -3,7 +3,7 @@
  * 
  * This file defines the ISceneWidgetVisualizer interface that serves as a contract
  * for all model visualizers in the system. It enables runtime polymorphism for
- * different cell models (e.g., BallCell, SciddicaTCell) without requiring
+ * different cell models without requiring
  * compile-time template binding. This is a key component in the visualization
  * system that allows for flexible model handling and visualization.
  * 
@@ -35,7 +35,7 @@ struct SubstateInfo;
  * models. It abstracts away the specific implementation details of each model type,
  * allowing the visualization system to work with various models through a uniform interface.
  * 
- * Each model type (e.g., Ball, SciddicaT) provides its own implementation of this interface,
+ * Each model type provides its own implementation of this interface,
  * typically through the SceneWidgetVisualizerTemplate template class. The interface
  * handles the complete visualization lifecycle, from data loading to rendering.
  * 
@@ -89,7 +89,7 @@ public:
     /// @brief Get the visualizer instance.
     virtual Visualizer& getVisualizer() = 0;
 
-    /** @brief Get the model name (e.g., "Ball", "SciddicaT").
+    /** @brief Get the model name.
      * 
      * This should return the name from the Cell type's static name() method. */
     virtual std::string getModelName() const = 0;

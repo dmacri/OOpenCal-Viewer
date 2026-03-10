@@ -699,9 +699,17 @@ void CustomDirectoryDialog::loadAvailableModels()
     
     if (availableModels.empty())
     {
+        ui->availableModulesComboBox->addItem(tr("No models loaded"));
+        ui->availableModulesComboBox->setEnabled(false);
+        ui->availableModulesLabel->setEnabled(false);
+        ui->loadingModuleOptionsTabWidget->setTabEnabled(1, false);
         std::cerr << "Warning: No models available from factory!" << std::endl;
         return;
     }
+
+    ui->availableModulesComboBox->setEnabled(true);
+    ui->availableModulesLabel->setEnabled(true);
+    ui->loadingModuleOptionsTabWidget->setTabEnabled(1, true);
     
     // Add models to combo box
     for (const auto& modelName : availableModels)
