@@ -2,7 +2,8 @@
 
 #include <stdexcept> // std::invalid_argument
 
-
+#include <OOpenCAL/models/Ball/BallCell.h>
+#include <OOpenCAL/models/SciddicaT/SciddicaTCell.h>
 
 #include "ISceneWidgetVisualizer.h"
 
@@ -15,13 +16,13 @@ std::map<std::string, SceneWidgetVisualizerFactory::ModelCreator>& SceneWidgetVi
 
 void SceneWidgetVisualizerFactory::initializeBuiltInModels()
 {
-    // if (isInitializedWithBuildInModels)
-    // {
-    //     return;
-    // }
+    if (isInitializedWithBuildInModels)
+    {
+        return;
+    }
 
-    // registerModel<BallCell>("Ball");
-    // registerModel<SciddicaTCell>("SciddicaT");
+    registerModel<BallCell>("Ball");
+    registerModel<SciddicaTCell>("SciddicaT");
 
     isInitializedWithBuildInModels = true;
 }
