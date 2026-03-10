@@ -332,7 +332,7 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 void SceneWidget::prepareStageWithCurrentNodeConfiguration()
 {
     // Initialize the visualizer stage with current node configuration
-    sceneWidgetVisualizerProxy->prepareStage(settingParameter->nNodeX, settingParameter->nNodeY);
+    sceneWidgetVisualizerProxy->prepareStage(settingParameter->nNodeX, settingParameter->nNodeY, settingParameter->nNodeZ);
 }
 
 void SceneWidget::drawVisualizationWithOptional3DSubstate()
@@ -543,6 +543,11 @@ void SceneWidget::readSettingsFromConfigFile(const std::string& filename)
         settingParameter->outputFileName = prepareOutputFileName(filename, outputFileNameFromCfg);
         settingParameter->numberOfColumnX = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_COLUMNS)->getValue<int>();
         settingParameter->numberOfRowsY = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_ROWS)->getValue<int>();
+        
+        // Read number_of_slices for 3D models (defaults to 1 for 2D models)
+        auto slicesParam = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_SLICES);
+        settingParameter->numberOfSlicesZ = slicesParam ? slicesParam->getValue<int>() : 1;
+        
         settingParameter->nsteps = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_STEPS)->getValue<int>();
         emit totalNumberOfStepsReadFromConfigFile(settingParameter->nsteps);
     }
@@ -551,7 +556,12 @@ void SceneWidget::readSettingsFromConfigFile(const std::string& filename)
         ConfigCategory* execContext = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED);
         settingParameter->nNodeX = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_X)->getValue<int>();
         settingParameter->nNodeY = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Y)->getValue<int>();
-        /// Notice: there are much more params, which are not used: e.g. border_size_x, border_size_y
+        
+        // Read number_node_z for 3D models (defaults to 1 for 2D models)
+        auto nodeZParam = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Z);
+        settingParameter->nNodeZ = nodeZParam ? nodeZParam->getValue<int>() : 1;
+        
+        /// Notice: there are much more params, which are not used: e.g. border_size_x, border_size_y, border_size_z
     }
 
     {
@@ -582,7 +592,7 @@ void SceneWidget::readSettingsFromConfigFile(const std::string& filename)
 
 void SceneWidget::setupVtkScene()
 {
-    sceneWidgetVisualizerProxy->prepareStage(settingParameter->nNodeX, settingParameter->nNodeY);
+    sceneWidgetVisualizerProxy->prepareStage(settingParameter->nNodeX, settingParameter->nNodeY, settingParameter->nNodeZ);
 
     renderWindow()->AddRenderer(renderer);
     interactor()->SetRenderWindow(renderWindow());
@@ -883,6 +893,7 @@ void SceneWidget::renderVtkScene()
 {
     sceneWidgetVisualizerProxy->readStepsOffsetsForAllNodesFromFiles(settingParameter->nNodeX,
                                                                      settingParameter->nNodeY,
+                                                                     settingParameter->nNodeZ,
                                                                      settingParameter->outputFileName);
 
     emit availableStepsReadFromConfigFile(sceneWidgetVisualizerProxy->availableSteps());
@@ -1203,6 +1214,7 @@ void SceneWidget::reloadData()
         sceneWidgetVisualizerProxy->readStepsOffsetsForAllNodesFromFiles(
             settingParameter->nNodeX,
             settingParameter->nNodeY,
+            settingParameter->nNodeZ,
             settingParameter->outputFileName
         );
 

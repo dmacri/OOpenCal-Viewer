@@ -21,8 +21,10 @@ struct SettingParameter
     StepIndex nsteps;           ///< Total number of simulation steps
     int numberOfColumnX;        ///< Number of columns in the simulation grid
     int numberOfRowsY;          ///< Number of rows in the simulation grid
+    int numberOfSlicesZ;        ///< Number of slices in the simulation grid (3D models, 1 for 2D)
     NodeIndex nNodeX;           ///< Number of nodes in X direction
     NodeIndex nNodeY;           ///< Number of nodes in Y direction
+    NodeIndex nNodeZ;           ///< Number of nodes in Z direction (3D models, 1 for 2D)
     int numberOfLines;          ///< Total number of lines in the visualization
     std::string outputFileName; ///< Name of the output file
     std::string readMode;       ///< File read mode: "text" or "binary"

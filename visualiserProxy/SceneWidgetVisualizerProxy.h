@@ -69,9 +69,9 @@ public:
         }
     }
 
-    void prepareStage(int nNodeX, int nNodeY) override
+    void prepareStage(int nNodeX, int nNodeY, int nNodeZ = 1) override
     {
-        modelReader.prepareStage(nNodeX, nNodeY);
+        modelReader.prepareStage(nNodeX, nNodeY, nNodeZ);
     }
 
     void clearStage() override
@@ -79,9 +79,9 @@ public:
         modelReader.clearStage();
     }
 
-    void readStepsOffsetsForAllNodesFromFiles(int nNodeX, int nNodeY, const std::string& filename) override
+    void readStepsOffsetsForAllNodesFromFiles(int nNodeX, int nNodeY, int nNodeZ, const std::string& filename) override
     {
-        modelReader.readStepsOffsetsForAllNodesFromFiles(nNodeX, nNodeY, filename);
+        modelReader.readStepsOffsetsForAllNodesFromFiles(nNodeX, nNodeY, nNodeZ, filename);
     }
 
     void readStageStateFromFilesForStep(SettingParameter* sp, Line* lines) override

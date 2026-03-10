@@ -49,7 +49,7 @@ public:
     virtual void initMatrix(int dimX, int dimY) = 0;
 
     /// @brief Prepare the stage for reading data.
-    virtual void prepareStage(int nNodeX, int nNodeY) = 0;
+    virtual void prepareStage(int nNodeX, int nNodeY, int nNodeZ = 1) = 0;
 
     /** @brief Clear the stage (remove all loaded step data).
      * 
@@ -57,7 +57,7 @@ public:
     virtual void clearStage() = 0;
 
     /// @brief Read steps offsets for all nodes from files.
-    virtual void readStepsOffsetsForAllNodesFromFiles(int nNodeX, int nNodeY, const std::string& filename) = 0;
+    virtual void readStepsOffsetsForAllNodesFromFiles(int nNodeX, int nNodeY, int nNodeZ, const std::string& filename) = 0;
 
     /// @brief Read stage state from files for a specific step.
     virtual void readStageStateFromFilesForStep(SettingParameter* sp, Line* lines) = 0;

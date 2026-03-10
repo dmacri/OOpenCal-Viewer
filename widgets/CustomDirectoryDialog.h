@@ -21,7 +21,7 @@ class QLabel;
 class QCheckBox;
 class QPushButton;
 class QTreeView;
-class QTreeView;
+class Config;
 
 namespace Ui
 {
@@ -82,6 +82,9 @@ private slots:
 
     /// Toggles the visibility of hidden directories
     void onHiddenDirectoriesToggled(bool checked);
+
+    /// Handles path input line edit text changes
+    void onPathInputChanged(const QString &path);
 
     /// Validates the selection and accepts the dialog
     void onOkButtonClicked();
@@ -170,6 +173,23 @@ private:
 
     /// Finds and selects matching model in the available modules combo box
     void selectMatchingModel(const QString &expectedModelName);
+
+    /// reads from loaded config: number_number_{x,y,z}
+    void readNodeNumbersFromConfig(/*const*/Config &config, CustomDirectoryDialog::HeaderInfo& info) const;
+
+    /// Updates path input line edit when tree view selection changes
+    void updatePathInputFromTree(const QString &path);
+
+    /// Navigates tree view to path and shows valid prefix or appropriate feedback
+    void navigateTreeToPath(const QString &path);
+
+    /// Finds longest valid prefix of given path and returns (valid_prefix, invalid_suffix)
+    struct PathValidationResult {
+        QString validPrefix;
+        QString invalidPart;
+        bool isComplete;
+    };
+    PathValidationResult validateAndSplitPath(const QString &path) const;
 
 private:
     /// Generated UI object
