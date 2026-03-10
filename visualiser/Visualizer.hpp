@@ -170,6 +170,7 @@ private:
 
     /// @brief This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
     Color flatSceneBackgroundColor() const;
+    GlobalValueManager* gvm;
 };
 
 ////////////////////////////////////////////////////////////////////
@@ -489,7 +490,7 @@ std::optional<Color> Visualizer::calculateCellColorOptional(int row, int column,
         const char* fieldNamePtr = (substateInfo && !substateInfo->name.empty())
                                        ? substateInfo->name.c_str()
                                        : nullptr;
-        return p[row][column].outputValue(fieldNamePtr, /*GlobalValueManager* gvm=*/nullptr);
+        return p[row][column].outputValue(fieldNamePtr, gvm);
     }
 }
 
