@@ -408,6 +408,7 @@ void CompilationSettingsWidget::loadEnvironmentVariables()
     QStringList relevantVars = {
         "OOPENCAL_DIR",
         "OOPENCAL_VIEWER_ROOT", 
+        "OOPENCAL_COMPILER",
         "PATH",
         "CPLUS_INCLUDE_PATH",
         "C_INCLUDE_PATH",

@@ -29,6 +29,29 @@ std::string getEnvCompilerOverride()
     return std::string(envCompiler);
 }
 
+bool looksLikePath(const std::string& value)
+{
+    return value.find('/') != std::string::npos || value.find('\\') != std::string::npos;
+}
+
+bool isExecutableFile(const std::string& path)
+{
+    std::error_code ec;
+    auto st = fs::status(path, ec);
+    if (ec || !fs::is_regular_file(st))
+    {
+        return false;
+    }
+#ifdef _WIN32
+    return true;
+#else
+    const auto perms = st.permissions();
+    return (perms & fs::perms::owner_exec) != fs::perms::none ||
+           (perms & fs::perms::group_exec) != fs::perms::none ||
+           (perms & fs::perms::others_exec) != fs::perms::none;
+#endif
+}
+
 std::string quoteIfNeeded(const std::string& path)
 {
     if (path.find(' ') == std::string::npos && path.find('"') == std::string::npos)
@@ -374,6 +397,10 @@ bool executeCompilerCheck(const std::string& command)
 
 bool isCompilerAvailable(const std::string &compiler)
 {
+    if (looksLikePath(compiler))
+    {
+        return isExecutableFile(compiler);
+    }
     const std::string command = buildCompilerCheckCommand(compiler);
     return executeCompilerCheck(command);
 }
