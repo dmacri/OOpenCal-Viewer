@@ -19,6 +19,25 @@ namespace fs = std::filesystem;
 // Helper function to convert std::string to TinyProcessLib::Process::string_type
 namespace
 {
+std::string getEnvCompilerOverride()
+{
+    const char* envCompiler = std::getenv("OOPENCAL_COMPILER");
+    if (!envCompiler || *envCompiler == '\0')
+    {
+        return {};
+    }
+    return std::string(envCompiler);
+}
+
+std::string quoteIfNeeded(const std::string& path)
+{
+    if (path.find(' ') == std::string::npos && path.find('"') == std::string::npos)
+    {
+        return path;
+    }
+    return "\"" + path + "\"";
+}
+
 inline TinyProcessLib::Process::string_type toProcessString(const std::string& str)
 {
 #ifdef _WIN32
@@ -41,15 +60,25 @@ inline TinyProcessLib::Process::string_type toProcessString(const std::string& s
  * @return Path to available compiler, or empty string if none found */
 std::string findAvailableCompiler(const std::string& preferredCompiler)
 {
+    const std::string envCompiler = getEnvCompilerOverride();
+
     // If no preferred compiler specified, use intelligent selection from CompilationConfig
     if (preferredCompiler.empty())
     {
+        if (!envCompiler.empty() && viz::plugins::isCompilerAvailable(envCompiler))
+        {
+            return envCompiler;
+        }
         return viz::plugins::CompilationConfig::getDefaultCompiler();
     }
     
     // Try preferred compiler first
     if (viz::plugins::isCompilerAvailable(preferredCompiler))
         return preferredCompiler;
+
+    // Try environment override next
+    if (!envCompiler.empty() && viz::plugins::isCompilerAvailable(envCompiler))
+        return envCompiler;
 
     // Fallback compilers in order of preference
     const std::vector<std::string> fallbacks = {"g++", "clang++", "c++"};
@@ -226,7 +255,7 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
     auto& config = CompilationConfig::getInstance();
     
     std::ostringstream cmd;
-    cmd << compilerPath
+    cmd << quoteIfNeeded(compilerPath)
         << " " << config.getCompilationFlags()
         << " -std=" << standard;
 
@@ -306,6 +335,9 @@ namespace
  * @return Command string to check compiler availability */
 std::string buildCompilerCheckCommand(const std::string& compiler)
 {
+    const auto quotedCompiler = (compiler.find(' ') == std::string::npos && compiler.find('"') == std::string::npos)
+                                    ? compiler
+                                    : "\"" + compiler + "\"";
 #ifdef _WIN32
     if (compiler == "cl")
     {
@@ -315,11 +347,11 @@ std::string buildCompilerCheckCommand(const std::string& compiler)
     else
     {
         // Other compilers on Windows
-        return compiler + " --version >nul 2>&1";
+        return quotedCompiler + " --version >nul 2>&1";
     }
 #else
     // Linux/macOS: Try to run compiler with --version
-    return compiler + " --version > /dev/null 2>&1";
+    return quotedCompiler + " --version > /dev/null 2>&1";
 #endif
 }
 
