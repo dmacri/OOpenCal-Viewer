@@ -400,9 +400,28 @@ jobs:
 
           # C/C++ header search paths for in-app module compilation
           export CLANG_RESOURCE_INCLUDE="${HERE}/compiler/include/clang/include"
+          CXX_ROOT="${HERE}/compiler/include/c++"
+          CXX_VER=""
+          if [ -d "$CXX_ROOT" ]; then
+            CXX_VER=$(ls -1v "$CXX_ROOT" | tail -n1)
+          fi
+          CXX_VER_DIR=""
+          CXX_ARCH_DIR=""
+          if [ -n "$CXX_VER" ] && [ -d "$CXX_ROOT/$CXX_VER" ]; then
+            CXX_VER_DIR="$CXX_ROOT/$CXX_VER"
+            if [ -d "$CXX_ROOT/$CXX_VER/x86_64-linux-gnu" ]; then
+              CXX_ARCH_DIR="$CXX_ROOT/$CXX_VER/x86_64-linux-gnu"
+            fi
+          fi
+
           export CPATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${CPATH}"
-          export CPLUS_INCLUDE_PATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${CPLUS_INCLUDE_PATH}"
-          export C_INCLUDE_PATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${C_INCLUDE_PATH}"
+          if [ -n "$CXX_VER_DIR" ]; then
+            export CPATH="${CXX_VER_DIR}:${CXX_ARCH_DIR}:${CPATH}"
+            export CPLUS_INCLUDE_PATH="${CXX_VER_DIR}:${CXX_ARCH_DIR}:${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${CPLUS_INCLUDE_PATH}"
+          else
+            export CPLUS_INCLUDE_PATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${CPLUS_INCLUDE_PATH}"
+          fi
+          export C_INCLUDE_PATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include/x86_64-linux-gnu:${HERE}/compiler/include:${C_INCLUDE_PATH}"
 
           # Qt configuration
           export QT_PLUGIN_PATH="${HERE}/usr/plugins"
@@ -412,7 +431,7 @@ jobs:
           export QT_AUTO_SCREEN_SCALE_FACTOR=0
 
           # Compatibility: set paths for OOpenCAL and VTK
-          export OOPENCAL_VIEWER_ROOT="${HERE}/compiler/include"
+          export OOPENCAL_VIEWER_ROOT="${HERE}/compiler/include/oopencal-viewer"
           export OOPENCAL_DIR="${HERE}/compiler/include"
           export VTK_INCLUDES="${HERE}/compiler/include/vtk"
 
