@@ -281,7 +281,7 @@ jobs:
           cp -r ${QT_PLUGINS}/xcbglintegrations AppDir/usr/plugins/ 2>/dev/null || true
           cp -r ${QT_PLUGINS}/imageformats AppDir/usr/plugins/ 2>/dev/null || true
 
-      - name: Diagnostics: ldd clang++
+      - name: "Diagnostics of ldd clang++"
         run: |
           echo "System clang++:"
           which clang++ || true
