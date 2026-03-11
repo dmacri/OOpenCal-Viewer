@@ -41,10 +41,55 @@ enum ColumnIndex
     ColumnDirectory = 0,
     ColumnX = 1,
     ColumnY = 2,
-    ColumnM = 3,
+    ColumnZ = 3,
+    ColumnM = 4,
 
     ColumnCount
 };
+
+bool is3DModel(Config& config)
+{
+    // Determine if this is a 3D model by checking number_of_slices from GENERAL category
+    ConfigCategory* generalCat = config.getConfigCategory(ConfigConstants::CATEGORY_GENERAL, /*ignoreCase=*/true);
+    if (generalCat)
+    {
+        const ConfigParameter* paramSlices = generalCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_SLICES);
+        if (paramSlices)
+        {
+            try
+            {
+                int numberOfSlices = std::stoi(paramSlices->getDefaultValue());
+                return (numberOfSlices > 1);
+            }
+            catch (...)
+            {
+                return false;
+            }
+        }
+    }
+    return false;
+}
+
+QString readFileModeFromConfig(Config& config)
+{
+    // Get mode from VISUALIZATION category
+    ConfigCategory* visualizationCat = config.getConfigCategory(ConfigConstants::CATEGORY_VISUALIZATION, /*ignoreCase=*/true);
+    if (visualizationCat)
+    {
+        const ConfigParameter* paramMode = visualizationCat->getConfigParameter(ConfigConstants::PARAM_MODE);
+        if (paramMode)
+        {
+            QString mode = QString::fromStdString(paramMode->getDefaultValue()).toLower();
+            if (mode == "binary")
+                return "b";
+            else if (mode == "text")
+                return "t";
+            else
+                return mode.left(1); // Take first letter as fallback
+        }
+    }
+    return QString();
+}
 } // namespace
 
 namespace Icons
@@ -71,11 +116,14 @@ QIcon grayIcon()
 }
 } // namespace icons
 
+
 struct CustomDirectoryDialog::HeaderInfo
 {
     int numberNodeX = -1;
     int numberNodeY = -1;
+    int numberNodeZ = -1;
     QString mode; // "binary" or "text"
+    bool is3DModel = false;  // True if model has Z dimension > 1 or number_of_slices > 1
     bool isValid = false;
 };
 
@@ -128,6 +176,8 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::data(const QModelIndex &i
                     return info.numberNodeX > 0 ? QString::number(info.numberNodeX) : QString();
                 case ColumnY: // y column (number_node_y)
                     return info.numberNodeY > 0 ? QString::number(info.numberNodeY) : QString();
+                case ColumnZ: // z column (number_node_z) - only show for 3D models
+                    return info.is3DModel ? QString::number(info.numberNodeZ) : QString();
                 case ColumnM: // m column (mode)
                     return info.mode;
                 }
@@ -181,6 +231,8 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Q
             return tr("X");
         case ColumnY: 
             return tr("Y");
+        case ColumnZ:
+            return tr("Z");
         case ColumnM: 
             return tr("M");
         }
@@ -229,6 +281,11 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Q
         case ColumnY:
             return tr("<html><b>Y</b><br/>"
                       "Number of nodes in Y direction<br/>"
+                      "Extracted from Header.txt file<br/>"
+                      "Only shown for directories with Header.txt</html>");
+        case ColumnZ:
+            return tr("<html><b>Z</b><br/>"
+                      "Number of nodes in Z direction (3D)<br/>"
                       "Extracted from Header.txt file<br/>"
                       "Only shown for directories with Header.txt</html>");
         case ColumnM:
@@ -378,15 +435,17 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     // Set column resize modes with fixed percentages
     QHeaderView* header = ui->m_treeView->header();
     header->setSectionResizeMode(ColumnDirectory, QHeaderView::Interactive);  // 70% for directory column
-    header->setSectionResizeMode(ColumnX, QHeaderView::Fixed);  // 10% for X column
-    header->setSectionResizeMode(ColumnY, QHeaderView::Fixed);  // 10% for Y column
-    header->setSectionResizeMode(ColumnM, QHeaderView::Fixed);  // 10% for M column
+    header->setSectionResizeMode(ColumnX, QHeaderView::Fixed);  // 7.5% for X column
+    header->setSectionResizeMode(ColumnY, QHeaderView::Fixed);  // 7.5% for Y column
+    header->setSectionResizeMode(ColumnZ, QHeaderView::Fixed);  // 7.5% for Z column
+    header->setSectionResizeMode(ColumnM, QHeaderView::Fixed);  // 7.5% for M column
     header->setStretchLastSection(false);
     
     // Set initial column widths (will be adjusted to percentages when widget is shown)
     ui->m_treeView->setColumnWidth(ColumnDirectory, 400);  // Initial width for directory column
     ui->m_treeView->setColumnWidth(ColumnX, 20);   // Initial width for X column
     ui->m_treeView->setColumnWidth(ColumnY, 20);   // Initial width for Y column
+    ui->m_treeView->setColumnWidth(ColumnZ, 20);   // Initial width for Z column
     ui->m_treeView->setColumnWidth(ColumnM, 20);   // Initial width for M column
     
     // Apply percentage-based widths after widget is shown
@@ -394,10 +453,11 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
         QHeaderView* header = ui->m_treeView->header();
         int totalWidth = ui->m_treeView->header()->viewport()->width();
         
-        header->resizeSection(ColumnDirectory, totalWidth * 0.7);  // 70% for directory
-        header->resizeSection(ColumnX, totalWidth * 0.1);         // 10% for X
-        header->resizeSection(ColumnY, totalWidth * 0.1);         // 10% for Y
-        header->resizeSection(ColumnM, totalWidth * 0.1);         // 10% for M
+        header->resizeSection(ColumnDirectory, totalWidth * 0.7);   // 70% for directory
+        header->resizeSection(ColumnX, totalWidth * 0.075);        // 7.5% for X
+        header->resizeSection(ColumnY, totalWidth * 0.075);        // 7.5% for Y
+        header->resizeSection(ColumnZ, totalWidth * 0.075);        // 7.5% for Z
+        header->resizeSection(ColumnM, totalWidth * 0.075);        // 7.5% for M
     });
     
     ui->m_treeView->setSortingEnabled(true);
@@ -420,6 +480,7 @@ CustomDirectoryDialog::CustomDirectoryDialog(QWidget *parent)
     connect(ui->m_treeView, &QTreeView::clicked, this, &CustomDirectoryDialog::onTreeViewClicked);
     connect(ui->m_treeView, &QTreeView::doubleClicked, this, &CustomDirectoryDialog::onTreeViewDoubleClicked);
     connect(ui->m_showHiddenCheckBox, &QCheckBox::toggled, this, &CustomDirectoryDialog::onHiddenDirectoriesToggled);
+    connect(ui->m_pathInputLineEdit, &QLineEdit::textChanged, this, &CustomDirectoryDialog::onPathInputChanged);
     connect(ui->m_okButton, &QPushButton::clicked, this, &CustomDirectoryDialog::onOkButtonClicked);
     connect(ui->m_cancelButton, &QPushButton::clicked, this, &CustomDirectoryDialog::onCancelButtonClicked);
     
@@ -638,9 +699,17 @@ void CustomDirectoryDialog::loadAvailableModels()
     
     if (availableModels.empty())
     {
+        ui->availableModulesComboBox->addItem(tr("No models loaded"));
+        ui->availableModulesComboBox->setEnabled(false);
+        ui->availableModulesLabel->setEnabled(false);
+        ui->loadingModuleOptionsTabWidget->setTabEnabled(1, false);
         std::cerr << "Warning: No models available from factory!" << std::endl;
         return;
     }
+
+    ui->availableModulesComboBox->setEnabled(true);
+    ui->availableModulesLabel->setEnabled(true);
+    ui->loadingModuleOptionsTabWidget->setTabEnabled(1, true);
     
     // Add models to combo box
     for (const auto& modelName : availableModels)
@@ -659,16 +728,31 @@ void CustomDirectoryDialog::loadAvailableModels()
 
 void CustomDirectoryDialog::setStartDirectory(const QString &path)
 {
-    if (QDir(path).exists())
+    QString targetPath = path;
+    
+    // If path doesn't exist or is empty, try to find a valid prefix or fall back to current working directory
+    if (targetPath.isEmpty() || !QDir(targetPath).exists())
     {
-        QModelIndex sourceIndex = m_fileSystemModel->index(path);
-        QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
-        if (proxyIndex.isValid())
+        // Try to find the longest valid prefix
+        PathValidationResult validation = validateAndSplitPath(targetPath);
+        if (!validation.validPrefix.isEmpty() && QDir(validation.validPrefix).exists())
         {
-            ui->m_treeView->setCurrentIndex(proxyIndex);
-            ui->m_treeView->scrollTo(proxyIndex, QTreeView::EnsureVisible);
-            onTreeViewClicked(proxyIndex);
+            targetPath = validation.validPrefix;
         }
+        else
+        {
+            // Fall back to current working directory (useful for AppImage deployments)
+            targetPath = QDir::currentPath();
+        }
+    }
+    
+    QModelIndex sourceIndex = m_fileSystemModel->index(targetPath);
+    QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
+    if (proxyIndex.isValid())
+    {
+        ui->m_treeView->setCurrentIndex(proxyIndex);
+        ui->m_treeView->scrollTo(proxyIndex, QTreeView::EnsureVisible);
+        onTreeViewClicked(proxyIndex);
     }
 }
 
@@ -696,43 +780,15 @@ CustomDirectoryDialog::HeaderInfo CustomDirectoryDialog::parseHeaderFile(const Q
     try
     {
         Config config(headerPath.toStdString(), /*printWarnings=*/false);
-        
-        // Get number_node_x from DISTRIBUTED category
-        ConfigCategory* distributedCat = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED, /*ignoreCase=*/true);
-        if (distributedCat)
-        {
-            const ConfigParameter* paramX = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_X);
-            if (paramX)
-            {
-                info.numberNodeX = std::stoi(paramX->getDefaultValue());
-            }
-            
-            const ConfigParameter* paramY = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Y);
-            if (paramY)
-            {
-                info.numberNodeY = std::stoi(paramY->getDefaultValue());
-            }
-        }
-        
-        // Get mode from VISUALIZATION category
-        ConfigCategory* visualizationCat = config.getConfigCategory(ConfigConstants::CATEGORY_VISUALIZATION, /*ignoreCase=*/true);
-        if (visualizationCat)
-        {
-            const ConfigParameter* paramMode = visualizationCat->getConfigParameter(ConfigConstants::PARAM_MODE);
-            if (paramMode)
-            {
-                info.mode = QString::fromStdString(paramMode->getDefaultValue()).toLower();
-                if (info.mode == "binary")
-                    info.mode = "b";
-                else if (info.mode == "text")
-                    info.mode = "t";
-                else
-                    info.mode = info.mode.left(1); // Take first letter as fallback
-            }
-        }
+
+        readNodeNumbersFromConfig(config, info);
+
+        info.is3DModel = is3DModel(config);
+
+        info.mode = readFileModeFromConfig(config);
         
         // Mark as valid if we got at least some data
-        info.isValid = (info.numberNodeX > 0 || info.numberNodeY > 0 || !info.mode.isEmpty());
+        info.isValid = (info.numberNodeX > 0 || info.numberNodeY > 0 || info.numberNodeZ > 0 || ! info.mode.isEmpty());
     }
     catch (const std::exception& /*e*/)
     {
@@ -741,6 +797,31 @@ CustomDirectoryDialog::HeaderInfo CustomDirectoryDialog::parseHeaderFile(const Q
     }
     
     return info;
+}
+void CustomDirectoryDialog::readNodeNumbersFromConfig(Config& config, CustomDirectoryDialog::HeaderInfo& info) const
+{
+    // Get number_node_{x,y,z} from DISTRIBUTED category
+    ConfigCategory* distributedCat = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED, /*ignoreCase=*/true);
+    if (distributedCat)
+    {
+        const ConfigParameter* paramX = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_X);
+        if (paramX)
+        {
+            info.numberNodeX = std::stoi(paramX->getDefaultValue());
+        }
+
+        const ConfigParameter* paramY = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Y);
+        if (paramY)
+        {
+            info.numberNodeY = std::stoi(paramY->getDefaultValue());
+        }
+
+        const ConfigParameter* paramZ = distributedCat->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Z);
+        if (paramZ)
+        {
+            info.numberNodeZ = std::stoi(paramZ->getDefaultValue());
+        }
+    }
 }
 
 CustomDirectoryDialog::DirectoryType CustomDirectoryDialog::analyzeDirectory(const QString &path) const
@@ -859,6 +940,9 @@ void CustomDirectoryDialog::onTreeViewClicked(const QModelIndex &index)
     if (fileInfo.isDir())
     {
         updateDirectoryAppearance(path);
+        
+        // Update path input field to reflect tree selection
+        updatePathInputFromTree(path);
         
         const DirectoryType type = analyzeDirectory(path);
         const bool hasHeader = (type == DirectoryType::WithHeader);
@@ -1123,4 +1207,147 @@ void CustomDirectoryDialog::onHiddenDirectoriesToggled(bool checked)
         filters |= QDir::Hidden;
     }
     m_fileSystemModel->setFilter(filters);
+}
+
+void CustomDirectoryDialog::updatePathInputFromTree(const QString &path)
+{
+    // Block signals to avoid circular updates
+    ui->m_pathInputLineEdit->blockSignals(true);
+    ui->m_pathInputLineEdit->setText(path);
+    
+    // Clear error styling if path now exists
+    QDir dir(path);
+    if (dir.exists())
+    {
+        ui->m_pathInputLineEdit->setStyleSheet("");
+        ui->m_pathInputLineEdit->setToolTip(QString());
+    }
+    
+    ui->m_pathInputLineEdit->blockSignals(false);
+}
+
+CustomDirectoryDialog::PathValidationResult CustomDirectoryDialog::validateAndSplitPath(const QString &path) const
+{
+    PathValidationResult result;
+    result.isComplete = false;
+    result.validPrefix = QString();
+    result.invalidPart = path;
+    
+    if (path.isEmpty())
+    {
+        return result;
+    }
+    
+    // Split path into parts
+    QStringList parts = path.split(QDir::separator(), Qt::SkipEmptyParts);
+    if (parts.isEmpty())
+    {
+        return result;
+    }
+    
+    // Check if path is absolute (for Unix/Linux this means starting with /)
+    bool isAbsolute = path.startsWith(QDir::separator());
+    
+    // Rebuild path progressively and check existence
+    QString currentPath = isAbsolute ? QString(QDir::separator()) : QString();
+    QString validPrefix = currentPath;
+    
+    for (int i = 0; i < parts.size(); ++i)
+    {
+        currentPath = QDir(currentPath).filePath(parts[i]);
+        QDir dir(currentPath);
+        
+        if (dir.exists())
+        {
+            validPrefix = currentPath;
+            result.validPrefix = currentPath;
+        }
+        else
+        {
+            // Found first invalid part - build the invalid suffix
+            QStringList invalidParts = parts.mid(i);
+            result.invalidPart = invalidParts.join(QDir::separator());
+            return result;
+        }
+    }
+    
+    // All parts are valid
+    result.isComplete = true;
+    result.validPrefix = currentPath;
+    result.invalidPart = QString();
+    
+    return result;
+}
+
+void CustomDirectoryDialog::navigateTreeToPath(const QString &path)
+{
+    if (path.isEmpty())
+    {
+        return;
+    }
+    
+    PathValidationResult validation = validateAndSplitPath(path);
+    
+    if (validation.isComplete)
+    {
+        // Path is completely valid
+        QModelIndex sourceIndex = m_fileSystemModel->index(validation.validPrefix);
+        QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
+        if (proxyIndex.isValid())
+        {
+            ui->m_treeView->setCurrentIndex(proxyIndex);
+            ui->m_treeView->scrollTo(proxyIndex, QTreeView::EnsureVisible);
+            onTreeViewClicked(proxyIndex);
+        }
+        
+        // Clear error styling
+        ui->m_pathInputLineEdit->setStyleSheet("");
+        ui->m_pathInputLineEdit->setToolTip(QString());
+    }
+    else
+    {
+        // Path is partially invalid
+        if (!validation.validPrefix.isEmpty())
+        {
+            // Navigate to valid prefix
+            QModelIndex sourceIndex = m_fileSystemModel->index(validation.validPrefix);
+            QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
+            if (proxyIndex.isValid())
+            {
+                ui->m_treeView->setCurrentIndex(proxyIndex);
+                ui->m_treeView->scrollTo(proxyIndex, QTreeView::EnsureVisible);
+                onTreeViewClicked(proxyIndex);
+            }
+        }
+        
+        // Set error styling with tooltip
+        ui->m_pathInputLineEdit->setStyleSheet("QLineEdit { background-color: #ffcccc; }");
+        
+        QString tooltipText = tr("Invalid path!\n\n");
+        if (!validation.validPrefix.isEmpty())
+        {
+            tooltipText += tr("Valid prefix: %1\n").arg(validation.validPrefix);
+            tooltipText += tr("Does not contain: %1\n").arg(validation.invalidPart);
+            tooltipText += tr("Full path: %1").arg(path);
+        }
+        else
+        {
+            tooltipText = tr("Path does not exist: %1").arg(path);
+        }
+        
+        ui->m_pathInputLineEdit->setToolTip(tooltipText);
+    }
+}
+
+void CustomDirectoryDialog::onPathInputChanged(const QString &path)
+{
+    // Ignore empty input
+    if (path.isEmpty())
+    {
+        ui->m_pathInputLineEdit->setStyleSheet("");
+        ui->m_pathInputLineEdit->setToolTip(QString());
+        return;
+    }
+    
+    navigateTreeToPath(path);
 }

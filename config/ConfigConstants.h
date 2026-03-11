@@ -28,6 +28,9 @@ namespace ConfigConstants
     /** @brief Number of rows in the simulation grid */
     inline constexpr const char PARAM_NUMBER_OF_ROWS[] = "number_of_rows";
     
+    /** @brief Number of slices in the simulation grid (3D models only) */
+    inline constexpr const char PARAM_NUMBER_OF_SLICES[] = "number_of_slices";
+    
     /** @brief Total number of simulation steps */
     inline constexpr const char PARAM_NUMBER_STEPS[] = "number_steps";
     
@@ -44,11 +47,17 @@ namespace ConfigConstants
     /** @brief Number of nodes in Y direction (vertical distribution) */
     inline constexpr const char PARAM_NUMBER_NODE_Y[] = "number_node_y";
     
+    /** @brief Number of nodes in Z direction (depth distribution, 3D models only) */
+    inline constexpr const char PARAM_NUMBER_NODE_Z[] = "number_node_z";
+    
     /** @brief Border size in X direction for distributed computing */
     inline constexpr const char PARAM_BORDER_SIZE_X[] = "border_size_x";
     
     /** @brief Border size in Y direction for distributed computing */
     inline constexpr const char PARAM_BORDER_SIZE_Y[] = "border_size_y";
+    
+    /** @brief Border size in Z direction for distributed computing (3D models only) */
+    inline constexpr const char PARAM_BORDER_SIZE_Z[] = "border_size_z";
 
     // ========== LOAD_BALANCING Category ==========
     /** @brief Configuration category name for load balancing settings */

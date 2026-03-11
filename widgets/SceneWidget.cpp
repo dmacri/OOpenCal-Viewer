@@ -63,6 +63,45 @@ enum class InteractorVariant
  * - InteractorVariant::PolymorphicWaitCursor: New polymorphic variant */
 constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::Custom;
 
+class NullSceneWidgetVisualizer final : public ISceneWidgetVisualizer
+{
+public:
+    void initMatrix(int, int) override {}
+    void prepareStage(int, int, int) override {}
+    void clearStage() override {}
+    void readStepsOffsetsForAllNodesFromFiles(int, int, int, const std::string&) override {}
+    void readStageStateFromFilesForStep(SettingParameter*, Line*) override {}
+    void drawWithVTK(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, bool) override {}
+    void refreshWindowsVTK(int, int, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&) override {}
+    void drawWithVTK3DSubstate(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&) override {}
+    void refreshWindowsVTK3DSubstate(int, int, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&) override {}
+    void drawFlatSceneBackground(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>) override {}
+    void refreshFlatSceneBackground(int, int, vtkSmartPointer<vtkActor>) override {}
+    void drawGridLinesOn3DSurface(int, int, const std::vector<Line>&, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double) override {}
+    void refreshGridLinesOn3DSurface(int, int, const std::vector<Line>&, vtkSmartPointer<vtkActor>, const std::string&, double, double) override {}
+
+    Visualizer& getVisualizer() override
+    {
+        static Visualizer visualizer;
+        return visualizer;
+    }
+
+    std::string getModelName() const override
+    {
+        return {};
+    }
+
+    std::vector<StepIndex> availableSteps() const override
+    {
+        return {};
+    }
+
+    std::string getCellStringEncoding(int, int, const char*) const override
+    {
+        return {};
+    }
+};
+
 /** @brief Checks if the given directory already contains data files matching the output name pattern
  *  @param configDir Directory to check
  *  @param outputFileNameFromCfg Base output filename to look for
@@ -127,7 +166,7 @@ vtkColor3d toVtkColor(QColor color)
 
 SceneWidget::SceneWidget(QWidget* parent)
     : QVTKOpenGLNativeWidget(parent)
-    , sceneWidgetVisualizerProxy{ SceneWidgetVisualizerFactory::defaultModel() }
+    , sceneWidgetVisualizerProxy{ std::make_unique<NullSceneWidgetVisualizer>() }
     , settingParameter{ std::make_unique<SettingParameter>() }
     , currentModelName{ sceneWidgetVisualizerProxy->getModelName() }
     , gridActor{ vtkSmartPointer<vtkActor>::New() }
@@ -332,7 +371,7 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 void SceneWidget::prepareStageWithCurrentNodeConfiguration()
 {
     // Initialize the visualizer stage with current node configuration
-    sceneWidgetVisualizerProxy->prepareStage(settingParameter->nNodeX, settingParameter->nNodeY);
+    sceneWidgetVisualizerProxy->prepareStage(settingParameter->nNodeX, settingParameter->nNodeY, settingParameter->nNodeZ);
 }
 
 void SceneWidget::drawVisualizationWithOptional3DSubstate()
@@ -543,6 +582,11 @@ void SceneWidget::readSettingsFromConfigFile(const std::string& filename)
         settingParameter->outputFileName = prepareOutputFileName(filename, outputFileNameFromCfg);
         settingParameter->numberOfColumnX = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_COLUMNS)->getValue<int>();
         settingParameter->numberOfRowsY = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_ROWS)->getValue<int>();
+        
+        // Read number_of_slices for 3D models (defaults to 1 for 2D models)
+        auto slicesParam = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_SLICES);
+        settingParameter->numberOfSlicesZ = slicesParam ? slicesParam->getValue<int>() : 1;
+        
         settingParameter->nsteps = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_STEPS)->getValue<int>();
         emit totalNumberOfStepsReadFromConfigFile(settingParameter->nsteps);
     }
@@ -551,7 +595,12 @@ void SceneWidget::readSettingsFromConfigFile(const std::string& filename)
         ConfigCategory* execContext = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED);
         settingParameter->nNodeX = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_X)->getValue<int>();
         settingParameter->nNodeY = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Y)->getValue<int>();
-        /// Notice: there are much more params, which are not used: e.g. border_size_x, border_size_y
+        
+        // Read number_node_z for 3D models (defaults to 1 for 2D models)
+        auto nodeZParam = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Z);
+        settingParameter->nNodeZ = nodeZParam ? nodeZParam->getValue<int>() : 1;
+        
+        /// Notice: there are much more params, which are not used: e.g. border_size_x, border_size_y, border_size_z
     }
 
     {
@@ -582,7 +631,7 @@ void SceneWidget::readSettingsFromConfigFile(const std::string& filename)
 
 void SceneWidget::setupVtkScene()
 {
-    sceneWidgetVisualizerProxy->prepareStage(settingParameter->nNodeX, settingParameter->nNodeY);
+    sceneWidgetVisualizerProxy->prepareStage(settingParameter->nNodeX, settingParameter->nNodeY, settingParameter->nNodeZ);
 
     renderWindow()->AddRenderer(renderer);
     interactor()->SetRenderWindow(renderWindow());
@@ -883,6 +932,7 @@ void SceneWidget::renderVtkScene()
 {
     sceneWidgetVisualizerProxy->readStepsOffsetsForAllNodesFromFiles(settingParameter->nNodeX,
                                                                      settingParameter->nNodeY,
+                                                                     settingParameter->nNodeZ,
                                                                      settingParameter->outputFileName);
 
     emit availableStepsReadFromConfigFile(sceneWidgetVisualizerProxy->availableSteps());
@@ -1203,6 +1253,7 @@ void SceneWidget::reloadData()
         sceneWidgetVisualizerProxy->readStepsOffsetsForAllNodesFromFiles(
             settingParameter->nNodeX,
             settingParameter->nNodeY,
+            settingParameter->nNodeZ,
             settingParameter->outputFileName
         );
 

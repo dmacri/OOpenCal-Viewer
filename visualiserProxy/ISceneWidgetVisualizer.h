@@ -3,7 +3,7 @@
  * 
  * This file defines the ISceneWidgetVisualizer interface that serves as a contract
  * for all model visualizers in the system. It enables runtime polymorphism for
- * different cell models (e.g., BallCell, SciddicaTCell) without requiring
+ * different cell models without requiring
  * compile-time template binding. This is a key component in the visualization
  * system that allows for flexible model handling and visualization.
  * 
@@ -35,7 +35,7 @@ struct SubstateInfo;
  * models. It abstracts away the specific implementation details of each model type,
  * allowing the visualization system to work with various models through a uniform interface.
  * 
- * Each model type (e.g., Ball, SciddicaT) provides its own implementation of this interface,
+ * Each model type provides its own implementation of this interface,
  * typically through the SceneWidgetVisualizerTemplate template class. The interface
  * handles the complete visualization lifecycle, from data loading to rendering.
  * 
@@ -49,7 +49,7 @@ public:
     virtual void initMatrix(int dimX, int dimY) = 0;
 
     /// @brief Prepare the stage for reading data.
-    virtual void prepareStage(int nNodeX, int nNodeY) = 0;
+    virtual void prepareStage(int nNodeX, int nNodeY, int nNodeZ = 1) = 0;
 
     /** @brief Clear the stage (remove all loaded step data).
      * 
@@ -57,7 +57,7 @@ public:
     virtual void clearStage() = 0;
 
     /// @brief Read steps offsets for all nodes from files.
-    virtual void readStepsOffsetsForAllNodesFromFiles(int nNodeX, int nNodeY, const std::string& filename) = 0;
+    virtual void readStepsOffsetsForAllNodesFromFiles(int nNodeX, int nNodeY, int nNodeZ, const std::string& filename) = 0;
 
     /// @brief Read stage state from files for a specific step.
     virtual void readStageStateFromFilesForStep(SettingParameter* sp, Line* lines) = 0;
@@ -89,7 +89,7 @@ public:
     /// @brief Get the visualizer instance.
     virtual Visualizer& getVisualizer() = 0;
 
-    /** @brief Get the model name (e.g., "Ball", "SciddicaT").
+    /** @brief Get the model name.
      * 
      * This should return the name from the Cell type's static name() method. */
     virtual std::string getModelName() const = 0;

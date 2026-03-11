@@ -28,6 +28,13 @@
     </widget>
    </item>
    <item>
+    <widget class="QLineEdit" name="m_pathInputLineEdit">
+     <property name="placeholderText">
+      <string>Paste directory path here or navigate using the tree below...</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="QTreeView" name="m_treeView">
      <property name="sortingEnabled">
       <bool>true</bool>

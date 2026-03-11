@@ -25,7 +25,9 @@ The OOpenCal-Viewer implements a dynamic plugin system that allows loading custo
 - ✅ **GUI loader** - user-friendly interface for loading plugins
 - ✅ **Auto-discovery** - automatic loading from `./plugins/` directory
 - ✅ **Symbol sharing** - plugins use main app's factory instance
-- ✅ **Backward compatible** - built-in models (Ball, SciddicaT) still work
+- ✅ **No built-in models** - all models are loaded via plugins or model directories
+
+> Note: Some examples below still use historical model names like Ball or SciddicaT as placeholders.
 
 ### Evolution
 
@@ -153,8 +155,6 @@ public:
     
 private:
     static std::map<std::string, ModelCreator>& getRegistry();
-    static void initializeBuiltInModels();
-    static bool& isInitialized();
 };
 
 // Implementation
@@ -163,21 +163,6 @@ SceneWidgetVisualizerFactory::getRegistry()
 {
     static std::map<std::string, ModelCreator> registry;
     return registry;
-}
-
-void SceneWidgetVisualizerFactory::initializeBuiltInModels()
-{
-    if (isInitialized()) return;
-    
-    registerModel("Ball", []() {
-        return std::make_unique<SceneWidgetVisualizerAdapter<BallCell>>(0, "Ball");
-    });
-    
-    registerModel("SciddicaT", []() {
-        return std::make_unique<SceneWidgetVisualizerAdapter<SciddicaTCell>>(1, "SciddicaT");
-    });
-    
-    isInitialized() = true;
 }
 
 bool SceneWidgetVisualizerFactory::registerModel(
@@ -195,8 +180,6 @@ bool SceneWidgetVisualizerFactory::registerModel(
 std::unique_ptr<ISceneWidgetVisualizer> 
 SceneWidgetVisualizerFactory::create(const std::string& modelName)
 {
-    initializeBuiltInModels();
-    
     auto& registry = getRegistry();
     auto it = registry.find(modelName);
     

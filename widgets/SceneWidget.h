@@ -65,7 +65,7 @@ public:
      * This method allows changing the visualization model at runtime.
      * @note This does NOT reload data files. Use reloadData() after switching.
      * 
-     * @param modelName The name of the model to use (e.g., "Ball", "SciddicaT") */
+     * @param modelName The name of the model to use */
     void switchModel(const std::string& modelName);
 
     /** @brief Reload data files for the current model.
