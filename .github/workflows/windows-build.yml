@@ -106,5 +106,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: OOpenCal-Viewer-${{ matrix.build_type }}
-        path: build/Desktop_Qt_*_MSVC*_64bit-${{ matrix.build_type }}/OOpenCal-Viewer.exe
+        path: build/${{ matrix.build_type }}/OOpenCal-Viewer.exe
         if-no-files-found: warn

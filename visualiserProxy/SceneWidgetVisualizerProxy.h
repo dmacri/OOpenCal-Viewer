@@ -22,8 +22,8 @@
 #include "data/ModelReader.hpp"
 #include "visualiser/Visualizer.hpp"
 
-class Line;
-class SettingParameter;
+struct Line;
+struct SettingParameter;
 
 /** @class SceneWidgetVisualizerTemplate
  * @tparam Cell The cell type used in the model (must inherit from Element in OOpenCal)

@@ -636,7 +636,8 @@ CompilationSettingsWidget::ConfigValues CompilationSettingsWidget::getOopencalDi
 #endif
     
     // Get environment value
-    if (const char* envPath = std::getenv("OOPENCAL_DIR")) {
+    if (const char* envPath = std::getenv("OOPENCAL_DIR"))
+    {
         values.envValue = envPath;
     }
     
@@ -659,7 +660,8 @@ CompilationSettingsWidget::ConfigValues CompilationSettingsWidget::getViewerRoot
 #endif
     
     // Get environment value
-    if (const char* envPath = std::getenv("OOPENCAL_VIEWER_ROOT")) {
+    if (const char* envPath = std::getenv("OOPENCAL_VIEWER_ROOT"))
+    {
         values.envValue = envPath;
     }
     
