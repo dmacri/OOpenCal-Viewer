@@ -117,6 +117,18 @@ jobs:
           ln -sf clang++ c++ 2>/dev/null || true
           cd -
 
+      - name: Copy Clang resource headers
+        run: |
+          RESOURCE_DIR=$(clang -print-resource-dir 2>/dev/null || true)
+          if [ -n "$RESOURCE_DIR" ] && [ -d "$RESOURCE_DIR" ]; then
+            mkdir -p AppDir/compiler/lib/clang
+            cp -r "$RESOURCE_DIR" AppDir/compiler/lib/clang/ 2>/dev/null || true
+            if [ -d "$RESOURCE_DIR/include" ]; then
+              mkdir -p AppDir/compiler/include/clang
+              cp -r "$RESOURCE_DIR/include" AppDir/compiler/include/clang/ 2>/dev/null || true
+            fi
+          fi
+
       - name: Copy system headers
         run: |
           # Copy standard C headers
@@ -237,11 +249,6 @@ jobs:
             [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ || true
           done
 
-          # Copy glibc runtime
-          for lib in /lib/x86_64-linux-gnu/libc.so* /lib/x86_64-linux-gnu/libm.so* /lib/x86_64-linux-gnu/libdl.so* /lib/x86_64-linux-gnu/libpthread.so* /lib/x86_64-linux-gnu/libnsl.so* /lib/x86_64-linux-gnu/libutil.so* /lib/x86_64-linux-gnu/libresolv.so*; do
-            [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ || true
-          done
-
           # Copy libgomp (OpenMP) if available
           for lib in /usr/lib/x86_64-linux-gnu/libgomp.so*; do
             [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ || true
@@ -286,7 +293,7 @@ jobs:
               if [ -f "$lib" ]; then
                 # Skip some system libraries but be less strict for AppImage with compiler
                 case "$lib" in
-                  /lib/x86_64-linux-gnu/ld-linux*.so*)
+                  /lib/x86_64-linux-gnu/ld-linux*.so*|/lib64/ld-linux*.so*|/lib/x86_64-linux-gnu/libc.so*|/lib/x86_64-linux-gnu/libm.so*|/lib/x86_64-linux-gnu/libdl.so*|/lib/x86_64-linux-gnu/libpthread.so*|/lib/x86_64-linux-gnu/librt.so*|/lib/x86_64-linux-gnu/libutil.so*|/lib/x86_64-linux-gnu/libnsl.so*|/lib/x86_64-linux-gnu/libresolv.so*|/usr/lib/x86_64-linux-gnu/libc.so*|/usr/lib/x86_64-linux-gnu/libm.so*|/usr/lib/x86_64-linux-gnu/libdl.so*|/usr/lib/x86_64-linux-gnu/libpthread.so*|/usr/lib/x86_64-linux-gnu/librt.so*|/usr/lib/x86_64-linux-gnu/libutil.so*|/usr/lib/x86_64-linux-gnu/libnsl.so*|/usr/lib/x86_64-linux-gnu/libresolv.so*)
                     continue
                     ;;
                 esac
@@ -317,6 +324,15 @@ jobs:
                      /usr/lib/x86_64-linux-gnu/libxcb.so*; do
             [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ 2>/dev/null || true
           done
+
+      - name: Remove bundled glibc (AppImage compatibility)
+        run: |
+          rm -f AppDir/usr/lib/libc.so* AppDir/usr/lib/libm.so* AppDir/usr/lib/libdl.so* AppDir/usr/lib/libpthread.so* \
+                AppDir/usr/lib/librt.so* AppDir/usr/lib/libutil.so* AppDir/usr/lib/libnsl.so* AppDir/usr/lib/libresolv.so* \
+                AppDir/usr/lib/ld-linux*.so* AppDir/usr/lib/ld-linux-x86-64.so* 2>/dev/null || true
+          rm -f AppDir/compiler/lib/libc.so* AppDir/compiler/lib/libm.so* AppDir/compiler/lib/libdl.so* AppDir/compiler/lib/libpthread.so* \
+                AppDir/compiler/lib/librt.so* AppDir/compiler/lib/libutil.so* AppDir/compiler/lib/libnsl.so* AppDir/compiler/lib/libresolv.so* \
+                AppDir/compiler/lib/ld-linux*.so* AppDir/compiler/lib/ld-linux-x86-64.so* 2>/dev/null || true
 
       ################### icons and desktop entry ###################
       - name: Prepare application icon
@@ -356,14 +372,16 @@ jobs:
           export COMPILER_PATH="${HERE}/compiler/bin"
           export COMPILER_INCLUDEDIR="${HERE}/compiler/include"
           export COMPILER_LIBDIR="${HERE}/compiler/lib"
+          export PATH="${HERE}/compiler/bin:${PATH}"
 
           # Library paths - app runtime
           export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/compiler/lib:${LD_LIBRARY_PATH}"
 
           # C/C++ header search paths for in-app module compilation
-          export CPATH="${HERE}/compiler/include:${CPATH}"
-          export CPLUS_INCLUDE_PATH="${HERE}/compiler/include:${CPLUS_INCLUDE_PATH}"
-          export C_INCLUDE_PATH="${HERE}/compiler/include:${C_INCLUDE_PATH}"
+          export CLANG_RESOURCE_INCLUDE="${HERE}/compiler/include/clang/include"
+          export CPATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${CPATH}"
+          export CPLUS_INCLUDE_PATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${CPLUS_INCLUDE_PATH}"
+          export C_INCLUDE_PATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${C_INCLUDE_PATH}"
 
           # Qt configuration
           export QT_PLUGIN_PATH="${HERE}/usr/plugins"
@@ -380,6 +398,7 @@ jobs:
           # Make sure compiler can find libraries
           export LDFLAGS="-L${HERE}/compiler/lib"
           export LDLIBS="-L${HERE}/compiler/lib"
+          export LIBRARY_PATH="${HERE}/compiler/lib:${LIBRARY_PATH}"
           export LD_RPATH_SEARCH_PATHS="${HERE}/compiler/lib:${HERE}/usr/lib"
 
           # Execute the application
