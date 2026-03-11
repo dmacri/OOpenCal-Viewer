@@ -423,7 +423,7 @@ target_link_options(${PROJECT_NAME} PRIVATE -rdynamic)
 2. **Start simple** - use basic colors first (red, green, blue)
 3. **Debug with prints** - `std::cout << "value=" << value << std::endl;`
 4. **Test with small data** - verify logic before running full simulation
-5. **Check existing models** - see `BallCell.h`, `SciddicaTCell.h` for reference
+5. **Check an existing model header** - use any available model header as a reference
 
 ### Color Design
 

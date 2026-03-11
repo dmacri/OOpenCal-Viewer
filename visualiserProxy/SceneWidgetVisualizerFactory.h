@@ -37,9 +37,8 @@ class ISceneWidgetVisualizer;
  * This allows for a plugin system where new models can be added at runtime by registering
  * their creation functions, enabling dynamic model loading without recompilation.
  * 
- * Built-in models are registered automatically at startup via the static initialization
- * mechanism. Plugin models can be registered by calling registerModel() with appropriate
- * creation functions.
+ * Models are registered at runtime by plugins or other application code using
+ * registerModel(). This factory does not register any built-in models.
  * 
  * @note This class uses static methods and a static registry for simplicity. */
 class SceneWidgetVisualizerFactory
@@ -50,12 +49,12 @@ public:
 
     /** @brief Create a visualizer from a string name.
      * 
-     * @param modelName The name of the model (e.g., "Ball", "SciddicaT")
+     * @param modelName The name of the model
      * @return std::unique_ptr<ISceneWidgetVisualizer> Pointer to the created visualizer
      * @throws std::invalid_argument if the model name is not recognized */
     static std::unique_ptr<ISceneWidgetVisualizer> create(const std::string& modelName);
 
-    /// @brief Create a visualizer for default model
+    /// @brief Create a visualizer for the first registered model
     static std::unique_ptr<ISceneWidgetVisualizer> defaultModel();
 
     /** @brief Register a new model with the factory.
@@ -101,10 +100,4 @@ public:
 private:
     /// Registry of model creation functions
     static std::map<std::string, ModelCreator>& getRegistry();
-
-    /// Initialize built-in models (called automatically)
-    static void initializeBuiltInModels();
-
-    /// Flag to track if built-in models are initialized
-    static inline bool isInitializedWithBuildInModels = false;
 };

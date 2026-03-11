@@ -69,7 +69,7 @@ The OOpenCal-Viewer now supports switching between **2D** and **3D** view modes,
 
 ### Compatibility
 
-- View modes work with all model types (Ball, SciddicaT, etc.)
+- View modes work with all model types loaded via plugins or model directories.
 - Switching modes does **not** reload data files
 - View mode preference is **not** saved between sessions (always starts in 2D)
 
