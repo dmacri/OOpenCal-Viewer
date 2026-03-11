@@ -361,13 +361,6 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
         }
 
         const std::string includeRoot = compilerInclude;
-        cmd << " -isystem " << quoteIfNeeded(includeRoot);
-        const std::string archInclude = includeRoot + "/x86_64-linux-gnu";
-        if (fs::exists(archInclude))
-        {
-            cmd << " -isystem " << quoteIfNeeded(archInclude);
-        }
-
         const std::string cxxDir = detectBundledCxxVersionDir(includeRoot);
         if (!cxxDir.empty())
         {
@@ -377,6 +370,14 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
             {
                 cmd << " -isystem " << quoteIfNeeded(cxxArchDir);
             }
+        }
+
+        // Add C system headers after C++ dirs so include_next can find them
+        cmd << " -isystem " << quoteIfNeeded(includeRoot);
+        const std::string archInclude = includeRoot + "/x86_64-linux-gnu";
+        if (fs::exists(archInclude))
+        {
+            cmd << " -isystem " << quoteIfNeeded(archInclude);
         }
     }
 
