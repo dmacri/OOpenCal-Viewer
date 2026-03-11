@@ -160,6 +160,16 @@ jobs:
             cp -r /usr/include/c++/* AppDir/compiler/include/c++/ 2>/dev/null || true
           fi
 
+          # Copy target-specific libstdc++ headers (bits/c++config.h, etc.)
+          if [ -d "/usr/include/x86_64-linux-gnu/c++" ]; then
+            for verdir in /usr/include/x86_64-linux-gnu/c++/*; do
+              [ -d "$verdir" ] || continue
+              ver=$(basename "$verdir")
+              mkdir -p AppDir/compiler/include/c++/$ver/x86_64-linux-gnu
+              cp -r "$verdir"/* AppDir/compiler/include/c++/$ver/x86_64-linux-gnu/ 2>/dev/null || true
+            done
+          fi
+
       - name: Copy project headers
         run: |
           # Copy headers from project directories with directory structure
