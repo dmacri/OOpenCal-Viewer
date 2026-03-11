@@ -49,6 +49,11 @@ std::string extractCompilerVersion(const std::string& compilerName)
 }
 } // anonymous namespace
 
+namespace
+{
+std::string getEnvCompilerOverride();
+} // anonymous namespace
+
 namespace viz::plugins
 {
 std::pair<std::string, std::string> CompilationConfig::getBuildCompilerInfo()
