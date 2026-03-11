@@ -47,11 +47,16 @@ std::string extractCompilerVersion(const std::string& compilerName)
     
     return "";
 }
-} // anonymous namespace
 
-namespace
+std::string getEnvCompilerOverride()
 {
-std::string getEnvCompilerOverride();
+    const char* envCompiler = std::getenv("OOPENCAL_COMPILER");
+    if (!envCompiler || *envCompiler == '\0')
+    {
+        return {};
+    }
+    return std::string(envCompiler);
+}
 } // anonymous namespace
 
 namespace viz::plugins
@@ -182,16 +187,6 @@ bool supportsVersionedCompilers()
 #else
     return true;  // Linux/macOS commonly use versioned compilers
 #endif
-}
-
-std::string getEnvCompilerOverride()
-{
-    const char* envCompiler = std::getenv("OOPENCAL_COMPILER");
-    if (!envCompiler || *envCompiler == '\0')
-    {
-        return {};
-    }
-    return std::string(envCompiler);
 }
 
 /** @brief Create compiler info structure for detected compiler
