@@ -373,6 +373,7 @@ jobs:
           export COMPILER_INCLUDEDIR="${HERE}/compiler/include"
           export COMPILER_LIBDIR="${HERE}/compiler/lib"
           export PATH="${HERE}/compiler/bin:${PATH}"
+          export OOPENCAL_COMPILER="${HERE}/compiler/bin/clang++"
 
           # Library paths - app runtime
           export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/compiler/lib:${LD_LIBRARY_PATH}"
