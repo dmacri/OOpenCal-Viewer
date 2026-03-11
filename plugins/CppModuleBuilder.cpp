@@ -61,6 +61,73 @@ std::string quoteIfNeeded(const std::string& path)
     return "\"" + path + "\"";
 }
 
+std::vector<std::string> splitEnvPaths(const char* value)
+{
+    std::vector<std::string> result;
+    if (!value || *value == '\0')
+    {
+        return result;
+    }
+    std::string current;
+    for (const char* p = value; *p != '\0'; ++p)
+    {
+        if (*p == ':')
+        {
+            if (!current.empty())
+            {
+                result.push_back(current);
+                current.clear();
+            }
+        }
+        else
+        {
+            current.push_back(*p);
+        }
+    }
+    if (!current.empty())
+    {
+        result.push_back(current);
+    }
+    return result;
+}
+
+std::string detectBundledCxxVersionDir(const std::string& includeRoot)
+{
+    const fs::path cxxRoot = fs::path(includeRoot) / "c++";
+    if (!fs::exists(cxxRoot) || !fs::is_directory(cxxRoot))
+    {
+        return {};
+    }
+
+    int bestVersion = -1;
+    std::string bestName;
+    for (const auto& entry : fs::directory_iterator(cxxRoot))
+    {
+        if (!entry.is_directory())
+        {
+            continue;
+        }
+        const std::string name = entry.path().filename().string();
+        bool allDigits = !name.empty() && std::all_of(name.begin(), name.end(), ::isdigit);
+        if (!allDigits)
+        {
+            continue;
+        }
+        int version = std::stoi(name);
+        if (version > bestVersion)
+        {
+            bestVersion = version;
+            bestName = name;
+        }
+    }
+
+    if (bestVersion < 0)
+    {
+        return {};
+    }
+    return (cxxRoot / bestName).string();
+}
+
 inline TinyProcessLib::Process::string_type toProcessString(const std::string& str)
 {
 #ifdef _WIN32
@@ -281,6 +348,37 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
     cmd << quoteIfNeeded(compilerPath)
         << " " << config.getCompilationFlags()
         << " -std=" << standard;
+
+    const char* compilerInclude = std::getenv("COMPILER_INCLUDEDIR");
+    const char* clangResource = std::getenv("CLANG_RESOURCE_INCLUDE");
+    if (compilerInclude && *compilerInclude != '\0')
+    {
+        // Prefer bundled headers over system headers when provided by AppImage
+        cmd << " -nostdinc -nostdinc++";
+        if (clangResource && *clangResource != '\0')
+        {
+            cmd << " -isystem " << quoteIfNeeded(clangResource);
+        }
+
+        const std::string includeRoot = compilerInclude;
+        cmd << " -isystem " << quoteIfNeeded(includeRoot);
+        const std::string archInclude = includeRoot + "/x86_64-linux-gnu";
+        if (fs::exists(archInclude))
+        {
+            cmd << " -isystem " << quoteIfNeeded(archInclude);
+        }
+
+        const std::string cxxDir = detectBundledCxxVersionDir(includeRoot);
+        if (!cxxDir.empty())
+        {
+            cmd << " -isystem " << quoteIfNeeded(cxxDir);
+            const std::string cxxArchDir = cxxDir + "/x86_64-linux-gnu";
+            if (fs::exists(cxxArchDir))
+            {
+                cmd << " -isystem " << quoteIfNeeded(cxxArchDir);
+            }
+        }
+    }
 
     // Add include paths from configuration
     auto includePaths = config.getIncludePaths();
