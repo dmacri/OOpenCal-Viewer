@@ -232,31 +232,31 @@ jobs:
 
       - name: Copy compiler runtime libraries
         run: |
-          # Copy libclang-cpp (required by clang++)
+          # Copy libclang-cpp (required by clang++) - follow symlinks to real files
           for lib in /usr/lib/llvm-*/lib/libclang-cpp.so* /usr/lib/x86_64-linux-gnu/libclang-cpp.so*; do
-            [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ 2>/dev/null || true
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/lib/ 2>/dev/null || true
           done
 
           # Copy Clang runtime libraries
           CLANG_LIB_PATHS=$(find /usr/lib/x86_64-linux-gnu -path "*clang*" -name "*.so*" -type f)
           for lib in $CLANG_LIB_PATHS; do
-            cp -P "$lib" AppDir/compiler/lib/ 2>/dev/null || true
+            cp -L "$lib" AppDir/compiler/lib/ 2>/dev/null || true
           done
 
           # Copy LLVM runtime libraries
           LLVM_LIB_PATHS=$(find /usr/lib/x86_64-linux-gnu -path "*llvm*" -name "*.so*" -type f)
           for lib in $LLVM_LIB_PATHS; do
-            cp -P "$lib" AppDir/compiler/lib/ 2>/dev/null || true
+            cp -L "$lib" AppDir/compiler/lib/ 2>/dev/null || true
           done
 
           # Copy libstdc++ and libc++ runtime
           for lib in /usr/lib/x86_64-linux-gnu/libstdc++.so* /usr/lib/x86_64-linux-gnu/libc++.so* /usr/lib/x86_64-linux-gnu/libc++abi.so*; do
-            [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ || true
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/lib/ || true
           done
 
           # Copy libgomp (OpenMP) if available
           for lib in /usr/lib/x86_64-linux-gnu/libgomp.so*; do
-            [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ || true
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/lib/ || true
           done
 
       - name: Copy Qt libraries
