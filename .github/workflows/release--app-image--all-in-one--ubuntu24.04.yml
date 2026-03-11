@@ -244,9 +244,14 @@ jobs:
           done
 
           # Copy LLVM runtime libraries
-          LLVM_LIB_PATHS=$(find /usr/lib/x86_64-linux-gnu -path "*llvm*" -name "*.so*" -type f)
+          LLVM_LIB_PATHS=$(find /usr/lib/x86_64-linux-gnu /usr/lib/llvm-* -path "*llvm*" -name "*.so*" -type f)
           for lib in $LLVM_LIB_PATHS; do
             cp -L "$lib" AppDir/compiler/lib/ 2>/dev/null || true
+          done
+
+          # Ensure libLLVM from versioned llvm dirs
+          for lib in /usr/lib/llvm-*/lib/libLLVM.so*; do
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/lib/ 2>/dev/null || true
           done
 
           # Copy libstdc++ and libc++ runtime
@@ -275,6 +280,16 @@ jobs:
           cp -r ${QT_PLUGINS}/platforms AppDir/usr/plugins/ 2>/dev/null || true
           cp -r ${QT_PLUGINS}/xcbglintegrations AppDir/usr/plugins/ 2>/dev/null || true
           cp -r ${QT_PLUGINS}/imageformats AppDir/usr/plugins/ 2>/dev/null || true
+
+      - name: Diagnostics: ldd clang++
+        run: |
+          echo "System clang++:"
+          which clang++ || true
+          ldd $(which clang++) || true
+          echo "AppDir clang++ (with compiler lib path):"
+          if [ -f "AppDir/compiler/bin/clang++" ]; then
+            LD_LIBRARY_PATH="AppDir/compiler/lib" ldd AppDir/compiler/bin/clang++ || true
+          fi
 
       - name: Copy VTK libraries
         run: |
