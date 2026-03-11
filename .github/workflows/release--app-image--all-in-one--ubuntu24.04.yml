@@ -232,6 +232,11 @@ jobs:
 
       - name: Copy compiler runtime libraries
         run: |
+          # Copy libclang-cpp (required by clang++)
+          for lib in /usr/lib/llvm-*/lib/libclang-cpp.so* /usr/lib/x86_64-linux-gnu/libclang-cpp.so*; do
+            [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ 2>/dev/null || true
+          done
+
           # Copy Clang runtime libraries
           CLANG_LIB_PATHS=$(find /usr/lib/x86_64-linux-gnu -path "*clang*" -name "*.so*" -type f)
           for lib in $CLANG_LIB_PATHS; do
