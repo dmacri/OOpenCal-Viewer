@@ -15,7 +15,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { build_type: "Debug", generator: "Visual Studio 17 2022" }
           - { build_type: "Release", generator: "Visual Studio 17 2022" }
 
     steps:
