@@ -101,10 +101,44 @@ jobs:
         cd build
         cmake --build . --config ${{ matrix.build_type }} --target OOpenCal-Viewer
 
+    - name: Package runtime (Qt + VTK)
+      shell: pwsh
+      run: |
+        $vcpkg_root = "${{ runner.temp }}/vcpkg"
+        $build_type = "${{ matrix.build_type }}"
+        $exe_path = "build/$build_type/OOpenCal-Viewer.exe"
+        $package_dir = "build/package/$build_type"
+        
+        New-Item -ItemType Directory -Force -Path $package_dir | Out-Null
+        Copy-Item $exe_path $package_dir -Force
+        
+        $windeployqt = Get-ChildItem -Path "$vcpkg_root/installed/x64-windows" -Recurse -Filter windeployqt.exe | Select-Object -First 1
+        if (-not $windeployqt) { throw "windeployqt.exe not found under vcpkg." }
+        
+        $deployArgs = @("--no-translations")
+        if ($build_type -eq "Debug") { $deployArgs += "--debug" } else { $deployArgs += "--release" }
+        & $windeployqt.FullName @deployArgs "$package_dir/OOpenCal-Viewer.exe"
+        
+        $applocal = Join-Path $vcpkg_root "scripts/buildsystems/msbuild/applocal.ps1"
+        if (-not (Test-Path $applocal)) { throw "applocal.ps1 not found at $applocal" }
+        
+        $installedDir = Join-Path $vcpkg_root "installed/x64-windows/bin"
+        if ($build_type -eq "Debug") { $installedDir = Join-Path $vcpkg_root "installed/x64-windows/debug/bin" }
+        & $applocal -targetBinary "$package_dir/OOpenCal-Viewer.exe" -installedDir "$installedDir"
+        
+        Compress-Archive -Path "$package_dir/*" -DestinationPath "build/OOpenCal-Viewer-${{ matrix.build_type }}-windows.zip" -Force
+
     - name: Upload build artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: OOpenCal-Viewer-${{ matrix.build_type }}
         path: build/${{ matrix.build_type }}/OOpenCal-Viewer.exe
+
+    - name: Upload packaged ZIP
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: OOpenCal-Viewer-${{ matrix.build_type }}-windows-zip
+        path: build/OOpenCal-Viewer-${{ matrix.build_type }}-windows.zip
         if-no-files-found: warn
