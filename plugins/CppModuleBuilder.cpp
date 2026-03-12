@@ -351,6 +351,22 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
 
     const char* compilerInclude = std::getenv("COMPILER_INCLUDEDIR");
     const char* clangResource = std::getenv("CLANG_RESOURCE_INCLUDE");
+    const char* compilerLibDir = std::getenv("COMPILER_LIBDIR");
+    const char* gccToolchain = std::getenv("COMPILER_GCC_TOOLCHAIN");
+    const char* sysroot = std::getenv("COMPILER_SYSROOT");
+
+    if (gccToolchain && *gccToolchain != '\0')
+    {
+        cmd << " --gcc-toolchain=" << quoteIfNeeded(gccToolchain);
+    }
+    if (sysroot && *sysroot != '\0')
+    {
+        cmd << " --sysroot=" << quoteIfNeeded(sysroot);
+    }
+    if (compilerLibDir && *compilerLibDir != '\0')
+    {
+        cmd << " -L" << quoteIfNeeded(compilerLibDir);
+    }
     if (compilerInclude && *compilerInclude != '\0')
     {
         // Prefer bundled headers over system headers when provided by AppImage

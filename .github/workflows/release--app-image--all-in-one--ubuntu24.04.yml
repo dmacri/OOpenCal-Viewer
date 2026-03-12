@@ -94,6 +94,10 @@ jobs:
           mkdir -p AppDir/compiler/bin
           mkdir -p AppDir/compiler/lib
           mkdir -p AppDir/compiler/include
+          mkdir -p AppDir/compiler/gcc/lib/gcc/x86_64-linux-gnu
+          mkdir -p AppDir/compiler/gcc/lib/x86_64-linux-gnu
+          mkdir -p AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu
+          mkdir -p AppDir/compiler/sysroot/lib/x86_64-linux-gnu
 
           # Copy main executable
           cp build/${PROJECT_NAME} AppDir/usr/bin/ || \
@@ -281,6 +285,32 @@ jobs:
             [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/lib/ || true
           done
 
+          # Copy GCC toolchain (crtbegin/crtend, libgcc, etc.)
+          GCC_LIB_ROOT=/usr/lib/gcc/x86_64-linux-gnu
+          if [ -d "$GCC_LIB_ROOT" ]; then
+            GCC_VER=$(ls -1v "$GCC_LIB_ROOT" | tail -n1)
+            if [ -n "$GCC_VER" ] && [ -d "$GCC_LIB_ROOT/$GCC_VER" ]; then
+              mkdir -p AppDir/compiler/gcc/lib/gcc/x86_64-linux-gnu/$GCC_VER
+              cp -L "$GCC_LIB_ROOT/$GCC_VER"/* AppDir/compiler/gcc/lib/gcc/x86_64-linux-gnu/$GCC_VER/ 2>/dev/null || true
+            fi
+          fi
+
+          # Copy libstdc++ and libgcc_s into gcc toolchain lib dir
+          for lib in /usr/lib/x86_64-linux-gnu/libstdc++.so* /usr/lib/x86_64-linux-gnu/libgcc_s.so*; do
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/gcc/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          done
+
+          # Copy glibc start files and linker scripts into sysroot
+          for obj in /usr/lib/x86_64-linux-gnu/crt1.o /usr/lib/x86_64-linux-gnu/Scrt1.o /usr/lib/x86_64-linux-gnu/crti.o /usr/lib/x86_64-linux-gnu/crtn.o; do
+            [ -f "$obj" ] && cp -L "$obj" AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          done
+          for script in /usr/lib/x86_64-linux-gnu/libc.so /usr/lib/x86_64-linux-gnu/libm.so; do
+            [ -f "$script" ] && cp -L "$script" AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          done
+          for lib in /lib/x86_64-linux-gnu/libc.so.6 /lib/x86_64-linux-gnu/libm.so.6 /lib/x86_64-linux-gnu/libpthread.so.0 /lib/x86_64-linux-gnu/librt.so.1 /lib/x86_64-linux-gnu/libdl.so.2; do
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/sysroot/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          done
+
       - name: Copy Qt libraries
         run: |
           # Find Qt library path
@@ -409,6 +439,8 @@ jobs:
           export COMPILER_PATH="${HERE}/compiler/bin"
           export COMPILER_INCLUDEDIR="${HERE}/compiler/include"
           export COMPILER_LIBDIR="${HERE}/compiler/lib"
+          export COMPILER_GCC_TOOLCHAIN="${HERE}/compiler/gcc"
+          export COMPILER_SYSROOT="${HERE}/compiler/sysroot"
           export PATH="${HERE}/compiler/bin:${PATH}"
           export OOPENCAL_COMPILER="${HERE}/compiler/bin/clang++"
 
