@@ -98,6 +98,7 @@ jobs:
           mkdir -p AppDir/compiler/gcc/lib/x86_64-linux-gnu
           mkdir -p AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu
           mkdir -p AppDir/compiler/sysroot/lib/x86_64-linux-gnu
+          mkdir -p AppDir/compiler/sysroot/lib64
 
           # Copy main executable
           cp build/${PROJECT_NAME} AppDir/usr/bin/ || \
@@ -307,12 +308,22 @@ jobs:
           for script in /usr/lib/x86_64-linux-gnu/libc.so /usr/lib/x86_64-linux-gnu/libm.so; do
             [ -f "$script" ] && cp -L "$script" AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
           done
+          # Copy libc nonshared archive (needed by linker when using sysroot)
+          if [ -f /usr/lib/x86_64-linux-gnu/libc_nonshared.a ]; then
+            cp -L /usr/lib/x86_64-linux-gnu/libc_nonshared.a AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          fi
           for lib in /lib/x86_64-linux-gnu/libc.so.6 /lib/x86_64-linux-gnu/libm.so.6 /lib/x86_64-linux-gnu/libmvec.so.1 /lib/x86_64-linux-gnu/libpthread.so.0 /lib/x86_64-linux-gnu/librt.so.1 /lib/x86_64-linux-gnu/libdl.so.2 /lib/x86_64-linux-gnu/libgcc_s.so.1; do
             [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/sysroot/lib/x86_64-linux-gnu/ 2>/dev/null || true
           done
           for lib in /usr/lib/x86_64-linux-gnu/libgcc_s.so.1; do
             [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
           done
+          # Copy dynamic loader into sysroot (/lib64 is the canonical path for ld-linux)
+          if [ -f /lib64/ld-linux-x86-64.so.2 ]; then
+            cp -L /lib64/ld-linux-x86-64.so.2 AppDir/compiler/sysroot/lib64/ 2>/dev/null || true
+          elif [ -f /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 ]; then
+            cp -L /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 AppDir/compiler/sysroot/lib64/ 2>/dev/null || true
+          fi
 
       - name: Copy Qt libraries
         run: |
