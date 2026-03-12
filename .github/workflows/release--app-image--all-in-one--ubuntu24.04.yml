@@ -307,8 +307,11 @@ jobs:
           for script in /usr/lib/x86_64-linux-gnu/libc.so /usr/lib/x86_64-linux-gnu/libm.so; do
             [ -f "$script" ] && cp -L "$script" AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
           done
-          for lib in /lib/x86_64-linux-gnu/libc.so.6 /lib/x86_64-linux-gnu/libm.so.6 /lib/x86_64-linux-gnu/libmvec.so.1 /lib/x86_64-linux-gnu/libpthread.so.0 /lib/x86_64-linux-gnu/librt.so.1 /lib/x86_64-linux-gnu/libdl.so.2; do
+          for lib in /lib/x86_64-linux-gnu/libc.so.6 /lib/x86_64-linux-gnu/libm.so.6 /lib/x86_64-linux-gnu/libmvec.so.1 /lib/x86_64-linux-gnu/libpthread.so.0 /lib/x86_64-linux-gnu/librt.so.1 /lib/x86_64-linux-gnu/libdl.so.2 /lib/x86_64-linux-gnu/libgcc_s.so.1; do
             [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/sysroot/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          done
+          for lib in /usr/lib/x86_64-linux-gnu/libgcc_s.so.1; do
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
           done
 
       - name: Copy Qt libraries
@@ -336,6 +339,10 @@ jobs:
           echo "AppDir clang++ (with compiler lib path):"
           if [ -f "AppDir/compiler/bin/clang++" ]; then
             LD_LIBRARY_PATH="AppDir/compiler/lib" ldd AppDir/compiler/bin/clang++ || true
+          fi
+          echo "clang++ search dirs:"
+          if [ -f "AppDir/compiler/bin/clang++" ]; then
+            AppDir/compiler/bin/clang++ --print-search-dirs || true
           fi
 
       - name: Copy VTK libraries
