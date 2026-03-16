@@ -217,6 +217,8 @@ set(OTHER_FILES
     .github/workflows/release--deb-package--ubuntu24.04.yml
     .github/workflows/release--deb-package-bundled--ubuntu24.04.yml
     .github/workflows/release--app-image--ubuntu24.04.yml
+    .github/workflows/release--app-image--all-in-one--ubuntu24.04.yml
+    .github/workflows/windows-build.yml
     .githooks/pre-commit
     .clang-format
 )
