@@ -94,6 +94,11 @@ jobs:
           mkdir -p AppDir/compiler/bin
           mkdir -p AppDir/compiler/lib
           mkdir -p AppDir/compiler/include
+          mkdir -p AppDir/compiler/gcc/lib/gcc/x86_64-linux-gnu
+          mkdir -p AppDir/compiler/gcc/lib/x86_64-linux-gnu
+          mkdir -p AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu
+          mkdir -p AppDir/compiler/sysroot/lib/x86_64-linux-gnu
+          mkdir -p AppDir/compiler/sysroot/lib64
 
           # Copy main executable
           cp build/${PROJECT_NAME} AppDir/usr/bin/ || \
@@ -116,6 +121,18 @@ jobs:
           ln -sf clang++ g++ 2>/dev/null || true
           ln -sf clang++ c++ 2>/dev/null || true
           cd -
+
+      - name: Copy Clang resource headers
+        run: |
+          RESOURCE_DIR=$(clang -print-resource-dir 2>/dev/null || true)
+          if [ -n "$RESOURCE_DIR" ] && [ -d "$RESOURCE_DIR" ]; then
+            mkdir -p AppDir/compiler/lib/clang
+            cp -r "$RESOURCE_DIR" AppDir/compiler/lib/clang/ 2>/dev/null || true
+            if [ -d "$RESOURCE_DIR/include" ]; then
+              mkdir -p AppDir/compiler/include/clang
+              cp -r "$RESOURCE_DIR/include" AppDir/compiler/include/clang/ 2>/dev/null || true
+            fi
+          fi
 
       - name: Copy system headers
         run: |
@@ -148,6 +165,16 @@ jobs:
             cp -r /usr/include/c++/* AppDir/compiler/include/c++/ 2>/dev/null || true
           fi
 
+          # Copy target-specific libstdc++ headers (bits/c++config.h, etc.)
+          if [ -d "/usr/include/x86_64-linux-gnu/c++" ]; then
+            for verdir in /usr/include/x86_64-linux-gnu/c++/*; do
+              [ -d "$verdir" ] || continue
+              ver=$(basename "$verdir")
+              mkdir -p AppDir/compiler/include/c++/$ver/x86_64-linux-gnu
+              cp -r "$verdir"/* AppDir/compiler/include/c++/$ver/x86_64-linux-gnu/ 2>/dev/null || true
+            done
+          fi
+
       - name: Copy project headers
         run: |
           # Copy headers from project directories with directory structure
@@ -157,42 +184,49 @@ jobs:
           mkdir -p AppDir/usr/include/utilities
           mkdir -p AppDir/usr/include/visualiser
           mkdir -p AppDir/usr/include/visualiserProxy
+          mkdir -p AppDir/usr/include/config
           mkdir -p AppDir/compiler/include/oopencal-viewer
 
           # Copy all headers from core/
           if [ -d "core" ]; then
             cp -r core/* AppDir/usr/include/core/ 2>/dev/null || true
-            cp -r core/* AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
+            cp -r core AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
           fi
 
           # Copy all headers from data/
           if [ -d "data" ]; then
             cp -r data/* AppDir/usr/include/data/ 2>/dev/null || true
-            cp -r data/* AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
+            cp -r data AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
           fi
 
           # Copy all headers from plugins/
           if [ -d "plugins" ]; then
             cp -r plugins/* AppDir/usr/include/plugins/ 2>/dev/null || true
-            cp -r plugins/* AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
+            cp -r plugins AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
           fi
 
           # Copy all headers from utilities/
           if [ -d "utilities" ]; then
             cp -r utilities/* AppDir/usr/include/utilities/ 2>/dev/null || true
-            cp -r utilities/* AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
+            cp -r utilities AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
           fi
 
           # Copy all headers from visualiser/
           if [ -d "visualiser" ]; then
             cp -r visualiser/* AppDir/usr/include/visualiser/ 2>/dev/null || true
-            cp -r visualiser/* AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
+            cp -r visualiser AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
           fi
 
           # Copy all headers from visualiserProxy/
           if [ -d "visualiserProxy" ]; then
             cp -r visualiserProxy/* AppDir/usr/include/visualiserProxy/ 2>/dev/null || true
-            cp -r visualiserProxy/* AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
+            cp -r visualiserProxy AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
+          fi
+
+          # Copy all headers from config/
+          if [ -d "config" ]; then
+            cp -r config/* AppDir/usr/include/config/ 2>/dev/null || true
+            cp -r config AppDir/compiler/include/oopencal-viewer/ 2>/dev/null || true
           fi
 
       - name: Copy OOpenCAL headers
@@ -220,32 +254,76 @@ jobs:
 
       - name: Copy compiler runtime libraries
         run: |
+          # Copy libclang-cpp (required by clang++) - follow symlinks to real files
+          for lib in /usr/lib/llvm-*/lib/libclang-cpp.so* /usr/lib/x86_64-linux-gnu/libclang-cpp.so*; do
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/lib/ 2>/dev/null || true
+          done
+
           # Copy Clang runtime libraries
           CLANG_LIB_PATHS=$(find /usr/lib/x86_64-linux-gnu -path "*clang*" -name "*.so*" -type f)
           for lib in $CLANG_LIB_PATHS; do
-            cp -P "$lib" AppDir/compiler/lib/ 2>/dev/null || true
+            cp -L "$lib" AppDir/compiler/lib/ 2>/dev/null || true
           done
 
           # Copy LLVM runtime libraries
-          LLVM_LIB_PATHS=$(find /usr/lib/x86_64-linux-gnu -path "*llvm*" -name "*.so*" -type f)
+          LLVM_LIB_PATHS=$(find /usr/lib/x86_64-linux-gnu /usr/lib/llvm-* -path "*llvm*" -name "*.so*" -type f)
           for lib in $LLVM_LIB_PATHS; do
-            cp -P "$lib" AppDir/compiler/lib/ 2>/dev/null || true
+            cp -L "$lib" AppDir/compiler/lib/ 2>/dev/null || true
+          done
+
+          # Ensure libLLVM from versioned llvm dirs
+          for lib in /usr/lib/llvm-*/lib/libLLVM.so*; do
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/lib/ 2>/dev/null || true
           done
 
           # Copy libstdc++ and libc++ runtime
           for lib in /usr/lib/x86_64-linux-gnu/libstdc++.so* /usr/lib/x86_64-linux-gnu/libc++.so* /usr/lib/x86_64-linux-gnu/libc++abi.so*; do
-            [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ || true
-          done
-
-          # Copy glibc runtime
-          for lib in /lib/x86_64-linux-gnu/libc.so* /lib/x86_64-linux-gnu/libm.so* /lib/x86_64-linux-gnu/libdl.so* /lib/x86_64-linux-gnu/libpthread.so* /lib/x86_64-linux-gnu/libnsl.so* /lib/x86_64-linux-gnu/libutil.so* /lib/x86_64-linux-gnu/libresolv.so*; do
-            [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ || true
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/lib/ || true
           done
 
           # Copy libgomp (OpenMP) if available
           for lib in /usr/lib/x86_64-linux-gnu/libgomp.so*; do
-            [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ || true
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/lib/ || true
           done
+
+          # Copy GCC toolchain (crtbegin/crtend, libgcc, etc.)
+          GCC_LIB_ROOT=/usr/lib/gcc/x86_64-linux-gnu
+          if [ -d "$GCC_LIB_ROOT" ]; then
+            GCC_VER=$(ls -1v "$GCC_LIB_ROOT" | tail -n1)
+            if [ -n "$GCC_VER" ] && [ -d "$GCC_LIB_ROOT/$GCC_VER" ]; then
+              mkdir -p AppDir/compiler/gcc/lib/gcc/x86_64-linux-gnu/$GCC_VER
+              cp -L "$GCC_LIB_ROOT/$GCC_VER"/* AppDir/compiler/gcc/lib/gcc/x86_64-linux-gnu/$GCC_VER/ 2>/dev/null || true
+            fi
+          fi
+
+          # Copy libstdc++ and libgcc_s into gcc toolchain lib dir
+          for lib in /usr/lib/x86_64-linux-gnu/libstdc++.so* /usr/lib/x86_64-linux-gnu/libgcc_s.so*; do
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/gcc/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          done
+
+          # Copy glibc start files and linker scripts into sysroot
+          for obj in /usr/lib/x86_64-linux-gnu/crt1.o /usr/lib/x86_64-linux-gnu/Scrt1.o /usr/lib/x86_64-linux-gnu/crti.o /usr/lib/x86_64-linux-gnu/crtn.o; do
+            [ -f "$obj" ] && cp -L "$obj" AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          done
+          for script in /usr/lib/x86_64-linux-gnu/libc.so /usr/lib/x86_64-linux-gnu/libm.so; do
+            [ -f "$script" ] && cp -L "$script" AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          done
+          # Copy libc nonshared archive (needed by linker when using sysroot)
+          if [ -f /usr/lib/x86_64-linux-gnu/libc_nonshared.a ]; then
+            cp -L /usr/lib/x86_64-linux-gnu/libc_nonshared.a AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          fi
+          for lib in /lib/x86_64-linux-gnu/libc.so.6 /lib/x86_64-linux-gnu/libm.so.6 /lib/x86_64-linux-gnu/libmvec.so.1 /lib/x86_64-linux-gnu/libpthread.so.0 /lib/x86_64-linux-gnu/librt.so.1 /lib/x86_64-linux-gnu/libdl.so.2 /lib/x86_64-linux-gnu/libgcc_s.so.1; do
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/sysroot/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          done
+          for lib in /usr/lib/x86_64-linux-gnu/libgcc_s.so.1; do
+            [ -f "$lib" ] && cp -L "$lib" AppDir/compiler/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          done
+          # Copy dynamic loader into sysroot (/lib64 is the canonical path for ld-linux)
+          if [ -f /lib64/ld-linux-x86-64.so.2 ]; then
+            cp -L /lib64/ld-linux-x86-64.so.2 AppDir/compiler/sysroot/lib64/ 2>/dev/null || true
+          elif [ -f /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 ]; then
+            cp -L /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 AppDir/compiler/sysroot/lib64/ 2>/dev/null || true
+          fi
 
       - name: Copy Qt libraries
         run: |
@@ -263,6 +341,20 @@ jobs:
           cp -r ${QT_PLUGINS}/platforms AppDir/usr/plugins/ 2>/dev/null || true
           cp -r ${QT_PLUGINS}/xcbglintegrations AppDir/usr/plugins/ 2>/dev/null || true
           cp -r ${QT_PLUGINS}/imageformats AppDir/usr/plugins/ 2>/dev/null || true
+
+      - name: "Diagnostics of ldd clang++"
+        run: |
+          echo "System clang++:"
+          which clang++ || true
+          ldd $(which clang++) || true
+          echo "AppDir clang++ (with compiler lib path):"
+          if [ -f "AppDir/compiler/bin/clang++" ]; then
+            LD_LIBRARY_PATH="AppDir/compiler/lib" ldd AppDir/compiler/bin/clang++ || true
+          fi
+          echo "clang++ search dirs:"
+          if [ -f "AppDir/compiler/bin/clang++" ]; then
+            AppDir/compiler/bin/clang++ --print-search-dirs || true
+          fi
 
       - name: Copy VTK libraries
         run: |
@@ -286,7 +378,7 @@ jobs:
               if [ -f "$lib" ]; then
                 # Skip some system libraries but be less strict for AppImage with compiler
                 case "$lib" in
-                  /lib/x86_64-linux-gnu/ld-linux*.so*)
+                  /lib/x86_64-linux-gnu/ld-linux*.so*|/lib64/ld-linux*.so*|/lib/x86_64-linux-gnu/libc.so*|/lib/x86_64-linux-gnu/libm.so*|/lib/x86_64-linux-gnu/libdl.so*|/lib/x86_64-linux-gnu/libpthread.so*|/lib/x86_64-linux-gnu/librt.so*|/lib/x86_64-linux-gnu/libutil.so*|/lib/x86_64-linux-gnu/libnsl.so*|/lib/x86_64-linux-gnu/libresolv.so*|/usr/lib/x86_64-linux-gnu/libc.so*|/usr/lib/x86_64-linux-gnu/libm.so*|/usr/lib/x86_64-linux-gnu/libdl.so*|/usr/lib/x86_64-linux-gnu/libpthread.so*|/usr/lib/x86_64-linux-gnu/librt.so*|/usr/lib/x86_64-linux-gnu/libutil.so*|/usr/lib/x86_64-linux-gnu/libnsl.so*|/usr/lib/x86_64-linux-gnu/libresolv.so*)
                     continue
                     ;;
                 esac
@@ -317,6 +409,15 @@ jobs:
                      /usr/lib/x86_64-linux-gnu/libxcb.so*; do
             [ -f "$lib" ] && cp -P "$lib" AppDir/compiler/lib/ 2>/dev/null || true
           done
+
+      - name: Remove bundled glibc (AppImage compatibility)
+        run: |
+          rm -f AppDir/usr/lib/libc.so* AppDir/usr/lib/libm.so* AppDir/usr/lib/libdl.so* AppDir/usr/lib/libpthread.so* \
+                AppDir/usr/lib/librt.so* AppDir/usr/lib/libutil.so* AppDir/usr/lib/libnsl.so* AppDir/usr/lib/libresolv.so* \
+                AppDir/usr/lib/ld-linux*.so* AppDir/usr/lib/ld-linux-x86-64.so* 2>/dev/null || true
+          rm -f AppDir/compiler/lib/libc.so* AppDir/compiler/lib/libm.so* AppDir/compiler/lib/libdl.so* AppDir/compiler/lib/libpthread.so* \
+                AppDir/compiler/lib/librt.so* AppDir/compiler/lib/libutil.so* AppDir/compiler/lib/libnsl.so* AppDir/compiler/lib/libresolv.so* \
+                AppDir/compiler/lib/ld-linux*.so* AppDir/compiler/lib/ld-linux-x86-64.so* 2>/dev/null || true
 
       ################### icons and desktop entry ###################
       - name: Prepare application icon
@@ -356,14 +457,38 @@ jobs:
           export COMPILER_PATH="${HERE}/compiler/bin"
           export COMPILER_INCLUDEDIR="${HERE}/compiler/include"
           export COMPILER_LIBDIR="${HERE}/compiler/lib"
+          export COMPILER_GCC_TOOLCHAIN="${HERE}/compiler/gcc"
+          export COMPILER_SYSROOT="${HERE}/compiler/sysroot"
+          export PATH="${HERE}/compiler/bin:${PATH}"
+          export OOPENCAL_COMPILER="${HERE}/compiler/bin/clang++"
 
           # Library paths - app runtime
           export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/compiler/lib:${LD_LIBRARY_PATH}"
 
           # C/C++ header search paths for in-app module compilation
-          export CPATH="${HERE}/compiler/include:${CPATH}"
-          export CPLUS_INCLUDE_PATH="${HERE}/compiler/include:${CPLUS_INCLUDE_PATH}"
-          export C_INCLUDE_PATH="${HERE}/compiler/include:${C_INCLUDE_PATH}"
+          export CLANG_RESOURCE_INCLUDE="${HERE}/compiler/include/clang/include"
+          CXX_ROOT="${HERE}/compiler/include/c++"
+          CXX_VER=""
+          if [ -d "$CXX_ROOT" ]; then
+            CXX_VER=$(ls -1v "$CXX_ROOT" | tail -n1)
+          fi
+          CXX_VER_DIR=""
+          CXX_ARCH_DIR=""
+          if [ -n "$CXX_VER" ] && [ -d "$CXX_ROOT/$CXX_VER" ]; then
+            CXX_VER_DIR="$CXX_ROOT/$CXX_VER"
+            if [ -d "$CXX_ROOT/$CXX_VER/x86_64-linux-gnu" ]; then
+              CXX_ARCH_DIR="$CXX_ROOT/$CXX_VER/x86_64-linux-gnu"
+            fi
+          fi
+
+          export CPATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${CPATH}"
+          if [ -n "$CXX_VER_DIR" ]; then
+            export CPATH="${CXX_VER_DIR}:${CXX_ARCH_DIR}:${CPATH}"
+            export CPLUS_INCLUDE_PATH="${CXX_VER_DIR}:${CXX_ARCH_DIR}:${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${CPLUS_INCLUDE_PATH}"
+          else
+            export CPLUS_INCLUDE_PATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include:${CPLUS_INCLUDE_PATH}"
+          fi
+          export C_INCLUDE_PATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include/x86_64-linux-gnu:${HERE}/compiler/include:${C_INCLUDE_PATH}"
 
           # Qt configuration
           export QT_PLUGIN_PATH="${HERE}/usr/plugins"
@@ -373,13 +498,14 @@ jobs:
           export QT_AUTO_SCREEN_SCALE_FACTOR=0
 
           # Compatibility: set paths for OOpenCAL and VTK
-          export OOPENCAL_VIEWER_ROOT="${HERE}/compiler/include"
+          export OOPENCAL_VIEWER_ROOT="${HERE}/compiler/include/oopencal-viewer"
           export OOPENCAL_DIR="${HERE}/compiler/include"
           export VTK_INCLUDES="${HERE}/compiler/include/vtk"
 
           # Make sure compiler can find libraries
           export LDFLAGS="-L${HERE}/compiler/lib"
           export LDLIBS="-L${HERE}/compiler/lib"
+          export LIBRARY_PATH="${HERE}/compiler/lib:${LIBRARY_PATH}"
           export LD_RPATH_SEARCH_PATHS="${HERE}/compiler/lib:${HERE}/usr/lib"
 
           # Execute the application

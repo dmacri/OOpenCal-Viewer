@@ -193,13 +193,17 @@ std::vector<std::string> SettingParameter::getSubstateFields() const
     
     for (const auto& [name, info] : parsedFields)
     {
-        int order = info.order;
-        if (order == -1)
+        std::size_t orderKey = 0;
+        if (info.order < 0)
         {
             // If no order is set, use a large number to put it at the end
-            order = 1000000 + orderedFields.size();
+            orderKey = 1000000u + orderedFields.size();
         }
-        orderedFields.emplace_back(order, name);
+        else
+        {
+            orderKey = static_cast<std::size_t>(info.order);
+        }
+        orderedFields.emplace_back(orderKey, name);
     }
     
     // Sort by order

@@ -1031,8 +1031,8 @@ QString SceneWidget::getNodeAtWorldPosition(const std::array<double, 3>& worldPo
     const int nodeY = static_cast<int>((worldPos[1] - bounds[2]) / nodeHeight);
 
     // Check if the calculated node is within bounds
-    if (nodeX >= 0 && nodeX < settingParameter->nNodeX &&
-        nodeY >= 0 && nodeY < settingParameter->nNodeY)
+    if (nodeX >= 0 && nodeX < static_cast<int>(settingParameter->nNodeX) &&
+        nodeY >= 0 && nodeY < static_cast<int>(settingParameter->nNodeY))
     {
         return QString("Node [%1, %2]").arg(nodeX).arg(nodeY);
     }

@@ -178,6 +178,7 @@ public:
     /** @brief Select the best available compiler with intelligent fallback
      * 
      * Selection priority:
+     * 0. Compiler from environment variable OOPENCAL_COMPILER (if set and valid)
      * 1. Same compiler and version as used to build the application
      * 2. Same compiler family (e.g., clang++ or g++) but different version
      * 3. Other available compilers (g++, clang++, c++)
