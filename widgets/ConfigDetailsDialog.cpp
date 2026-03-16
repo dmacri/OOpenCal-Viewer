@@ -77,7 +77,8 @@ void ConfigDetailsDialog::loadConfigData(const std::string& configFilePath)
             ConfigCategory* category = config.getConfigCategory(categoryName);
             if (category && category->getSize() > 0)
             {
-                rowCount += 1 + category->getSize(); // 1 for category header + parameters
+                const int categorySize = static_cast<int>(category->getSize());
+                rowCount += 1 + categorySize; // 1 for category header + parameters
             }
         }
 

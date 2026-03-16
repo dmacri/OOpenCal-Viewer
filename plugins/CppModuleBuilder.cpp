@@ -19,6 +19,115 @@ namespace fs = std::filesystem;
 // Helper function to convert std::string to TinyProcessLib::Process::string_type
 namespace
 {
+std::string getEnvCompilerOverride()
+{
+    const char* envCompiler = std::getenv("OOPENCAL_COMPILER");
+    if (!envCompiler || *envCompiler == '\0')
+    {
+        return {};
+    }
+    return std::string(envCompiler);
+}
+
+bool looksLikePath(const std::string& value)
+{
+    return value.find('/') != std::string::npos || value.find('\\') != std::string::npos;
+}
+
+bool isExecutableFile(const std::string& path)
+{
+    std::error_code ec;
+    auto st = fs::status(path, ec);
+    if (ec || !fs::is_regular_file(st))
+    {
+        return false;
+    }
+#ifdef _WIN32
+    return true;
+#else
+    const auto perms = st.permissions();
+    return (perms & fs::perms::owner_exec) != fs::perms::none ||
+           (perms & fs::perms::group_exec) != fs::perms::none ||
+           (perms & fs::perms::others_exec) != fs::perms::none;
+#endif
+}
+
+std::string quoteIfNeeded(const std::string& path)
+{
+    if (path.find(' ') == std::string::npos && path.find('"') == std::string::npos)
+    {
+        return path;
+    }
+    return "\"" + path + "\"";
+}
+
+std::vector<std::string> splitEnvPaths(const char* value)
+{
+    std::vector<std::string> result;
+    if (!value || *value == '\0')
+    {
+        return result;
+    }
+    std::string current;
+    for (const char* p = value; *p != '\0'; ++p)
+    {
+        if (*p == ':')
+        {
+            if (!current.empty())
+            {
+                result.push_back(current);
+                current.clear();
+            }
+        }
+        else
+        {
+            current.push_back(*p);
+        }
+    }
+    if (!current.empty())
+    {
+        result.push_back(current);
+    }
+    return result;
+}
+
+std::string detectBundledCxxVersionDir(const std::string& includeRoot)
+{
+    const fs::path cxxRoot = fs::path(includeRoot) / "c++";
+    if (!fs::exists(cxxRoot) || !fs::is_directory(cxxRoot))
+    {
+        return {};
+    }
+
+    int bestVersion = -1;
+    std::string bestName;
+    for (const auto& entry : fs::directory_iterator(cxxRoot))
+    {
+        if (!entry.is_directory())
+        {
+            continue;
+        }
+        const std::string name = entry.path().filename().string();
+        bool allDigits = !name.empty() && std::all_of(name.begin(), name.end(), ::isdigit);
+        if (!allDigits)
+        {
+            continue;
+        }
+        int version = std::stoi(name);
+        if (version > bestVersion)
+        {
+            bestVersion = version;
+            bestName = name;
+        }
+    }
+
+    if (bestVersion < 0)
+    {
+        return {};
+    }
+    return (cxxRoot / bestName).string();
+}
+
 inline TinyProcessLib::Process::string_type toProcessString(const std::string& str)
 {
 #ifdef _WIN32
@@ -41,15 +150,25 @@ inline TinyProcessLib::Process::string_type toProcessString(const std::string& s
  * @return Path to available compiler, or empty string if none found */
 std::string findAvailableCompiler(const std::string& preferredCompiler)
 {
+    const std::string envCompiler = getEnvCompilerOverride();
+
     // If no preferred compiler specified, use intelligent selection from CompilationConfig
     if (preferredCompiler.empty())
     {
+        if (!envCompiler.empty() && viz::plugins::isCompilerAvailable(envCompiler))
+        {
+            return envCompiler;
+        }
         return viz::plugins::CompilationConfig::getDefaultCompiler();
     }
     
     // Try preferred compiler first
     if (viz::plugins::isCompilerAvailable(preferredCompiler))
         return preferredCompiler;
+
+    // Try environment override next
+    if (!envCompiler.empty() && viz::plugins::isCompilerAvailable(envCompiler))
+        return envCompiler;
 
     // Fallback compilers in order of preference
     const std::vector<std::string> fallbacks = {"g++", "clang++", "c++"};
@@ -226,9 +345,57 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
     auto& config = CompilationConfig::getInstance();
     
     std::ostringstream cmd;
-    cmd << compilerPath
+    cmd << quoteIfNeeded(compilerPath)
         << " " << config.getCompilationFlags()
         << " -std=" << standard;
+
+    const char* compilerInclude = std::getenv("COMPILER_INCLUDEDIR");
+    const char* clangResource = std::getenv("CLANG_RESOURCE_INCLUDE");
+    const char* compilerLibDir = std::getenv("COMPILER_LIBDIR");
+    const char* gccToolchain = std::getenv("COMPILER_GCC_TOOLCHAIN");
+    const char* sysroot = std::getenv("COMPILER_SYSROOT");
+
+    if (gccToolchain && *gccToolchain != '\0')
+    {
+        cmd << " --gcc-toolchain=" << quoteIfNeeded(gccToolchain);
+    }
+    if (sysroot && *sysroot != '\0')
+    {
+        cmd << " --sysroot=" << quoteIfNeeded(sysroot);
+    }
+    if (compilerLibDir && *compilerLibDir != '\0')
+    {
+        cmd << " -L" << quoteIfNeeded(compilerLibDir);
+    }
+    if (compilerInclude && *compilerInclude != '\0')
+    {
+        // Prefer bundled headers over system headers when provided by AppImage
+        cmd << " -nostdinc -nostdinc++";
+        if (clangResource && *clangResource != '\0')
+        {
+            cmd << " -isystem " << quoteIfNeeded(clangResource);
+        }
+
+        const std::string includeRoot = compilerInclude;
+        const std::string cxxDir = detectBundledCxxVersionDir(includeRoot);
+        if (!cxxDir.empty())
+        {
+            cmd << " -isystem " << quoteIfNeeded(cxxDir);
+            const std::string cxxArchDir = cxxDir + "/x86_64-linux-gnu";
+            if (fs::exists(cxxArchDir))
+            {
+                cmd << " -isystem " << quoteIfNeeded(cxxArchDir);
+            }
+        }
+
+        // Add C system headers after C++ dirs so include_next can find them
+        cmd << " -isystem " << quoteIfNeeded(includeRoot);
+        const std::string archInclude = includeRoot + "/x86_64-linux-gnu";
+        if (fs::exists(archInclude))
+        {
+            cmd << " -isystem " << quoteIfNeeded(archInclude);
+        }
+    }
 
     // Add include paths from configuration
     auto includePaths = config.getIncludePaths();
@@ -306,6 +473,9 @@ namespace
  * @return Command string to check compiler availability */
 std::string buildCompilerCheckCommand(const std::string& compiler)
 {
+    const auto quotedCompiler = (compiler.find(' ') == std::string::npos && compiler.find('"') == std::string::npos)
+                                    ? compiler
+                                    : "\"" + compiler + "\"";
 #ifdef _WIN32
     if (compiler == "cl")
     {
@@ -315,11 +485,11 @@ std::string buildCompilerCheckCommand(const std::string& compiler)
     else
     {
         // Other compilers on Windows
-        return compiler + " --version >nul 2>&1";
+        return quotedCompiler + " --version >nul 2>&1";
     }
 #else
     // Linux/macOS: Try to run compiler with --version
-    return compiler + " --version > /dev/null 2>&1";
+    return quotedCompiler + " --version > /dev/null 2>&1";
 #endif
 }
 
@@ -342,6 +512,10 @@ bool executeCompilerCheck(const std::string& command)
 
 bool isCompilerAvailable(const std::string &compiler)
 {
+    if (looksLikePath(compiler))
+    {
+        return isExecutableFile(compiler);
+    }
     const std::string command = buildCompilerCheckCommand(compiler);
     return executeCompilerCheck(command);
 }

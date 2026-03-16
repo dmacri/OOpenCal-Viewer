@@ -47,6 +47,16 @@ std::string extractCompilerVersion(const std::string& compilerName)
     
     return "";
 }
+
+std::string getEnvCompilerOverride()
+{
+    const char* envCompiler = std::getenv("OOPENCAL_COMPILER");
+    if (!envCompiler || *envCompiler == '\0')
+    {
+        return {};
+    }
+    return std::string(envCompiler);
+}
 } // anonymous namespace
 
 namespace viz::plugins
@@ -90,6 +100,11 @@ std::string CompilationConfig::getBuildCompilerInfoString()
 std::string CompilationConfig::getDefaultCompiler()
 {
     auto [buildCompiler, buildVersion] = getBuildCompilerInfo();
+    const std::string envCompiler = getEnvCompilerOverride();
+    if (!envCompiler.empty() && isCompilerAvailable(envCompiler))
+    {
+        return envCompiler;
+    }
     
 #ifdef _WIN32
     // Windows: prioritize MSVC (cl.exe) then check for clang/gcc
@@ -209,21 +224,57 @@ CompilationConfig::CompilerInfo createCompilerInfo(
     
     return info;
 }
+
+CompilationConfig::CompilerInfo createCompilerInfoFromPath(
+    const std::string& compilerPath,
+    const std::string& buildCompiler,
+    const std::string& buildVersion)
+{
+    CompilationConfig::CompilerInfo info;
+    info.name = compilerPath;
+    info.fullPath = compilerPath;
+    info.family = std::filesystem::path(compilerPath).filename().string();
+    info.isAvailable = true;
+
+    info.isFamilyMatch = (info.family == buildCompiler ||
+                         (info.family == "cl" && buildCompiler == "cl"));
+
+    info.version = extractCompilerVersion(compilerPath);
+    if (info.isFamilyMatch && !buildVersion.empty() && !info.version.empty())
+    {
+        std::string buildMajorVersion = buildVersion.substr(0, buildVersion.find('.'));
+        std::string detectedMajor = info.version.substr(0, info.version.find('.'));
+        info.isExactMatch = (detectedMajor == buildMajorVersion);
+    }
+    else
+    {
+        info.isExactMatch = info.isFamilyMatch;
+    }
+
+    return info;
+}
 } // anonymous namespace
 
 std::vector<CompilationConfig::CompilerInfo> CompilationConfig::detectAvailableCompilers()
 {
     std::vector<CompilerInfo> compilers;
     auto [buildCompiler, buildVersion] = getBuildCompilerInfo();
+    const std::string envCompiler = getEnvCompilerOverride();
     
     const std::vector<std::string> families = getPlatformCompilerFamilies();
     const bool useVersionedVariants = supportsVersionedCompilers();
-    
+
+    if (!envCompiler.empty() && isCompilerAvailable(envCompiler))
+    {
+        compilers.push_back(createCompilerInfoFromPath(envCompiler, buildCompiler, buildVersion));
+    }
+
+    std::vector<CompilerInfo> detectedCompilers;
     for (const auto& family : families)
     {
         if (isCompilerAvailable(family))
         {
-            compilers.push_back(createCompilerInfo(family, buildCompiler, buildVersion));
+            detectedCompilers.push_back(createCompilerInfo(family, buildCompiler, buildVersion));
         }
         
         // Add versioned variants only on platforms that support them
@@ -235,21 +286,26 @@ std::vector<CompilationConfig::CompilerInfo> CompilationConfig::detectAvailableC
                 
                 if (isCompilerAvailable(versionedCompiler))
                 {
-                    compilers.push_back(createCompilerInfo(versionedCompiler, buildCompiler, buildVersion));
+                    detectedCompilers.push_back(createCompilerInfo(versionedCompiler, buildCompiler, buildVersion));
                 }
             }
         }
     }
     
     // Sort compilers by priority: exact match > family match > others (newest first)
-    std::sort(compilers.begin(), compilers.end(), [](const CompilerInfo& a, const CompilerInfo& b) {
+    std::sort(detectedCompilers.begin(), detectedCompilers.end(), [](const CompilerInfo& a, const CompilerInfo& b) {
         if (a.isExactMatch != b.isExactMatch)
             return a.isExactMatch > b.isExactMatch;
         if (a.isFamilyMatch != b.isFamilyMatch)
             return a.isFamilyMatch > b.isFamilyMatch;
         return a.version > b.version;
     });
-    
+
+    if (!detectedCompilers.empty())
+    {
+        compilers.insert(compilers.end(), detectedCompilers.begin(), detectedCompilers.end());
+    }
+
     return compilers;
 }
 
