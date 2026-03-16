@@ -42,27 +42,6 @@
 
 namespace
 {
-/** @brief Enum for interactor style variants in 3D mode.
- * 
- * Used to test different interactor implementations:
- * - None: No custom interactor (VTK default)
- * - Current: Current CustomInteractorStyle with ray-plane zoom
- * - PolymorphicWaitCursor: Subclass of TrackballCamera with wait cursor */
-enum class InteractorVariant
-{
-    None,                    ///< No custom interactor - VTK default
-    Custom,                  ///< CustomInteractorStyle (ray-plane zoom)
-    PolymorphicWaitCursor    ///< Subclass with wait cursor (minimal overhead)
-};
-
-/** @brief Hardcoded constant to select interactor variant for testing.
- * 
- * Change this to test different interactor implementations:
- * - InteractorVariant::None: No custom interactor
- * - InteractorVariant::Current: Current implementation
- * - InteractorVariant::PolymorphicWaitCursor: New polymorphic variant */
-constexpr InteractorVariant INTERACTOR_VARIANT = InteractorVariant::Custom;
-
 class NullSceneWidgetVisualizer final : public ISceneWidgetVisualizer
 {
 public:
@@ -1680,28 +1659,10 @@ bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
 
 void SceneWidget::setupInteractorStyleWithWaitCursor()
 {
-    if constexpr (INTERACTOR_VARIANT == InteractorVariant::None)
-    {
-        // Variant 1: No custom interactor - VTK default
-        // VTK will automatically use vtkInteractorStyleTrackballCamera
-        // No need to set anything
-    }
-    else if constexpr (INTERACTOR_VARIANT == InteractorVariant::Custom)
-    {
-        // Variant 2: Current CustomInteractorStyle
-        // Features: Ray-plane zoom (zoom towards cursor), wait cursor, Shift+Drag panning
-        // Cost: ~5% overhead due to ray-plane calculations
-        vtkNew<CustomInteractorStyle> style;
-        interactor()->SetInteractorStyle(style);
-    }
-    else if constexpr (INTERACTOR_VARIANT == InteractorVariant::PolymorphicWaitCursor)
-    {
-        // Variant 3: Polymorphic wait cursor variant
-        // Features: Standard VTK zoom (center), wait cursor, Shift+Drag panning
-        // Cost: ~0.5% overhead (just polymorphic call)
-        vtkNew<SimpleInteractorWithWaitCursor> style;
-        interactor()->SetInteractorStyle(style);
-    }
+    // Features: Ray-plane zoom (zoom towards cursor), wait cursor, Shift+Drag panning
+    // Cost: ~5% overhead due to ray-plane calculations
+    vtkNew<CustomInteractorStyle> style;
+    interactor()->SetInteractorStyle(style);
 }
 
 void SceneWidget::applyGridLinesSettings()
