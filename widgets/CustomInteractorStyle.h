@@ -93,22 +93,3 @@ private:
     /// @brief Handle timer events for deferred zoom
     void OnTimer() override;
 };
-
-/** @brief Simple interactor style with wait cursor feedback.
- *
- * Extends vtkInteractorStyleTrackballCamera to show wait cursor during zoom operations.
- * This is a minimal overhead alternative to CustomInteractorStyle. */
-class SimpleInteractorWithWaitCursor : public vtkInteractorStyleTrackballCamera
-{
-public:
-    static SimpleInteractorWithWaitCursor* New();
-    vtkTypeMacro(SimpleInteractorWithWaitCursor, vtkInteractorStyleTrackballCamera);
-
-    /** @brief Handle mouse wheel forward event (zoom in).
-     * Shows wait cursor during zoom operation. */
-    void OnMouseWheelForward() override;
-
-    /** @brief Handle mouse wheel backward event (zoom out).
-     * Shows wait cursor during zoom operation. */
-    void OnMouseWheelBackward() override;
-};
