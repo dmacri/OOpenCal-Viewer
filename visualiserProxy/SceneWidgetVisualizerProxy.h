@@ -155,7 +155,7 @@ public:
 private:
     const std::string m_modelName;
 
-    Visualizer visualiser;            ///< The visualizer instance for rendering the model
-    ModelReader<Cell> modelReader;    ///< The reader for loading and managing model data
-    ContiguousGrid<Cell, 2> p;        ///< Temporary contiguous 2D storage until std::mdspan is available in the toolchain
+    Visualizer visualiser;           ///< The visualizer instance for rendering the model
+    ModelReader<Cell> modelReader;   ///< The reader for loading and managing model data
+    ContiguousGrid<Cell> p;          ///< Temporary contiguous grid storage with a default single layer until std::mdspan is available
 };

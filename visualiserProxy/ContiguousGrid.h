@@ -1,181 +1,169 @@
 /** @file ContiguousGrid.h
- * @brief Lightweight contiguous N-dimensional storage with chained indexing.
+ * @brief Lightweight contiguous grid storage with row and layer access.
  *
  * This is a temporary in-tree replacement for std::mdspan while the project
  * still needs to build with toolchains that do not provide it yet. */
 
 #pragma once
 
-#include <array>
 #include <cassert>
-#include <concepts>
 #include <cstddef>
 #include <vector>
 
 /** @class ContiguousGrid
- * @brief Stores N-dimensional data in a single contiguous std::vector.
+ * @brief Stores grid data in a single contiguous std::vector.
  *
- * The class offers both chained indexing (`grid[y][x]`, `grid[z][y][x]`) and
- * direct multi-index access (`grid(y, x)`, `grid(z, y, x)`), while keeping the
- * data in a compact row-major layout.
- *
- * @note This helper is intended as a temporary solution until std::mdspan is
- *       reliably available in the compilers used by this project. */
-template<typename T, std::size_t Dimensions>
+ * The container keeps a row-major layout with an optional third dimension.
+ * The layer count defaults to 1 so the same type can back the current 2D code
+ * and future 3D-oriented access patterns. */
+template<typename T>
 class ContiguousGrid
 {
-    static_assert(Dimensions >= 2, "ContiguousGrid is intended for 2D or higher-dimensional storage.");
-
 public:
     using value_type = T;
     using size_type = std::size_t;
 
-    template<typename ElementType, std::size_t RemainingDimensions>
-    class Slice
+    /** @class RowProxy
+     * @brief Provides column-based access to a single row of the grid. */
+    template<typename ElementType>
+    class RowProxy
     {
     public:
+        /** @brief Returns the number of columns available in this row. */
         [[nodiscard]] size_type size() const noexcept
         {
-            return extents_[0];
+            return columnCount_;
         }
 
-        [[nodiscard]] decltype(auto) operator[](size_type index) const noexcept
+        /** @brief Returns the element from the first layer at the given column. */
+        [[nodiscard]] decltype(auto) operator[](size_type column) const noexcept
         {
-            assert(index < size());
+            assert(column < columnCount_);
+            return (rowData_[column * layerCount_]);
+        }
 
-            if constexpr (RemainingDimensions == 1)
-            {
-                return (data_[index]);
-            }
-            else
-            {
-                return Slice<ElementType, RemainingDimensions - 1>(data_ + index * strides_[0], extents_ + 1, strides_ + 1);
-            }
+        /** @brief Returns the element at the given column and layer. */
+        [[nodiscard]] decltype(auto) operator[](size_type column, size_type layer) const noexcept
+        {
+            assert(column < columnCount_);
+            assert(layer < layerCount_);
+            return (rowData_[column * layerCount_ + layer]);
         }
 
     private:
         friend class ContiguousGrid;
 
-        Slice(ElementType* data, const size_type* extents, const size_type* strides) noexcept
-            : data_(data)
-            , extents_(extents)
-            , strides_(strides)
+        /** @brief Creates a row proxy for internal contiguous storage access. */
+        RowProxy(ElementType* rowData, size_type columnCount, size_type layerCount) noexcept
+            : rowData_(rowData)
+            , columnCount_(columnCount)
+            , layerCount_(layerCount)
         {
         }
 
-        ElementType* data_ = nullptr;
-        const size_type* extents_ = nullptr;
-        const size_type* strides_ = nullptr;
+        ElementType* rowData_ = nullptr;
+        size_type columnCount_ = 0;
+        size_type layerCount_ = 1;
     };
 
+    /** @brief Creates an empty grid. */
     ContiguousGrid() = default;
 
-    explicit ContiguousGrid(const std::array<size_type, Dimensions>& extents)
+    /** @brief Creates a grid with the given row, column and layer counts. */
+    explicit ContiguousGrid(size_type rowCount, size_type columnCount, size_type layerCount = 1)
     {
-        resize(extents);
+        resize(rowCount, columnCount, layerCount);
     }
 
-    void resize(const std::array<size_type, Dimensions>& extents)
+    /** @brief Resizes the grid and value-initializes the contiguous storage. */
+    void resize(size_type rowCount, size_type columnCount, size_type layerCount = 1)
     {
-        extents_ = extents;
-        recomputeStrides();
-        storage_.resize(totalSize());
+        rowCount_ = rowCount;
+        columnCount_ = columnCount;
+        layerCount_ = layerCount;
+        storage_.resize(rowCount_ * columnCount_ * layerCount_);
     }
 
-    template<typename... Sizes>
-        requires(sizeof...(Sizes) == Dimensions && (std::integral<Sizes> && ...))
-    void resize(Sizes... sizes)
-    {
-        resize(std::array<size_type, Dimensions>{toSize(sizes)...});
-    }
-
+    /** @brief Returns the number of rows to preserve `grid[row][column]` usage. */
     [[nodiscard]] size_type size() const noexcept
     {
-        return extents_[0];
+        return rowCount_;
     }
 
+    /** @brief Returns true when the grid contains no elements. */
     [[nodiscard]] bool empty() const noexcept
     {
         return storage_.empty();
     }
 
-    [[nodiscard]] const std::array<size_type, Dimensions>& extents() const noexcept
+    /** @brief Returns the configured number of rows. */
+    [[nodiscard]] size_type rowCount() const noexcept
     {
-        return extents_;
+        return rowCount_;
     }
 
+    /** @brief Returns the configured number of columns. */
+    [[nodiscard]] size_type columnCount() const noexcept
+    {
+        return columnCount_;
+    }
+
+    /** @brief Returns the configured number of layers. */
+    [[nodiscard]] size_type layerCount() const noexcept
+    {
+        return layerCount_;
+    }
+
+    /** @brief Returns a mutable pointer to the contiguous storage buffer. */
     [[nodiscard]] value_type* data() noexcept
     {
         return storage_.data();
     }
 
+    /** @brief Returns a const pointer to the contiguous storage buffer. */
     [[nodiscard]] const value_type* data() const noexcept
     {
         return storage_.data();
     }
 
-    [[nodiscard]] auto operator[](size_type index) noexcept
+    /** @brief Returns a mutable row proxy for `grid[row][column]` access. */
+    [[nodiscard]] RowProxy<value_type> operator[](size_type row) noexcept
     {
-        assert(index < size());
-        return Slice<value_type, Dimensions - 1>(storage_.data() + index * strides_[0], extents_.data() + 1, strides_.data() + 1);
+        assert(row < rowCount_);
+        return RowProxy<value_type>(storage_.data() + row * columnCount_ * layerCount_, columnCount_, layerCount_);
     }
 
-    [[nodiscard]] auto operator[](size_type index) const noexcept
+    /** @brief Returns a const row proxy for `grid[row][column]` access. */
+    [[nodiscard]] RowProxy<const value_type> operator[](size_type row) const noexcept
     {
-        assert(index < size());
-        return Slice<const value_type, Dimensions - 1>(storage_.data() + index * strides_[0], extents_.data() + 1, strides_.data() + 1);
+        assert(row < rowCount_);
+        return RowProxy<const value_type>(storage_.data() + row * columnCount_ * layerCount_, columnCount_, layerCount_);
     }
 
-    template<typename... Indices>
-        requires(sizeof...(Indices) == Dimensions && (std::integral<Indices> && ...))
-    [[nodiscard]] value_type& operator()(Indices... indices) noexcept
+    /** @brief Returns a mutable element using C++23 multidimensional subscript syntax. */
+    [[nodiscard]] value_type& operator[](size_type row, size_type column, size_type layer = 0) noexcept
     {
-        return storage_[flatten(std::array<size_type, Dimensions>{toSize(indices)...})];
+        return storage_[flatIndex(row, column, layer)];
     }
 
-    template<typename... Indices>
-        requires(sizeof...(Indices) == Dimensions && (std::integral<Indices> && ...))
-    [[nodiscard]] const value_type& operator()(Indices... indices) const noexcept
+    /** @brief Returns a const element using C++23 multidimensional subscript syntax. */
+    [[nodiscard]] const value_type& operator[](size_type row, size_type column, size_type layer = 0) const noexcept
     {
-        return storage_[flatten(std::array<size_type, Dimensions>{toSize(indices)...})];
+        return storage_[flatIndex(row, column, layer)];
     }
 
 private:
-    [[nodiscard]] static constexpr size_type toSize(std::integral auto value) noexcept
+    /** @brief Computes the storage offset for a row, column and layer triplet. */
+    [[nodiscard]] size_type flatIndex(size_type row, size_type column, size_type layer) const noexcept
     {
-        return static_cast<size_type>(value);
-    }
-
-    void recomputeStrides() noexcept
-    {
-        size_type stride = 1;
-        for (size_type i = Dimensions; i-- > 0;)
-        {
-            strides_[i] = stride;
-            stride *= extents_[i];
-        }
-    }
-
-    [[nodiscard]] size_type totalSize() const noexcept
-    {
-        size_type size = 1;
-        for (const size_type extent : extents_)
-            size *= extent;
-        return size;
-    }
-
-    [[nodiscard]] size_type flatten(const std::array<size_type, Dimensions>& indices) const noexcept
-    {
-        size_type offset = 0;
-        for (size_type i = 0; i < Dimensions; ++i)
-        {
-            assert(indices[i] < extents_[i]);
-            offset += indices[i] * strides_[i];
-        }
-        return offset;
+        assert(row < rowCount_);
+        assert(column < columnCount_);
+        assert(layer < layerCount_);
+        return (row * columnCount_ + column) * layerCount_ + layer;
     }
 
     std::vector<value_type> storage_;
-    std::array<size_type, Dimensions> extents_{};
-    std::array<size_type, Dimensions> strides_{};
+    size_type rowCount_ = 0;
+    size_type columnCount_ = 0;
+    size_type layerCount_ = 1;
 };
