@@ -33,6 +33,7 @@
 #include "mainwindow.h"
 #include "core/CommandLineParser.h"
 #include "plugins/PluginLoader.h"
+#include "data/PerformanceMetrics.h"
 
 
 void applyStyleSheet(MainWindow& mainWindow);
@@ -63,6 +64,9 @@ int main(int argc, char* argv[])
     {
         return 1; // Parsing failed
     }
+
+    // Configure performance metrics based on command-line flag
+    PerformanceMetrics::setEnabled(cmdParser.areMetricsEnabled());
 
     // Load custom model plugins if specified
     for (const auto& modelPath : cmdParser.getLoadModelPaths())

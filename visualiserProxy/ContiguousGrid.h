@@ -140,14 +140,26 @@ public:
         return RowProxy<const value_type>(storage_.data() + row * columnCount_ * layerCount_, columnCount_, layerCount_);
     }
 
-    /** @brief Returns a mutable element using C++23 multidimensional subscript syntax. */
-    [[nodiscard]] value_type& operator[](size_type row, size_type column, size_type layer = 0) noexcept
+    /** @brief Returns a mutable element from the first layer using C++23 multidimensional subscript syntax. */
+    [[nodiscard]] value_type& operator[](size_type row, size_type column) noexcept
+    {
+        return storage_[flatIndex(row, column, 0)];
+    }
+
+    /** @brief Returns a const element from the first layer using C++23 multidimensional subscript syntax. */
+    [[nodiscard]] const value_type& operator[](size_type row, size_type column) const noexcept
+    {
+        return storage_[flatIndex(row, column, 0)];
+    }
+
+    /** @brief Returns a mutable element from the given layer using C++23 multidimensional subscript syntax. */
+    [[nodiscard]] value_type& operator[](size_type row, size_type column, size_type layer) noexcept
     {
         return storage_[flatIndex(row, column, layer)];
     }
 
-    /** @brief Returns a const element using C++23 multidimensional subscript syntax. */
-    [[nodiscard]] const value_type& operator[](size_type row, size_type column, size_type layer = 0) const noexcept
+    /** @brief Returns a const element from the given layer using C++23 multidimensional subscript syntax. */
+    [[nodiscard]] const value_type& operator[](size_type row, size_type column, size_type layer) const noexcept
     {
         return storage_[flatIndex(row, column, layer)];
     }

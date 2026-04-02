@@ -22,7 +22,9 @@
  * - step=<number>: Go to specific step directly
  * - generateImagePath=<path>: Generate image for current step and save to file
  * - silent: Suppress error dialogs (default and deprecated)
- * - configFile: Path to configuration file (positional argument) */
+ * - configFile: Path to configuration file (positional argument)
+ * - --metrics: Enable performance metrics (default enabled)
+ * - --disableMetrics: Disable performance metrics reporting */
 class CommandLineParser
 {
 public:
@@ -35,6 +37,8 @@ public:
     static constexpr const char ARG_STEP[] = "--step";
     static constexpr const char ARG_EXIT_AFTER_LAST[] = "--exitAfterLastStep";
     static constexpr const char ARG_SILENT[] = "--silent";
+    static constexpr const char ARG_METRICS[] = "--metrics";
+    static constexpr const char ARG_DISABLE_METRICS[] = "--disableMetrics";
 
     /** @brief Parse command-line arguments.
      * @param argc Number of arguments
@@ -80,6 +84,13 @@ public:
         return exitAfterLastStep;
     }
 
+    /// @brief Check if performance metrics are enabled.
+    /// @return true if metrics should be enabled, false if disabled
+    bool areMetricsEnabled() const
+    {
+        return enableMetrics;
+    }
+
     /// @brief Print help message with available arguments.
     void printHelp() const;
 
@@ -92,4 +103,5 @@ private:
     std::optional<std::string> configFile;
     bool isDirectory = false;  ///< true if configFile is actually a model directory
     bool exitAfterLastStep = false;
+    bool enableMetrics = true;  ///< true if performance metrics should be enabled
 };

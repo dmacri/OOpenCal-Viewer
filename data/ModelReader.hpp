@@ -25,6 +25,7 @@
 #include "visualiser/Line.h"
 #include "visualiser/SettingParameter.h"
 #include "plugins/CellConcept.hpp"
+#include "data/PerformanceMetrics.h"
 
 /** @class ModelReader
  * @brief Template class for reading and processing model data from files.
@@ -241,9 +242,26 @@ template<CellLike Cell>
 template<class Matrix>
 void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParameter* sp, Line* lines)
 {
+    // Create a performance session that tracks this operation
+    // Note: Session is destroyed at the end of the scope, triggering metrics recording
+    PerformanceSession perfSession("readStageStateFromFilesForStep", 
+                                   static_cast<uint32_t>(sp->numberOfColumnX),
+                                   static_cast<uint32_t>(sp->numberOfRowsY),
+                                   static_cast<uint32_t>(sp->numberOfSlicesZ),
+                                   1);
+
     const auto totalNodes = sp->nNodeX * sp->nNodeY;
     const bool isBinary = (sp->readMode == "binary");
     const auto columnsAndRows = giveMeLocalColsAndRowsForAllSteps(sp->step, sp->nNodeX, sp->nNodeY, sp->outputFileName, isBinary);
+
+    // Calculate total cells that will be read in this call
+    size_t totalCellsForThisCall = 0;
+    for (const auto& colRow : columnsAndRows)
+    {
+        totalCellsForThisCall += static_cast<size_t>(colRow.column) * colRow.row;
+    }
+
+    perfSession.recordReadCall(totalCellsForThisCall);
 
     /// Lambda responsible for reading and processing a single node's file
     auto processNode = [&, this](NodeIndex node)
@@ -412,6 +430,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
                           {
                               f.get();
                           });
+    // PerformanceSession destructor will record metrics automatically
 }
 
 template<CellLike Cell>

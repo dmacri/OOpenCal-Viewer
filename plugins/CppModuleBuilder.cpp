@@ -13,6 +13,7 @@
 #include "CompilationConfig.h"
 #include "process.hpp" // tiny process library
 #include "ModelLoader.h"
+#include "data/PerformanceMetrics.h"
 
 namespace fs = std::filesystem;
 
@@ -247,6 +248,9 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
                                                   const std::string& outputFile,
                                                   const std::string& cppStandard)
 {
+    // Create a performance session to track compilation time
+    PerformanceSession perfSession("Module Compilation: " + fs::path(sourceFile).filename().string());
+
     lastResult = std::make_unique<CompilationResult>();
     lastResult->sourceFile = sourceFile;
     lastResult->outputFile = outputFile;
