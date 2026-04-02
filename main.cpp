@@ -68,6 +68,22 @@ int main(int argc, char* argv[])
     // Configure performance metrics based on command-line flag
     PerformanceMetrics::setEnabled(cmdParser.areMetricsEnabled());
 
+    // Set metrics reporting mode
+    const std::string& mode = cmdParser.getMetricsMode();
+    if (mode == "summary")
+    {
+        PerformanceMetrics::setReportingMode(PerformanceMetrics::ReportingMode::SummaryOnly);
+    }
+    else if (mode == "steps")
+    {
+        PerformanceMetrics::setReportingMode(PerformanceMetrics::ReportingMode::StepsOnly);
+    }
+    else if (mode == "all")
+    {
+        PerformanceMetrics::setReportingMode(PerformanceMetrics::ReportingMode::All);
+    }
+    // "none" is handled by disabling metrics above
+
     // Load custom model plugins if specified
     for (const auto& modelPath : cmdParser.getLoadModelPaths())
     {

@@ -249,6 +249,8 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
                                    static_cast<uint32_t>(sp->numberOfRowsY),
                                    static_cast<uint32_t>(sp->numberOfSlicesZ),
                                    1);
+    perfSession.setStepNumber(sp->step);
+    perfSession.setCategory(PerformanceMetrics::MetricsCategory::DataLoading);
 
     const auto totalNodes = sp->nNodeX * sp->nNodeY;
     const bool isBinary = (sp->readMode == "binary");

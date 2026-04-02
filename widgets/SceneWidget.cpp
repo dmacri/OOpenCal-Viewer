@@ -361,6 +361,7 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
                                            static_cast<uint32_t>(settingParameter->numberOfSlicesZ),
                                            1);  // Single timestep
             perfSession.setStepNumber(settingParameter->step);
+            perfSession.setCategory(PerformanceMetrics::MetricsCategory::DataLoading);
 
             // Read stage state from files for the current step
             sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
@@ -950,12 +951,13 @@ void SceneWidget::renderVtkScene()
     emit availableStepsReadFromConfigFile(availableSteps);
 
     {
-        // Create a performance session for configuration loading
-        PerformanceSession perfSession("Configuration Loading",
+        // Create a performance session for initial data loading
+        PerformanceSession perfSession("Initial Data Loading",
                                        static_cast<uint32_t>(settingParameter->numberOfColumnX),
                                        static_cast<uint32_t>(settingParameter->numberOfRowsY),
                                        static_cast<uint32_t>(settingParameter->numberOfSlicesZ),
                                        static_cast<uint32_t>(availableSteps.size()));
+        perfSession.setCategory(PerformanceMetrics::MetricsCategory::DataLoading);
 
         lines.resize(settingParameter->numberOfLines);
         sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
@@ -1770,6 +1772,7 @@ void SceneWidget::initializeAndDraw3DSubstateVisualization()
                                        static_cast<uint32_t>(settingParameter->numberOfRowsY),
                                        static_cast<uint32_t>(settingParameter->numberOfSlicesZ),
                                        1);
+        perfSession.setCategory(PerformanceMetrics::MetricsCategory::Rendering);
 
         // Read the current step data from files
         lines.resize(settingParameter->numberOfLines);

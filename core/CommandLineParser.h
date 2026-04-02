@@ -39,6 +39,7 @@ public:
     static constexpr const char ARG_SILENT[] = "--silent";
     static constexpr const char ARG_METRICS[] = "--metrics";
     static constexpr const char ARG_DISABLE_METRICS[] = "--disableMetrics";
+    static constexpr const char ARG_METRICS_MODE[] = "--metricsMode";
 
     /** @brief Parse command-line arguments.
      * @param argc Number of arguments
@@ -91,6 +92,13 @@ public:
         return enableMetrics;
     }
 
+    /// @brief Get the metrics reporting mode (all/summary/steps).
+    /// @return metrics mode string ("all", "summary", "steps", or "none")
+    const std::string& getMetricsMode() const
+    {
+        return metricsMode;
+    }
+
     /// @brief Print help message with available arguments.
     void printHelp() const;
 
@@ -104,4 +112,5 @@ private:
     bool isDirectory = false;  ///< true if configFile is actually a model directory
     bool exitAfterLastStep = false;
     bool enableMetrics = true;  ///< true if performance metrics should be enabled
+    std::string metricsMode = "none";  ///< Metrics reporting mode: "all", "summary", "steps", or "none"
 };

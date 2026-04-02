@@ -250,6 +250,7 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
 {
     // Create a performance session to track compilation time
     PerformanceSession perfSession("Module Compilation: " + fs::path(sourceFile).filename().string());
+    perfSession.setCategory(PerformanceMetrics::MetricsCategory::Compilation);
 
     lastResult = std::make_unique<CompilationResult>();
     lastResult->sourceFile = sourceFile;

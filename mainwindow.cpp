@@ -41,6 +41,7 @@
 #include "widgets/ConfigDetailsDialog.h"
 #include "widgets/ReductionDialog.h"
 #include "widgets/CustomDirectoryDialog.h"
+#include "widgets/PerformanceSettingsDialog.h"
 
 
 namespace
@@ -191,6 +192,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionLoadModelFromDirectory, &QAction::triggered, this, &MainWindow::onLoadModelFromDirectoryRequested);
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
     connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
+    connect(ui->actionPerformance_settings, &QAction::triggered, this, &MainWindow::onPerformanceSettingsRequested);
     connect(ui->actionCellRendering, &QAction::triggered, this, &MainWindow::onCellRenderingToggled);
     connect(ui->actionShow_reduction, &QAction::triggered, this, &MainWindow::onShowReductionRequested);
 
@@ -975,6 +977,13 @@ void MainWindow::onCompilationSettingsRequested()
     compilationSettings->setModuleBuilder(moduleBuilder);
     
     compilationSettings->show();
+}
+
+void MainWindow::onPerformanceSettingsRequested()
+{
+    auto* perfSettings = new PerformanceSettingsDialog(this);
+    perfSettings->exec();
+    delete perfSettings;  // Modal dialog, delete after use
 }
 
 void MainWindow::onCellRenderingToggled(bool checked)

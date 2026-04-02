@@ -56,6 +56,10 @@ bool CommandLineParser::parse(int argc, char* argv[])
             .help("Disable performance metrics reporting")
             .flag();
 
+        program.add_argument(ARG_METRICS_MODE)
+            .help("Metrics reporting mode: all (default), summary (summary only), steps (no summary), or none (disabled)")
+            .metavar("MODE");
+
         try
         {
             program.parse_args(argc, argv);
@@ -118,6 +122,17 @@ bool CommandLineParser::parse(int argc, char* argv[])
         else if (program.is_used(ARG_METRICS))
         {
             enableMetrics = true;
+        }
+
+        // Handle metrics mode
+        if (auto mode = program.present<std::string>(ARG_METRICS_MODE))
+        {
+            metricsMode = *mode;
+            // "none" mode disables metrics
+            if (metricsMode == "none")
+                enableMetrics = false;
+            else
+                enableMetrics = true;
         }
 
         return true;

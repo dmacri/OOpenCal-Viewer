@@ -74,6 +74,7 @@ private slots: // menu actions
     // Settings submenu
     void onColorSettingsRequested();
     void onCompilationSettingsRequested();
+    void onPerformanceSettingsRequested();
     void onCellRenderingToggled(bool checked);
     void syncCellRenderingCheckbox();
 
