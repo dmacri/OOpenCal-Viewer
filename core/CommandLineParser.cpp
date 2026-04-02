@@ -60,6 +60,10 @@ bool CommandLineParser::parse(int argc, char* argv[])
             .help("Metrics reporting mode: all (default), summary (summary only), steps (no summary), or none (disabled)")
             .metavar("MODE");
 
+        program.add_argument(ARG_AUTO_PLAY)
+            .help("Automatically start playback when configuration loads (useful for performance testing)")
+            .flag();
+
         try
         {
             program.parse_args(argc, argv);
@@ -108,6 +112,8 @@ bool CommandLineParser::parse(int argc, char* argv[])
             step = *st;
 
         exitAfterLastStep = program.is_used(ARG_EXIT_AFTER_LAST);
+
+        autoPlay = program.is_used(ARG_AUTO_PLAY);
 
         if (const bool requestedSilent = program.is_used(ARG_SILENT))
         {

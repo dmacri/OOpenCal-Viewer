@@ -120,13 +120,15 @@ int main(int argc, char* argv[])
 
     applyStyleSheet(mainWindow);
 
-    mainWindow.applyCommandLineOptions(cmdParser);
-
     // Show window (unless in headless mode)
     if (! cmdParser.getGenerateMoviePath() && ! cmdParser.getGenerateImagePath())
     {
         mainWindow.show();
     }
+
+    // Apply command-line options AFTER show() and before event loop
+    // This ensures timers and event handlers are properly initialized
+    mainWindow.applyCommandLineOptions(cmdParser);
 
     return a.exec();
 }

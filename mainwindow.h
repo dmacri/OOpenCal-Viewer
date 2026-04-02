@@ -209,6 +209,7 @@ private:
 
     // Playback state for timer-based playback
     PlayingDirection playbackDirection = PlayingDirection::Forward;
+    bool shouldExitAfterPlayback = false;  ///< true if --autoPlay + --exitAfterLastStep
 
     QString noSelectionMessage;
     QString directorySelectionMessage;

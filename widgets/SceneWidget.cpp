@@ -361,7 +361,7 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
                                            static_cast<uint32_t>(settingParameter->numberOfSlicesZ),
                                            1);  // Single timestep
             perfSession.setStepNumber(settingParameter->step);
-            perfSession.setCategory(PerformanceMetrics::MetricsCategory::DataLoading);
+            perfSession.setCategory(PerformanceMetrics::MetricsCategory::Rendering);
 
             // Read stage state from files for the current step
             sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);

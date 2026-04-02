@@ -468,12 +468,39 @@ void MainWindow::onPlaybackTimerTick()
         std::clamp(targetStepSigned, static_cast<int>(FIRST_STEP_NUMBER), static_cast<int>(totalSteps()))
     );
     
-    // Check if we reached the end
+    // Check if we reached the end (based on totalSteps)
     if ((playbackDirection == PlayingDirection::Forward && clampedStep >= totalSteps())
         || (playbackDirection == PlayingDirection::Backward && clampedStep <= FIRST_STEP_NUMBER))
     {
         playbackTimer.stop();
+        
+        // Exit application if autoPlay + exitAfterLastStep was requested
+        if (shouldExitAfterPlayback)
+        {
+            QTimer::singleShot(100, this, &MainWindow::close);
+        }
         return;
+    }
+    
+    // Also check if we've reached the last available step
+    // This handles cases where not all steps are available (e.g., steps [0, 10, 20, ..., 90])
+    if (!availableSteps.empty())
+    {
+        const StepIndex lastAvailableStep = availableSteps.back();
+        const StepIndex firstAvailableStep = availableSteps.front();
+        
+        if ((playbackDirection == PlayingDirection::Forward && currentStep >= lastAvailableStep)
+            || (playbackDirection == PlayingDirection::Backward && currentStep <= firstAvailableStep))
+        {
+            playbackTimer.stop();
+            
+            // Exit application if autoPlay + exitAfterLastStep was requested
+            if (shouldExitAfterPlayback)
+            {
+                QTimer::singleShot(100, this, &MainWindow::close);
+            }
+            return;
+        }
     }
     
     // Check if target step exists in available steps
@@ -482,7 +509,14 @@ void MainWindow::onPlaybackTimerTick()
         // Handle missing step
         if (! handleMissingStepDuringPlayback(clampedStep, playbackDirection))
         {
+            // No more available steps in this direction
             playbackTimer.stop();
+            
+            // Exit application if autoPlay + exitAfterLastStep was requested
+            if (shouldExitAfterPlayback)
+            {
+                QTimer::singleShot(100, this, &MainWindow::close);
+            }
             return;
         }
         // If handleMissingStepDuringPlayback returns true, currentStep was updated
@@ -1836,6 +1870,16 @@ void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
         {
             QTimer::singleShot(100, this, &MainWindow::close);
         }
+    }
+
+    // Handle autoPlay - automatically start playback when configuration loads
+    if (cmdParser.isAutoPlayRequested())
+    {
+        // Set flag so we know to exit after playback completes
+        shouldExitAfterPlayback = cmdParser.shouldExitAfterLastStep();
+
+        // Start playback automatically
+        playingRequested(PlayingDirection::Forward);
     }
 }
 
