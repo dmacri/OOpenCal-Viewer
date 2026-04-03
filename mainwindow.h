@@ -74,6 +74,7 @@ private slots: // menu actions
     // Settings submenu
     void onColorSettingsRequested();
     void onCompilationSettingsRequested();
+    void onPerformanceSettingsRequested();
     void onCellRenderingToggled(bool checked);
     void syncCellRenderingCheckbox();
 
@@ -208,6 +209,7 @@ private:
 
     // Playback state for timer-based playback
     PlayingDirection playbackDirection = PlayingDirection::Forward;
+    bool shouldExitAfterPlayback = false;  ///< true if --autoPlay + --exitAfterLastStep
 
     QString noSelectionMessage;
     QString directorySelectionMessage;

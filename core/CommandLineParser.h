@@ -22,7 +22,10 @@
  * - step=<number>: Go to specific step directly
  * - generateImagePath=<path>: Generate image for current step and save to file
  * - silent: Suppress error dialogs (default and deprecated)
- * - configFile: Path to configuration file (positional argument) */
+ * - configFile: Path to configuration file (positional argument)
+ * - --autoPlay: Automatically start playback when configuration loads
+ * - --metrics: Enable performance metrics (default enabled)
+ * - --disableMetrics: Disable performance metrics reporting */
 class CommandLineParser
 {
 public:
@@ -35,6 +38,10 @@ public:
     static constexpr const char ARG_STEP[] = "--step";
     static constexpr const char ARG_EXIT_AFTER_LAST[] = "--exitAfterLastStep";
     static constexpr const char ARG_SILENT[] = "--silent";
+    static constexpr const char ARG_METRICS[] = "--metrics";
+    static constexpr const char ARG_DISABLE_METRICS[] = "--disableMetrics";
+    static constexpr const char ARG_METRICS_MODE[] = "--metricsMode";
+    static constexpr const char ARG_AUTO_PLAY[] = "--autoPlay";
 
     /** @brief Parse command-line arguments.
      * @param argc Number of arguments
@@ -80,6 +87,27 @@ public:
         return exitAfterLastStep;
     }
 
+    /// @brief Check if performance metrics are enabled.
+    /// @return true if metrics should be enabled, false if disabled
+    bool areMetricsEnabled() const
+    {
+        return enableMetrics;
+    }
+
+    /// @brief Get the metrics reporting mode (all/summary/steps).
+    /// @return metrics mode string ("all", "summary", "steps", or "none")
+    const std::string& getMetricsMode() const
+    {
+        return metricsMode;
+    }
+
+    /// @brief Check if automatic playback is requested.
+    /// @return true if --autoPlay flag was set
+    bool isAutoPlayRequested() const
+    {
+        return autoPlay;
+    }
+
     /// @brief Print help message with available arguments.
     void printHelp() const;
 
@@ -92,4 +120,7 @@ private:
     std::optional<std::string> configFile;
     bool isDirectory = false;  ///< true if configFile is actually a model directory
     bool exitAfterLastStep = false;
+    bool enableMetrics = true;  ///< true if performance metrics should be enabled
+    std::string metricsMode = "all";  ///< Metrics reporting mode: "all", "summary", "steps", or "none"
+    bool autoPlay = false;  ///< true if automatic playback should start on config load
 };

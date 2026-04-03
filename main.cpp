@@ -33,6 +33,7 @@
 #include "mainwindow.h"
 #include "core/CommandLineParser.h"
 #include "plugins/PluginLoader.h"
+#include "data/PerformanceMetrics.h"
 
 
 void applyStyleSheet(MainWindow& mainWindow);
@@ -63,6 +64,25 @@ int main(int argc, char* argv[])
     {
         return 1; // Parsing failed
     }
+
+    // Configure performance metrics based on command-line flag
+    PerformanceMetrics::setEnabled(cmdParser.areMetricsEnabled());
+
+    // Set metrics reporting mode
+    const std::string& mode = cmdParser.getMetricsMode();
+    if (mode == "summary")
+    {
+        PerformanceMetrics::setReportingMode(PerformanceMetrics::ReportingMode::SummaryOnly);
+    }
+    else if (mode == "steps")
+    {
+        PerformanceMetrics::setReportingMode(PerformanceMetrics::ReportingMode::StepsOnly);
+    }
+    else if (mode == "all")
+    {
+        PerformanceMetrics::setReportingMode(PerformanceMetrics::ReportingMode::All);
+    }
+    // "none" is handled by disabling metrics above
 
     // Load custom model plugins if specified
     for (const auto& modelPath : cmdParser.getLoadModelPaths())
@@ -100,13 +120,15 @@ int main(int argc, char* argv[])
 
     applyStyleSheet(mainWindow);
 
-    mainWindow.applyCommandLineOptions(cmdParser);
-
     // Show window (unless in headless mode)
     if (! cmdParser.getGenerateMoviePath() && ! cmdParser.getGenerateImagePath())
     {
         mainWindow.show();
     }
+
+    // Apply command-line options AFTER show() and before event loop
+    // This ensures timers and event handlers are properly initialized
+    mainWindow.applyCommandLineOptions(cmdParser);
 
     return a.exec();
 }

@@ -703,6 +703,7 @@
     <addaction name="separator"/>
     <addaction name="actionColor_settings"/>
     <addaction name="actionCompilation_settings"/>
+    <addaction name="actionPerformance_settings"/>
     <addaction name="separator"/>
     <addaction name="actionCellRendering"/>
    </widget>
@@ -835,6 +836,17 @@
    </property>
    <property name="toolTip">
     <string>Show C++ module compilation settings and environment variables</string>
+   </property>
+  </action>
+  <action name="actionPerformance_settings">
+   <property name="icon">
+    <iconset theme="QIcon::ThemeIcon::SystemSearch"/>
+   </property>
+   <property name="text">
+    <string>Performance Metrics</string>
+   </property>
+   <property name="toolTip">
+    <string>Configure performance metrics collection and reporting</string>
    </property>
   </action>
   <action name="action2DMode">

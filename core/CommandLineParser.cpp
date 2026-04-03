@@ -48,6 +48,22 @@ bool CommandLineParser::parse(int argc, char* argv[])
             .help("Silent mode: Skip displaying information dialogs (default behaviour)")
             .flag();
 
+        program.add_argument(ARG_METRICS)
+            .help("Enable performance metrics reporting (default)")
+            .flag();
+
+        program.add_argument(ARG_DISABLE_METRICS)
+            .help("Disable performance metrics reporting")
+            .flag();
+
+        program.add_argument(ARG_METRICS_MODE)
+            .help("Metrics reporting mode: all (default), summary (summary only), steps (no summary), or none (disabled)")
+            .metavar("MODE");
+
+        program.add_argument(ARG_AUTO_PLAY)
+            .help("Automatically start playback when configuration loads (useful for performance testing)")
+            .flag();
+
         try
         {
             program.parse_args(argc, argv);
@@ -97,9 +113,32 @@ bool CommandLineParser::parse(int argc, char* argv[])
 
         exitAfterLastStep = program.is_used(ARG_EXIT_AFTER_LAST);
 
+        autoPlay = program.is_used(ARG_AUTO_PLAY);
+
         if (const bool requestedSilent = program.is_used(ARG_SILENT))
         {
             std::cerr << "Warning: --silent is already the default mode. Using the flag has no effect." << std::endl;
+        }
+
+        // Handle metrics flags
+        if (program.is_used(ARG_DISABLE_METRICS))
+        {
+            enableMetrics = false;
+        }
+        else if (program.is_used(ARG_METRICS))
+        {
+            enableMetrics = true;
+        }
+
+        // Handle metrics mode
+        if (auto mode = program.present<std::string>(ARG_METRICS_MODE))
+        {
+            metricsMode = *mode;
+            // "none" mode disables metrics
+            if (metricsMode == "none")
+                enableMetrics = false;
+            else
+                enableMetrics = true;
         }
 
         return true;
@@ -129,6 +168,8 @@ void CommandLineParser::printHelp() const
               << std::format("  {: <{}} Go to specific step directly\n", ARG_STEP, WIDTH)
               << std::format("  {: <{}} Exit after last step\n", ARG_EXIT_AFTER_LAST, WIDTH)
               << std::format("  {: <{}} Suppress error dialogs and messages (default)\n", ARG_SILENT, WIDTH)
+              << std::format("  {: <{}} Enable performance metrics (default)\n", ARG_METRICS, WIDTH)
+              << std::format("  {: <{}} Disable performance metrics reporting\n", ARG_DISABLE_METRICS, WIDTH)
               << std::format("  {: <{}} Show this help message\n\n", "-h, --help", WIDTH)
               << "Examples:\n"
               << std::format("  {} config.txt\n", appName)

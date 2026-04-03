@@ -41,6 +41,7 @@
 #include "widgets/ConfigDetailsDialog.h"
 #include "widgets/ReductionDialog.h"
 #include "widgets/CustomDirectoryDialog.h"
+#include "widgets/PerformanceSettingsDialog.h"
 
 
 namespace
@@ -191,6 +192,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionLoadModelFromDirectory, &QAction::triggered, this, &MainWindow::onLoadModelFromDirectoryRequested);
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
     connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
+    connect(ui->actionPerformance_settings, &QAction::triggered, this, &MainWindow::onPerformanceSettingsRequested);
     connect(ui->actionCellRendering, &QAction::triggered, this, &MainWindow::onCellRenderingToggled);
     connect(ui->actionShow_reduction, &QAction::triggered, this, &MainWindow::onShowReductionRequested);
 
@@ -466,12 +468,39 @@ void MainWindow::onPlaybackTimerTick()
         std::clamp(targetStepSigned, static_cast<int>(FIRST_STEP_NUMBER), static_cast<int>(totalSteps()))
     );
     
-    // Check if we reached the end
+    // Check if we reached the end (based on totalSteps)
     if ((playbackDirection == PlayingDirection::Forward && clampedStep >= totalSteps())
         || (playbackDirection == PlayingDirection::Backward && clampedStep <= FIRST_STEP_NUMBER))
     {
         playbackTimer.stop();
+        
+        // Exit application if autoPlay + exitAfterLastStep was requested
+        if (shouldExitAfterPlayback)
+        {
+            QTimer::singleShot(100, this, &MainWindow::close);
+        }
         return;
+    }
+    
+    // Also check if we've reached the last available step
+    // This handles cases where not all steps are available (e.g., steps [0, 10, 20, ..., 90])
+    if (!availableSteps.empty())
+    {
+        const StepIndex lastAvailableStep = availableSteps.back();
+        const StepIndex firstAvailableStep = availableSteps.front();
+        
+        if ((playbackDirection == PlayingDirection::Forward && currentStep >= lastAvailableStep)
+            || (playbackDirection == PlayingDirection::Backward && currentStep <= firstAvailableStep))
+        {
+            playbackTimer.stop();
+            
+            // Exit application if autoPlay + exitAfterLastStep was requested
+            if (shouldExitAfterPlayback)
+            {
+                QTimer::singleShot(100, this, &MainWindow::close);
+            }
+            return;
+        }
     }
     
     // Check if target step exists in available steps
@@ -480,7 +509,14 @@ void MainWindow::onPlaybackTimerTick()
         // Handle missing step
         if (! handleMissingStepDuringPlayback(clampedStep, playbackDirection))
         {
+            // No more available steps in this direction
             playbackTimer.stop();
+            
+            // Exit application if autoPlay + exitAfterLastStep was requested
+            if (shouldExitAfterPlayback)
+            {
+                QTimer::singleShot(100, this, &MainWindow::close);
+            }
             return;
         }
         // If handleMissingStepDuringPlayback returns true, currentStep was updated
@@ -975,6 +1011,13 @@ void MainWindow::onCompilationSettingsRequested()
     compilationSettings->setModuleBuilder(moduleBuilder);
     
     compilationSettings->show();
+}
+
+void MainWindow::onPerformanceSettingsRequested()
+{
+    auto* perfSettings = new PerformanceSettingsDialog(this);
+    perfSettings->exec();
+    delete perfSettings;  // Modal dialog, delete after use
 }
 
 void MainWindow::onCellRenderingToggled(bool checked)
@@ -1827,6 +1870,16 @@ void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
         {
             QTimer::singleShot(100, this, &MainWindow::close);
         }
+    }
+
+    // Handle autoPlay - automatically start playback when configuration loads
+    if (cmdParser.isAutoPlayRequested())
+    {
+        // Set flag so we know to exit after playback completes
+        shouldExitAfterPlayback = cmdParser.shouldExitAfterLastStep();
+
+        // Start playback automatically
+        playingRequested(PlayingDirection::Forward);
     }
 }
 

@@ -38,6 +38,7 @@
 #include "widgets/ColorSettings.h"
 #include "widgets/SubstatesDockWidget.h"
 #include "widgets/CustomInteractorStyle.h"
+#include "data/PerformanceMetrics.h"
 
 
 namespace
@@ -331,8 +332,19 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
         // Resize lines vector to match expected number of lines
         lines.resize(settingParameter->numberOfLines);
 
-        // Read stage state from files for the current step
-        sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+        {
+            // Create a performance session for step loading (latency measurement)
+            PerformanceSession perfSession("Step Loading",
+                                           static_cast<uint32_t>(settingParameter->numberOfColumnX),
+                                           static_cast<uint32_t>(settingParameter->numberOfRowsY),
+                                           static_cast<uint32_t>(settingParameter->numberOfSlicesZ),
+                                           1);  // Single timestep
+            perfSession.setStepNumber(settingParameter->step);
+            perfSession.setCategory(PerformanceMetrics::MetricsCategory::Rendering);
+
+            // Read stage state from files for the current step
+            sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+        } // Session destructor prints metrics here
 
         // Refresh VTK visualization with optional 3D substate support
         refreshVisualizationWithOptional3DSubstate();
@@ -914,10 +926,21 @@ void SceneWidget::renderVtkScene()
                                                                      settingParameter->nNodeZ,
                                                                      settingParameter->outputFileName);
 
-    emit availableStepsReadFromConfigFile(sceneWidgetVisualizerProxy->availableSteps());
+    const auto availableSteps = sceneWidgetVisualizerProxy->availableSteps();
+    emit availableStepsReadFromConfigFile(availableSteps);
 
-    lines.resize(settingParameter->numberOfLines);
-    sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+    {
+        // Create a performance session for initial data loading
+        PerformanceSession perfSession("Initial Data Loading",
+                                       static_cast<uint32_t>(settingParameter->numberOfColumnX),
+                                       static_cast<uint32_t>(settingParameter->numberOfRowsY),
+                                       static_cast<uint32_t>(settingParameter->numberOfSlicesZ),
+                                       static_cast<uint32_t>(availableSteps.size()));
+        perfSession.setCategory(PerformanceMetrics::MetricsCategory::DataLoading);
+
+        lines.resize(settingParameter->numberOfLines);
+        sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+    } // Session destructor prints metrics here
 
     // Draw VTK visualization with optional 3D substate support
     drawVisualizationWithOptional3DSubstate();
@@ -1703,9 +1726,19 @@ void SceneWidget::applyGridLinesSettings()
 
 void SceneWidget::initializeAndDraw3DSubstateVisualization()
 {
-    // Read the current step data from files
-    lines.resize(settingParameter->numberOfLines);
-    sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+    {
+        // Create a performance session for 3D substate loading
+        PerformanceSession perfSession("3D Substate Loading",
+                                       static_cast<uint32_t>(settingParameter->numberOfColumnX),
+                                       static_cast<uint32_t>(settingParameter->numberOfRowsY),
+                                       static_cast<uint32_t>(settingParameter->numberOfSlicesZ),
+                                       1);
+        perfSession.setCategory(PerformanceMetrics::MetricsCategory::Rendering);
+
+        // Read the current step data from files
+        lines.resize(settingParameter->numberOfLines);
+        sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+    } // Session destructor prints metrics here
 
     // Draw the 3D substate visualization (initializes the scene with quad mesh)
     drawVisualizationWithOptional3DSubstate();

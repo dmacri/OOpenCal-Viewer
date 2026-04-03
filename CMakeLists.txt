@@ -183,6 +183,7 @@ list(APPEND Sources
     widgets/SubstatesDockWidget.cpp
     widgets/CustomInteractorStyle.cpp
     widgets/CustomDirectoryDialog.cpp
+    widgets/PerformanceSettingsDialog.cpp
     plugins/PluginLoader.cpp
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp
