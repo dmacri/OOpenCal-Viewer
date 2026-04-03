@@ -20,6 +20,7 @@
 #include <vector>
 #include "ISceneWidgetVisualizer.h"
 #include "data/ModelReader.hpp"
+#include "visualiserProxy/ContiguousGrid.h"
 #include "visualiser/Visualizer.hpp"
 
 struct Line;
@@ -53,20 +54,17 @@ public:
 
     /** @brief Initializes the internal matrix with the specified dimensions.
      *
-     * This method resizes the internal 2D vector to match the given dimensions,
-     * creating a grid of default-constructed Cell objects.
+     * This method resizes the internal contiguous storage to match the given
+     * dimensions, creating a grid of default-constructed Cell objects.
      *
      * @param dimX The width of the grid (number of columns)
      * @param dimY The height of the grid (number of rows)
      *
-     * @note The dimensions must be positive integers. The method will create a grid with dimY rows and dimX columns. */
+     * @note The dimensions must be positive integers. The method will create a
+     *       grid with dimY rows and dimX columns. */
     void initMatrix(int dimX, int dimY) override
     {
-        p.resize(dimY);
-        for (int i = 0; i < dimY; i++)
-        {
-            p[i].resize(dimX);
-        }
+        p.resize(dimY, dimX);
     }
 
     void prepareStage(int nNodeX, int nNodeY, int nNodeZ = 1) override
@@ -157,7 +155,7 @@ public:
 private:
     const std::string m_modelName;
 
-    Visualizer visualiser;            ///< The visualizer instance for rendering the model
-    ModelReader<Cell> modelReader;    ///< The reader for loading and managing model data
-    std::vector<std::vector<Cell>> p; ///< 2D vector storing the cell data
+    Visualizer visualiser;           ///< The visualizer instance for rendering the model
+    ModelReader<Cell> modelReader;   ///< The reader for loading and managing model data
+    ContiguousGrid<Cell> p;          ///< Temporary contiguous grid storage with a default single layer until std::mdspan is available
 };
