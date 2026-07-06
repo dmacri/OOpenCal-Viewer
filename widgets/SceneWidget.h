@@ -136,6 +136,30 @@ public:
     /// @brief Returns true when the loaded automaton has a real Z dimension.
     bool isNative3DModel() const;
 
+    /// @brief Display an axis-aligned 2D cross-section of a native 3D model.
+    void setNative3DSlice(GridSliceAxis axis, int fixedIndex);
+
+    /// @brief Return from an axis-aligned cross-section to the complete 3D volume.
+    void setNative3DVolumeView();
+
+    /// @brief Return true while a native 3D cross-section is displayed.
+    bool isNative3DSliceView() const;
+
+    /// @brief Return true when a 2D model is currently visualized as a 3D height field.
+    bool is3DSubstateSurface() const;
+
+    /// @brief Return true when the current scene can provide cross-sections.
+    bool hasSliceable3DView() const;
+
+    /// @brief Return true while any native-volume or substate cross-section is displayed.
+    bool isCrossSectionView() const;
+
+    /// @brief Display an XZ or YZ profile through the active 3D substate surface.
+    void setSubstate3DSlice(GridSliceAxis axis, int fixedIndex);
+
+    /// @brief Disable the active cross-section and restore its complete 3D source.
+    void clearCrossSection();
+
     /// @brief Get the current grid lines visibility state
     bool getGridLinesVisible() const
     {
@@ -456,6 +480,15 @@ protected:
      * @return True if coordinates are within valid grid bounds, false otherwise */
     bool convertWorldToGridCoordinates(const double worldPos[3], int& outRow, int& outCol) const;
 
+    /// @brief Number of rows in the currently rendered 2D grid or slice.
+    int displayedRowCount() const;
+
+    /// @brief Number of columns in the currently rendered 2D grid or slice.
+    int displayedColumnCount() const;
+
+    /// @brief Update 2D ruler titles for the currently selected plane.
+    void update2DRulerAxisTitles();
+
     /** @brief Check if world coordinates are within the grid bounds.
      * 
      * Determines whether the given world coordinates fall within the visible grid area.
@@ -518,6 +551,11 @@ protected:
 
     /// @brief Names of the substate fields currently used for 2D visualization (empty if using default)
     std::vector<std::string> activeSubstatesForColorring;
+
+    /// @brief Cross-section state for a 2D model rendered as a 3D substate surface.
+    bool substateSliceEnabled = false;
+    GridSliceAxis substateSliceAxis = GridSliceAxis::Y;
+    int substateSliceIndex = 0;
 
     /// @brief Current camera roll angle (cached to avoid recalculation)
     double cameraRoll{};

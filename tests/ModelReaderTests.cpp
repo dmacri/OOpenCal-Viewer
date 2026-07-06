@@ -48,6 +48,36 @@ TEST(ParseGridDimensions, Supports2DAnd3DHeaders)
     EXPECT_EQ(dimensions3D.slice, 99);
 }
 
+TEST(ContiguousGridSliceView, MapsAllOrthogonalPlanesWithoutCopying)
+{
+    ContiguousGrid<int> grid(2, 3, 4);
+    for (std::size_t row = 0; row < grid.rowCount(); ++row)
+    {
+        for (std::size_t column = 0; column < grid.columnCount(); ++column)
+        {
+            for (std::size_t layer = 0; layer < grid.layerCount(); ++layer)
+                grid[row, column, layer] = static_cast<int>(100 * row + 10 * column + layer);
+        }
+    }
+
+    const ContiguousGridSliceView<int> xy(grid, GridSliceAxis::Z, 2);
+    EXPECT_EQ(xy.rowCount(), 2);
+    EXPECT_EQ(xy.columnCount(), 3);
+    EXPECT_EQ(xy[1][2], 122);
+
+    const ContiguousGridSliceView<int> xz(grid, GridSliceAxis::Y, 1);
+    EXPECT_EQ(xz.rowCount(), 4);
+    EXPECT_EQ(xz.columnCount(), 3);
+    EXPECT_EQ(xz[0][2], 123); // top row is the highest Z
+    EXPECT_EQ(xz[3][2], 120); // bottom row is Z=0
+
+    const ContiguousGridSliceView<int> yz(grid, GridSliceAxis::X, 2);
+    EXPECT_EQ(yz.rowCount(), 4);
+    EXPECT_EQ(yz.columnCount(), 2);
+    EXPECT_EQ(yz[0][1], 123);
+    EXPECT_EQ(yz[3][0], 20);
+}
+
 TEST(CalculateXYZOffsetForNode, TwoByOneByTwo)
 {
     const std::vector<ColumnRowSlice> dimensions = {

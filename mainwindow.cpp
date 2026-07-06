@@ -203,6 +203,7 @@ void MainWindow::connectMenuActions()
     // View mode actions
     connect(ui->action2DMode, &QAction::triggered, this, &MainWindow::on2DModeRequested);
     connect(ui->action3DMode, &QAction::triggered, this, &MainWindow::on3DModeRequested);
+    connect(ui->actionCrossSectionControls, &QAction::toggled, this, &MainWindow::onCrossSectionControlsToggled);
     connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
     connect(ui->actionFlatSceneBackground, &QAction::triggered, this, &MainWindow::onFlatSceneBackgroundToggled);
 
@@ -316,6 +317,24 @@ void MainWindow::connectSliders()
 
     // Update sliders when camera changes (e.g., via mouse rotation in 3D mode)
     connect(ui->sceneWidget, &SceneWidget::cameraOrientationChanged, this, &MainWindow::onCameraOrientationChanged);
+
+    // Native 3D volume / axis-aligned cross-section controls
+    connect(ui->sliceViewComboBox,
+            QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this,
+            &MainWindow::onSliceViewChanged);
+    connect(ui->sliceSlider,
+            &QSlider::valueChanged,
+            this,
+            &MainWindow::onSliceChanged);
+    connect(ui->sliceSpinBox,
+            QOverload<int>::of(&QSpinBox::valueChanged),
+            ui->sliceSlider,
+            &QSlider::setValue);
+    connect(ui->sliceSlider,
+            &QSlider::valueChanged,
+            ui->sliceSpinBox,
+            &QSpinBox::setValue);
 }
 
 void MainWindow::loadStrings()
@@ -1345,7 +1364,15 @@ void MainWindow::on2DModeRequested()
         return;
     }
 
+    if (ui->sceneWidget->isCrossSectionView())
+        ui->sceneWidget->clearCrossSection();
+
     ui->sceneWidget->setViewMode2D();
+    {
+        QSignalBlocker blocker(ui->actionCrossSectionControls);
+        ui->actionCrossSectionControls->setChecked(false);
+    }
+    updateSliceControls(true);
     updateCameraControlsVisibility();
 
     // Synchronize menu checkboxes - ensure only 2D mode is checked
@@ -1362,7 +1389,20 @@ void MainWindow::on2DModeRequested()
 
 void MainWindow::on3DModeRequested()
 {
-    ui->sceneWidget->setViewMode3D();
+    if (ui->sceneWidget->isCrossSectionView())
+    {
+        ui->sceneWidget->clearCrossSection();
+        QSignalBlocker viewBlocker(ui->sliceViewComboBox);
+        ui->sliceViewComboBox->setCurrentIndex(0);
+        ui->sliceAxisLabel->setEnabled(false);
+        ui->sliceSlider->setEnabled(false);
+        ui->sliceSpinBox->setEnabled(false);
+        ui->sliceRangeLabel->setEnabled(false);
+    }
+    else
+    {
+        ui->sceneWidget->setViewMode3D();
+    }
 
     onResetCameraRequested();
 
@@ -1388,6 +1428,11 @@ void MainWindow::synchronizeViewModeWithLoadedModel()
     // A 2D model still keeps 3D available for "substate as altitude".
     ui->action2DMode->setEnabled(!native3D);
     ui->action3DMode->setEnabled(true);
+    {
+        QSignalBlocker blocker(ui->actionCrossSectionControls);
+        ui->actionCrossSectionControls->setChecked(false);
+    }
+    updateSliceControls(true);
 
     if (native3D)
         on3DModeRequested();
@@ -1425,8 +1470,187 @@ void MainWindow::syncFlatSceneBackgroundCheckbox()
 
 void MainWindow::updateCameraControlsVisibility()
 {
-    const bool is3DMode = (ui->sceneWidget->getViewMode() == ViewMode::Mode3D);
+    const bool is3DMode =
+        ui->sceneWidget->getViewMode() == ViewMode::Mode3D &&
+        !ui->sceneWidget->isCrossSectionView();
     ui->camera3DControlsWidget->setVisible(is3DMode);
+}
+
+void MainWindow::updateSliceControls(bool resetSelection)
+{
+    const bool available = ui->sceneWidget->hasSliceable3DView();
+    ui->actionCrossSectionControls->setEnabled(available);
+    ui->sliceControlsWidget->setVisible(
+        available && ui->actionCrossSectionControls->isChecked());
+
+    if (!available)
+    {
+        QSignalBlocker blocker(ui->actionCrossSectionControls);
+        ui->actionCrossSectionControls->setChecked(false);
+        return;
+    }
+
+    if (!resetSelection)
+        return;
+
+    QSignalBlocker viewBlocker(ui->sliceViewComboBox);
+    QSignalBlocker sliderBlocker(ui->sliceSlider);
+    QSignalBlocker spinBlocker(ui->sliceSpinBox);
+    ui->sliceViewComboBox->clear();
+    if (ui->sceneWidget->isNative3DModel())
+    {
+        ui->sliceViewComboBox->addItem(tr("Volume"));
+        ui->sliceViewComboBox->addItem(tr("XY plane (fixed Z)"));
+        ui->sliceViewComboBox->addItem(tr("XZ plane (fixed Y)"));
+        ui->sliceViewComboBox->addItem(tr("YZ plane (fixed X)"));
+    }
+    else
+    {
+        ui->sliceViewComboBox->addItem(tr("3D substate surface"));
+        ui->sliceViewComboBox->addItem(tr("XZ profile (fixed Y)"));
+        ui->sliceViewComboBox->addItem(tr("YZ profile (fixed X)"));
+    }
+    ui->sliceViewComboBox->setCurrentIndex(0);
+    ui->sliceSlider->setRange(0, 0);
+    ui->sliceSpinBox->setRange(0, 0);
+    ui->sliceSlider->setValue(0);
+    ui->sliceSpinBox->setValue(0);
+    ui->sliceAxisLabel->setText("Z:");
+    ui->sliceRangeLabel->setText("/ 0");
+    ui->sliceAxisLabel->setEnabled(false);
+    ui->sliceSlider->setEnabled(false);
+    ui->sliceSpinBox->setEnabled(false);
+    ui->sliceRangeLabel->setEnabled(false);
+}
+
+void MainWindow::onCrossSectionControlsToggled(bool checked)
+{
+    if (!checked)
+    {
+        const bool crossSectionWasActive = ui->sceneWidget->isCrossSectionView();
+        if (crossSectionWasActive)
+            ui->sceneWidget->clearCrossSection();
+        ui->sliceControlsWidget->hide();
+        if (crossSectionWasActive)
+        {
+            QSignalBlocker blocker2D(ui->action2DMode);
+            QSignalBlocker blocker3D(ui->action3DMode);
+            ui->action2DMode->setChecked(false);
+            ui->action3DMode->setChecked(true);
+            onResetCameraRequested();
+        }
+        updateCameraControlsVisibility();
+        syncFlatSceneBackgroundCheckbox();
+        return;
+    }
+
+    if (!ui->sceneWidget->hasSliceable3DView())
+    {
+        QSignalBlocker blocker(ui->actionCrossSectionControls);
+        ui->actionCrossSectionControls->setChecked(false);
+        return;
+    }
+
+    updateSliceControls(true);
+    ui->sliceControlsWidget->show();
+}
+
+void MainWindow::onSliceViewChanged(int viewIndex)
+{
+    if (!ui->sceneWidget->hasSliceable3DView())
+        return;
+
+    if (viewIndex <= 0)
+    {
+        on3DModeRequested();
+        return;
+    }
+
+    const SettingParameter* settings = ui->sceneWidget->getSettingParameter();
+    if (!settings)
+        return;
+
+    GridSliceAxis axis;
+    int axisSize;
+    QString axisName;
+    if (ui->sceneWidget->isNative3DModel())
+    {
+        axis = GridSliceAxis::Z;
+        axisSize = settings->numberOfSlicesZ;
+        axisName = "Z:";
+        if (viewIndex == 2)
+        {
+            axis = GridSliceAxis::Y;
+            axisSize = settings->numberOfRowsY;
+            axisName = "Y:";
+        }
+        else if (viewIndex == 3)
+        {
+            axis = GridSliceAxis::X;
+            axisSize = settings->numberOfColumnX;
+            axisName = "X:";
+        }
+    }
+    else
+    {
+        axis = viewIndex == 1 ? GridSliceAxis::Y : GridSliceAxis::X;
+        axisSize = axis == GridSliceAxis::Y
+            ? settings->numberOfRowsY
+            : settings->numberOfColumnX;
+        axisName = axis == GridSliceAxis::Y ? "Y:" : "X:";
+    }
+
+    const int maximum = std::max(0, axisSize - 1);
+    const int initialIndex = maximum / 2;
+    {
+        QSignalBlocker sliderBlocker(ui->sliceSlider);
+        QSignalBlocker spinBlocker(ui->sliceSpinBox);
+        ui->sliceSlider->setRange(0, maximum);
+        ui->sliceSpinBox->setRange(0, maximum);
+        ui->sliceSlider->setValue(initialIndex);
+        ui->sliceSpinBox->setValue(initialIndex);
+    }
+    ui->sliceAxisLabel->setText(axisName);
+    ui->sliceRangeLabel->setText(QString("/ %1").arg(maximum));
+    ui->sliceAxisLabel->setEnabled(true);
+    ui->sliceSlider->setEnabled(true);
+    ui->sliceSpinBox->setEnabled(true);
+    ui->sliceRangeLabel->setEnabled(true);
+
+    if (ui->sceneWidget->isNative3DModel())
+        ui->sceneWidget->setNative3DSlice(axis, initialIndex);
+    else
+        ui->sceneWidget->setSubstate3DSlice(axis, initialIndex);
+
+    QSignalBlocker blocker2D(ui->action2DMode);
+    QSignalBlocker blocker3D(ui->action3DMode);
+    ui->action2DMode->setChecked(true);
+    ui->action3DMode->setChecked(false);
+    updateCameraControlsVisibility();
+    syncFlatSceneBackgroundCheckbox();
+}
+
+void MainWindow::onSliceChanged(int fixedIndex)
+{
+    const int viewIndex = ui->sliceViewComboBox->currentIndex();
+    if (viewIndex <= 0 || !ui->sceneWidget->hasSliceable3DView())
+        return;
+
+    if (ui->sceneWidget->isNative3DModel())
+    {
+        GridSliceAxis axis = GridSliceAxis::Z;
+        if (viewIndex == 2)
+            axis = GridSliceAxis::Y;
+        else if (viewIndex == 3)
+            axis = GridSliceAxis::X;
+        ui->sceneWidget->setNative3DSlice(axis, fixedIndex);
+    }
+    else
+    {
+        const GridSliceAxis axis =
+            viewIndex == 1 ? GridSliceAxis::Y : GridSliceAxis::X;
+        ui->sceneWidget->setSubstate3DSlice(axis, fixedIndex);
+    }
 }
 
 void MainWindow::syncCameraSliders()
@@ -1803,6 +2027,9 @@ void MainWindow::setWidgetsEnabledState(bool enabled)
     ui->actionShow_config_details->setEnabled(enabled);
     ui->actionExport_Video->setEnabled(enabled);
     ui->actionReloadData->setEnabled(enabled);
+    ui->sliceControlsWidget->setEnabled(enabled);
+    ui->actionCrossSectionControls->setEnabled(
+        enabled && ui->sceneWidget->hasSliceable3DView());
 
     // Native 3D models cannot be flattened; 2D models retain optional 3D substates.
     ui->action2DMode->setEnabled(!ui->sceneWidget->isNative3DModel());
@@ -2285,6 +2512,13 @@ void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
     {
         // Show wait cursor during view mode change
         WaitCursorGuard waitCursor("Switching to 2D visualization...");
+
+        if (ui->sceneWidget->isCrossSectionView())
+            ui->sceneWidget->clearCrossSection();
+        {
+            QSignalBlocker blocker(ui->actionCrossSectionControls);
+            ui->actionCrossSectionControls->setChecked(false);
+        }
         
         // Disable 3D substate visualization
         ui->sceneWidget->setActiveSubstateFor3D("");
@@ -2297,6 +2531,7 @@ void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
         
         // Refresh visualization
         ui->sceneWidget->refreshVisualization();
+        updateSliceControls(true);
         return;
     }
     
@@ -2318,6 +2553,14 @@ void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
 
     // Initialize and draw the 3D substate visualization (this will create the quad mesh)
     ui->sceneWidget->initializeAndDraw3DSubstateVisualization();
+
+    // Cross-section controls are available for the height field, but remain
+    // opt-in through View -> Cross-section controls.
+    {
+        QSignalBlocker blocker(ui->actionCrossSectionControls);
+        ui->actionCrossSectionControls->setChecked(false);
+    }
+    updateSliceControls(true);
     
     // Cursor restored automatically by WaitCursorGuard destructor
 }

@@ -53,8 +53,14 @@ public:
     void readStageStateFromFilesForStep(SettingParameter*, Line*) override {}
     void drawWithVTK(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, bool) override {}
     void refreshWindowsVTK(int, int, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&) override {}
+    void setNative3DSlice(GridSliceAxis, int) override {}
+    void clearNative3DSlice() override {}
+    bool isNative3DSliceEnabled() const override { return false; }
+    GridSliceAxis native3DSliceAxis() const override { return GridSliceAxis::Z; }
+    int native3DSliceIndex() const override { return 0; }
     void drawWithVTK3DSubstate(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&) override {}
     void refreshWindowsVTK3DSubstate(int, int, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&) override {}
+    void drawWithVTK3DSubstateSlice(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&, GridSliceAxis, int) override {}
     void drawFlatSceneBackground(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>) override {}
     void refreshFlatSceneBackground(int, int, vtkSmartPointer<vtkActor>) override {}
     void drawGridLinesOn3DSurface(int, int, const std::vector<Line>&, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double) override {}
@@ -448,7 +454,8 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
 
     if (isNative3DModel())
     {
-        if (flatSceneBackgroundVisible)
+        const bool sliceView = isNative3DSliceView();
+        if (flatSceneBackgroundVisible && !sliceView)
         {
             sceneWidgetVisualizerProxy->drawFlatSceneBackground(settingParameter->numberOfRowsY,
                                                                 settingParameter->numberOfColumnX,
@@ -464,19 +471,22 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                 colorSubstateInfos,
                                                 useCellRendering);
 
-        sceneWidgetVisualizerProxy->drawGridLinesOn3DSurface(settingParameter->numberOfRowsY,
-                                                             settingParameter->numberOfColumnX,
-                                                             lines,
-                                                             renderer,
-                                                             gridLinesOnSurfaceActor,
-                                                             {},
-                                                             0.0,
-                                                             1.0);
+        if (!sliceView)
+        {
+            sceneWidgetVisualizerProxy->drawGridLinesOn3DSurface(settingParameter->numberOfRowsY,
+                                                                 settingParameter->numberOfColumnX,
+                                                                 lines,
+                                                                 renderer,
+                                                                 gridLinesOnSurfaceActor,
+                                                                 {},
+                                                                 0.0,
+                                                                 1.0);
+        }
 
         if (actorBuildLine)
             actorBuildLine->SetVisibility(false);
         if (gridLinesOnSurfaceActor)
-            gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+            gridLinesOnSurfaceActor->SetVisibility(!sliceView && gridLinesVisible);
 
         updateCameraPivotFromBounds();
         return;
@@ -490,6 +500,32 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
         if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
         {
+            if (substateSliceEnabled)
+            {
+                const auto colorSubstateInfos = getColorSubstateInfos();
+                sceneWidgetVisualizerProxy->drawWithVTK3DSubstateSlice(
+                    settingParameter->numberOfRowsY,
+                    settingParameter->numberOfColumnX,
+                    renderer,
+                    gridActor,
+                    activeSubstateFor3D,
+                    substateInfo.minValue,
+                    substateInfo.maxValue,
+                    colorSubstateInfos,
+                    substateSliceAxis,
+                    substateSliceIndex);
+
+                if (backgroundActor)
+                    backgroundActor->SetVisibility(false);
+                if (actorBuildLine)
+                    actorBuildLine->SetVisibility(false);
+                if (gridLinesOnSurfaceActor)
+                    gridLinesOnSurfaceActor->SetVisibility(false);
+
+                updateCameraPivotFromBounds();
+                return;
+            }
+
             // Clear old background actor to remove any 2D artifacts
             if (backgroundActor && renderer)
             {
@@ -570,6 +606,16 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
 {
     if (isNative3DModel())
     {
+        if (isNative3DSliceView())
+        {
+            // Rebuild instead of only replacing the lookup table: changing the
+            // selected plane can also change its row/column dimensions.
+            drawVisualizationWithOptional3DSubstate();
+            update2DRulerAxesBounds();
+            triggerRenderUpdate();
+            return;
+        }
+
         if (flatSceneBackgroundVisible && backgroundActor && backgroundActor->GetMapper())
         {
             sceneWidgetVisualizerProxy->refreshFlatSceneBackground(settingParameter->numberOfRowsY,
@@ -605,6 +651,14 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
         const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
         if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
         {
+            if (substateSliceEnabled)
+            {
+                drawVisualizationWithOptional3DSubstate();
+                update2DRulerAxesBounds();
+                triggerRenderUpdate();
+                return;
+            }
+
             // Refresh flat background scene if enabled
             if (flatSceneBackgroundVisible && backgroundActor && backgroundActor->GetMapper())
             {
@@ -876,6 +930,37 @@ void SceneWidget::update2DRulerAxesBounds()
 
     std::cout << "Ruler axes updated: X=[" << bounds[0] << ", " << bounds[1]
               << "], Y=[" << bounds[2] << ", " << bounds[3] << "]" << std::endl;
+}
+
+void SceneWidget::update2DRulerAxisTitles()
+{
+    const char* horizontalAxis = "X";
+    const char* verticalAxis = "Y";
+
+    if (isNative3DSliceView())
+    {
+        switch (sceneWidgetVisualizerProxy->native3DSliceAxis())
+        {
+            case GridSliceAxis::X:
+                horizontalAxis = "Y";
+                verticalAxis = "Z";
+                break;
+            case GridSliceAxis::Y:
+                horizontalAxis = "X";
+                verticalAxis = "Z";
+                break;
+            case GridSliceAxis::Z:
+                break;
+        }
+    }
+    else if (substateSliceEnabled)
+    {
+        horizontalAxis = substateSliceAxis == GridSliceAxis::Y ? "X" : "Y";
+        verticalAxis = activeSubstateFor3D.c_str();
+    }
+
+    rulerAxisX->SetTitle(horizontalAxis);
+    rulerAxisY->SetTitle(verticalAxis);
 }
 
 void SceneWidget::connectKeyboardCallback()
@@ -1237,6 +1322,60 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
     if (! renderer || ! renderWindow())
         return;
 
+    if (isCrossSectionView() && isWorldPositionInGrid(m_lastWorldPos.data()))
+    {
+        int planeRow = 0;
+        int planeColumn = 0;
+        if (convertWorldToGridCoordinates(m_lastWorldPos.data(), planeRow, planeColumn))
+        {
+            if (substateSliceEnabled)
+            {
+                const int x = substateSliceAxis == GridSliceAxis::Y
+                    ? planeColumn
+                    : substateSliceIndex;
+                const int y = substateSliceAxis == GridSliceAxis::Y
+                    ? substateSliceIndex
+                    : planeRow;
+                QString tooltipText =
+                    QString("Cell Coordinates: (X=%1, Y=%2)").arg(x).arg(y);
+                tooltipText += cellValueAtThisPositionAsText();
+                QToolTip::showText(mapToGlobal(lastMousePos),
+                                   tooltipText,
+                                   this,
+                                   QRect(lastMousePos, QSize(1, 1)),
+                                   0);
+                return;
+            }
+
+            int x = planeColumn;
+            int y = planeRow;
+            int z = sceneWidgetVisualizerProxy->native3DSliceIndex();
+            switch (sceneWidgetVisualizerProxy->native3DSliceAxis())
+            {
+                case GridSliceAxis::X:
+                    x = sceneWidgetVisualizerProxy->native3DSliceIndex();
+                    y = planeColumn;
+                    z = settingParameter->numberOfSlicesZ - 1 - planeRow;
+                    break;
+                case GridSliceAxis::Y:
+                    y = sceneWidgetVisualizerProxy->native3DSliceIndex();
+                    z = settingParameter->numberOfSlicesZ - 1 - planeRow;
+                    break;
+                case GridSliceAxis::Z:
+                    break;
+            }
+            QString tooltipText =
+                QString("Cell Coordinates: (X=%1, Y=%2, Z=%3)").arg(x).arg(y).arg(z);
+            tooltipText += cellValueAtThisPositionAsText();
+            QToolTip::showText(mapToGlobal(lastMousePos),
+                               tooltipText,
+                               this,
+                               QRect(lastMousePos, QSize(1, 1)),
+                               0);
+            return;
+        }
+    }
+
     // m_lastMousePos is already in Qt coordinates (origin: top-left)
     // m_lastWorldPos is set by the VTK callback (picker or DisplayToWorld fallback)
 
@@ -1408,6 +1547,8 @@ void SceneWidget::clearScene()
 
     // Clear stage data
     sceneWidgetVisualizerProxy->clearStage();
+    sceneWidgetVisualizerProxy->clearNative3DSlice();
+    substateSliceEnabled = false;
 
     // Reset setting parameters to avoid stale data
     settingParameter = std::make_unique<SettingParameter>();
@@ -1468,7 +1609,7 @@ void SceneWidget::refreshStepNumberTextColorFromSettings()
 
 void SceneWidget::setViewMode2D()
 {
-    if (isNative3DModel())
+    if (isNative3DModel() && !isNative3DSliceView())
     {
         std::cerr << "2D view is unavailable for a native 3D model." << std::endl;
         return;
@@ -1483,7 +1624,8 @@ void SceneWidget::setViewMode2D()
     currentViewMode = ViewMode::Mode2D;
     
     // Disable 3D substate visualization when switching to 2D mode
-    activeSubstateFor3D.clear();
+    if (!substateSliceEnabled)
+        activeSubstateFor3D.clear();
     
     // In 2D mode, flat scene background is always visible (it's the 2D visualization itself)
     flatSceneBackgroundVisible = true;
@@ -1530,9 +1672,11 @@ void SceneWidget::setViewMode2D()
 
     // Setup 2D ruler axes (bounds will be updated when data is loaded)
     setup2DRulerAxes();
+    update2DRulerAxisTitles();
 
     // Rebuild grid lines (they were removed when switching to 3D substate)
-    if (settingParameter && sceneWidgetVisualizerProxy && !lines.empty())
+    if (settingParameter && sceneWidgetVisualizerProxy && !lines.empty() &&
+        !isNative3DModel() && !substateSliceEnabled)
     {
         sceneWidgetVisualizerProxy->getVisualizer().buildLoadBalanceLine(lines,
                                                                          settingParameter->numberOfRowsY + 1,
@@ -1601,6 +1745,117 @@ bool SceneWidget::isNative3DModel() const
     return settingParameter && settingParameter->numberOfSlicesZ > 1;
 }
 
+bool SceneWidget::isNative3DSliceView() const
+{
+    return isNative3DModel() &&
+           sceneWidgetVisualizerProxy &&
+           sceneWidgetVisualizerProxy->isNative3DSliceEnabled();
+}
+
+bool SceneWidget::is3DSubstateSurface() const
+{
+    if (!settingParameter || isNative3DModel() || activeSubstateFor3D.empty())
+        return false;
+
+    const auto info = settingParameter->substateInfo.find(activeSubstateFor3D);
+    return info != settingParameter->substateInfo.end() &&
+           !std::isnan(info->second.minValue) &&
+           !std::isnan(info->second.maxValue) &&
+           info->second.minValue < info->second.maxValue;
+}
+
+bool SceneWidget::hasSliceable3DView() const
+{
+    return isNative3DModel() || is3DSubstateSurface();
+}
+
+bool SceneWidget::isCrossSectionView() const
+{
+    return isNative3DSliceView() || substateSliceEnabled;
+}
+
+void SceneWidget::setNative3DSlice(GridSliceAxis axis, int fixedIndex)
+{
+    if (!isNative3DModel() || !sceneWidgetVisualizerProxy)
+        return;
+
+    const bool planeChanged =
+        !isNative3DSliceView() ||
+        sceneWidgetVisualizerProxy->native3DSliceAxis() != axis;
+
+    sceneWidgetVisualizerProxy->setNative3DSlice(axis, fixedIndex);
+
+    if (planeChanged || currentViewMode != ViewMode::Mode2D)
+    {
+        setViewMode2D();
+        return;
+    }
+
+    drawVisualizationWithOptional3DSubstate();
+    update2DRulerAxisTitles();
+    update2DRulerAxesBounds();
+    updateCameraPivotFromBounds();
+    triggerRenderUpdate();
+}
+
+void SceneWidget::setNative3DVolumeView()
+{
+    if (!isNative3DModel() || !sceneWidgetVisualizerProxy)
+        return;
+
+    sceneWidgetVisualizerProxy->clearNative3DSlice();
+    drawVisualizationWithOptional3DSubstate();
+    setViewMode3D();
+    updateCameraPivotFromBounds();
+    applyCameraAngles();
+}
+
+void SceneWidget::setSubstate3DSlice(GridSliceAxis axis, int fixedIndex)
+{
+    if (!is3DSubstateSurface() ||
+        (axis != GridSliceAxis::X && axis != GridSliceAxis::Y))
+    {
+        return;
+    }
+
+    const bool planeChanged = !substateSliceEnabled || substateSliceAxis != axis;
+    substateSliceEnabled = true;
+    substateSliceAxis = axis;
+    substateSliceIndex = axis == GridSliceAxis::Y
+        ? std::clamp(fixedIndex, 0, settingParameter->numberOfRowsY - 1)
+        : std::clamp(fixedIndex, 0, settingParameter->numberOfColumnX - 1);
+
+    if (planeChanged || currentViewMode != ViewMode::Mode2D)
+    {
+        setViewMode2D();
+        return;
+    }
+
+    drawVisualizationWithOptional3DSubstate();
+    update2DRulerAxisTitles();
+    update2DRulerAxesBounds();
+    updateCameraPivotFromBounds();
+    triggerRenderUpdate();
+}
+
+void SceneWidget::clearCrossSection()
+{
+    if (isNative3DSliceView())
+    {
+        setNative3DVolumeView();
+        return;
+    }
+
+    if (!substateSliceEnabled)
+        return;
+
+    substateSliceEnabled = false;
+    drawVisualizationWithOptional3DSubstate();
+    setViewMode3D();
+    updateCameraPivotFromBounds();
+    applyCameraAngles();
+}
+
 void SceneWidget::setAxesWidgetVisible(bool visible)
 {
     if (axesWidget)
@@ -1640,6 +1895,8 @@ void SceneWidget::setUseCellRendering(bool useCellRenderingMode)
 
 void SceneWidget::setActiveSubstateFor3D(const std::string& fieldName)
 {
+    if (fieldName.empty())
+        substateSliceEnabled = false;
     activeSubstateFor3D = fieldName;
 }
 
@@ -1755,8 +2012,35 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
     if (sceneWidth <= 0 || sceneHeight <= 0)
         return false;
 
-    const double cellWidth = sceneWidth / settingParameter->numberOfColumnX;
-    const double cellHeight = sceneHeight / settingParameter->numberOfRowsY;
+    if (substateSliceEnabled)
+    {
+        const int sampleCount = substateSliceAxis == GridSliceAxis::Y
+            ? settingParameter->numberOfColumnX
+            : settingParameter->numberOfRowsY;
+        int sample = static_cast<int>(
+            ((worldPos[0] - bounds[0]) / sceneWidth) * sampleCount);
+        sample = std::clamp(sample, 0, sampleCount - 1);
+
+        if (substateSliceAxis == GridSliceAxis::Y)
+        {
+            outRow = substateSliceIndex;
+            outCol = sample;
+        }
+        else
+        {
+            outRow = sample;
+            outCol = substateSliceIndex;
+        }
+        return true;
+    }
+
+    const int columnCount = displayedColumnCount();
+    const int rowCount = displayedRowCount();
+    if (columnCount <= 0 || rowCount <= 0)
+        return false;
+
+    const double cellWidth = sceneWidth / columnCount;
+    const double cellHeight = sceneHeight / rowCount;
 
     // Convert world position to grid indices
     // Points are positioned with Y inverted: (nRows - 1 - row)
@@ -1765,15 +2049,39 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
     int row = static_cast<int>((worldPos[1] - bounds[2]) / cellHeight);
     
     // Invert row to match the inverted Y coordinates used in visualization
-    row = settingParameter->numberOfRowsY - 1 - row;
+    row = rowCount - 1 - row;
 
     // Clamp to valid range
-    col = std::max(0, std::min(col, settingParameter->numberOfColumnX - 1));
-    row = std::max(0, std::min(row, settingParameter->numberOfRowsY - 1));
+    col = std::max(0, std::min(col, columnCount - 1));
+    row = std::max(0, std::min(row, rowCount - 1));
 
     outRow = row;
     outCol = col;
     return true;
+}
+
+int SceneWidget::displayedRowCount() const
+{
+    if (!settingParameter)
+        return 0;
+    if (!isNative3DSliceView())
+        return settingParameter->numberOfRowsY;
+
+    return sceneWidgetVisualizerProxy->native3DSliceAxis() == GridSliceAxis::Z
+        ? settingParameter->numberOfRowsY
+        : settingParameter->numberOfSlicesZ;
+}
+
+int SceneWidget::displayedColumnCount() const
+{
+    if (!settingParameter)
+        return 0;
+    if (!isNative3DSliceView())
+        return settingParameter->numberOfColumnX;
+
+    return sceneWidgetVisualizerProxy->native3DSliceAxis() == GridSliceAxis::X
+        ? settingParameter->numberOfRowsY
+        : settingParameter->numberOfColumnX;
 }
 
 bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
@@ -1808,9 +2116,32 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
 
 void SceneWidget::applyGridLinesSettings()
 {
+    const bool isNativeModel = settingParameter && settingParameter->numberOfSlicesZ > 1;
+    const bool isNative3D = isNativeModel && !isNative3DSliceView();
+
+    // The existing load-balancing line data describes XY partitions only.
+    // Do not display it on XZ/YZ slices (or stale over an XY slice) until a
+    // plane-specific node-boundary representation is built.
+    if (isNativeModel && isNative3DSliceView())
+    {
+        if (actorBuildLine)
+            actorBuildLine->SetVisibility(false);
+        if (gridLinesOnSurfaceActor)
+            gridLinesOnSurfaceActor->SetVisibility(false);
+        return;
+    }
+
+    if (substateSliceEnabled)
+    {
+        if (actorBuildLine)
+            actorBuildLine->SetVisibility(false);
+        if (gridLinesOnSurfaceActor)
+            gridLinesOnSurfaceActor->SetVisibility(false);
+        return;
+    }
+
     // Native volumes never use the flat XY node overlay. The established
     // 2D "substate as altitude" mode keeps its surface-line behavior.
-    const bool isNative3D = settingParameter && settingParameter->numberOfSlicesZ > 1;
     const bool isSubstateSurface =
         !isNative3D &&
         settingParameter &&

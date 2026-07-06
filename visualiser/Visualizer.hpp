@@ -101,6 +101,20 @@ public:
     template<class Matrix>
     void refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
+    /// @brief Draw a vertical XZ or YZ profile through a 2D height-field substate.
+    template<class Matrix>
+    void drawWithVTK3DSubstateSlice(const Matrix& p,
+                                    int nRows,
+                                    int nCols,
+                                    vtkSmartPointer<vtkRenderer> renderer,
+                                    vtkSmartPointer<vtkActor> gridActor,
+                                    const std::string& substateFieldName,
+                                    double minValue,
+                                    double maxValue,
+                                    const std::vector<const SubstateInfo*>& colorSubstateInfos,
+                                    GridSliceAxis fixedAxis,
+                                    int fixedIndex);
+
     /// @brief Draw node grid lines projected onto the 3D substate surface.
     template<class Matrix>
     void drawGridLinesOn3DSurface(const Matrix& p,
@@ -1036,4 +1050,91 @@ void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCo
 
     mapper->SetInputData(surfacePolyData);
     mapper->Update();
+}
+
+template<class Matrix>
+void Visualizer::drawWithVTK3DSubstateSlice(
+    const Matrix& p,
+    int nRows,
+    int nCols,
+    vtkSmartPointer<vtkRenderer> renderer,
+    vtkSmartPointer<vtkActor> gridActor,
+    const std::string& substateFieldName,
+    double minValue,
+    double maxValue,
+    const std::vector<const SubstateInfo*>& colorSubstateInfos,
+    GridSliceAxis fixedAxis,
+    int fixedIndex)
+{
+    if (!renderer || !gridActor ||
+        (fixedAxis != GridSliceAxis::X && fixedAxis != GridSliceAxis::Y) ||
+        std::isnan(minValue) || std::isnan(maxValue) || minValue >= maxValue)
+    {
+        return;
+    }
+
+    const int sampleCount = fixedAxis == GridSliceAxis::Y ? nCols : nRows;
+    const int clampedFixedIndex = fixedAxis == GridSliceAxis::Y
+        ? std::clamp(fixedIndex, 0, nRows - 1)
+        : std::clamp(fixedIndex, 0, nCols - 1);
+
+    vtkNew<vtkPoints> points;
+    vtkNew<vtkCellArray> cells;
+    vtkNew<vtkUnsignedCharArray> cellColors;
+    cellColors->SetNumberOfComponents(3);
+
+    for (int sample = 0; sample < sampleCount; ++sample)
+    {
+        const int row = fixedAxis == GridSliceAxis::Y ? clampedFixedIndex : sample;
+        const int col = fixedAxis == GridSliceAxis::Y ? sample : clampedFixedIndex;
+
+        double value = minValue;
+        try
+        {
+            value = std::stod(p[row][col].stringEncoding(substateFieldName.c_str()));
+        }
+        catch (...)
+        {
+            continue;
+        }
+
+        if (!std::isfinite(value) || value <= minValue)
+            continue;
+
+        value = std::clamp(value, minValue, maxValue);
+        const double x0 = static_cast<double>(sample);
+        const double x1 = static_cast<double>(sample + 1);
+        const vtkIdType ids[4] = {
+            points->InsertNextPoint(x0, minValue, 1.0),
+            points->InsertNextPoint(x1, minValue, 1.0),
+            points->InsertNextPoint(x1, value, 1.0),
+            points->InsertNextPoint(x0, value, 1.0)
+        };
+
+        cells->InsertNextCell(4);
+        for (const vtkIdType id : ids)
+            cells->InsertCellPoint(id);
+
+        const Color color = calculateCellColor(row, col, p, colorSubstateInfos);
+        cellColors->InsertNextTuple3(color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    vtkNew<vtkPolyData> profile;
+    profile->SetPoints(points);
+    profile->SetPolys(cells);
+    profile->GetCellData()->SetScalars(cellColors);
+
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputData(profile);
+    mapper->SetScalarModeToUseCellData();
+    mapper->ScalarVisibilityOn();
+
+    renderer->RemoveActor(gridActor);
+    gridActor->SetMapper(mapper);
+    gridActor->GetProperty()->SetInterpolationToFlat();
+    gridActor->GetProperty()->SetAmbient(1.0);
+    gridActor->GetProperty()->SetDiffuse(0.0);
+    gridActor->GetProperty()->SetSpecular(0.0);
+    gridActor->GetProperty()->EdgeVisibilityOff();
+    renderer->AddActor(gridActor);
 }

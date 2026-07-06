@@ -99,6 +99,22 @@ public:
     {
         if (p.layerCount() > 1)
         {
+            if (nativeSliceEnabled)
+            {
+                if (nativeVolumeActor)
+                    renderer->RemoveVolume(nativeVolumeActor);
+
+                const ContiguousGridSliceView<Cell> slice(p, nativeSliceAxis, nativeSliceIndex);
+                visualiser.drawWithVTK(slice,
+                                       static_cast<int>(slice.rowCount()),
+                                       static_cast<int>(slice.columnCount()),
+                                       renderer,
+                                       gridActor,
+                                       colorSubstateInfos,
+                                       useCellRendering);
+                return;
+            }
+
             if (!nativeVolumeActor)
                 nativeVolumeActor = vtkSmartPointer<vtkVolume>::New();
             nativeVolumeRenderer = renderer;
@@ -122,6 +138,17 @@ public:
     {
         if (p.layerCount() > 1)
         {
+            if (nativeSliceEnabled)
+            {
+                const ContiguousGridSliceView<Cell> slice(p, nativeSliceAxis, nativeSliceIndex);
+                visualiser.refreshWindowsVTK(slice,
+                                             static_cast<int>(slice.rowCount()),
+                                             static_cast<int>(slice.columnCount()),
+                                             gridActor,
+                                             colorSubstateInfos);
+                return;
+            }
+
             if (!nativeVolumeActor)
                 nativeVolumeActor = vtkSmartPointer<vtkVolume>::New();
             if (nativeVolumeRenderer)
@@ -138,6 +165,51 @@ public:
         visualiser.refreshWindowsVTK(p, nRows, nCols, gridActor, colorSubstateInfos);
     }
 
+    void setNative3DSlice(GridSliceAxis axis, int fixedIndex) override
+    {
+        const auto axisSize = [this, axis]
+        {
+            switch (axis)
+            {
+                case GridSliceAxis::X:
+                    return p.columnCount();
+                case GridSliceAxis::Y:
+                    return p.rowCount();
+                case GridSliceAxis::Z:
+                    return p.layerCount();
+            }
+            return std::size_t{};
+        }();
+
+        if (axisSize == 0)
+            return;
+
+        nativeSliceAxis = axis;
+        nativeSliceIndex = static_cast<std::size_t>(
+            std::clamp(fixedIndex, 0, static_cast<int>(axisSize) - 1));
+        nativeSliceEnabled = true;
+    }
+
+    void clearNative3DSlice() override
+    {
+        nativeSliceEnabled = false;
+    }
+
+    bool isNative3DSliceEnabled() const override
+    {
+        return nativeSliceEnabled;
+    }
+
+    GridSliceAxis native3DSliceAxis() const override
+    {
+        return nativeSliceAxis;
+    }
+
+    int native3DSliceIndex() const override
+    {
+        return static_cast<int>(nativeSliceIndex);
+    }
+
     void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
         visualiser.drawWithVTK3DSubstate(p, nRows, nCols, renderer, gridActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
@@ -146,6 +218,30 @@ public:
     void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
         visualiser.refreshWindowsVTK3DSubstate(p, nRows, nCols, gridActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
+    }
+
+    void drawWithVTK3DSubstateSlice(int nRows,
+                                    int nCols,
+                                    vtkSmartPointer<vtkRenderer> renderer,
+                                    vtkSmartPointer<vtkActor> gridActor,
+                                    const std::string& substateFieldName,
+                                    double minValue,
+                                    double maxValue,
+                                    const std::vector<const SubstateInfo*>& colorSubstateInfos,
+                                    GridSliceAxis fixedAxis,
+                                    int fixedIndex) override
+    {
+        visualiser.drawWithVTK3DSubstateSlice(p,
+                                              nRows,
+                                              nCols,
+                                              renderer,
+                                              gridActor,
+                                              substateFieldName,
+                                              minValue,
+                                              maxValue,
+                                              colorSubstateInfos,
+                                              fixedAxis,
+                                              fixedIndex);
     }
 
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor) override
@@ -207,6 +303,19 @@ public:
 
     std::string getCellStringEncoding(int row, int col, const char* details = nullptr) const override
     {
+        if (nativeSliceEnabled && p.layerCount() > 1)
+        {
+            const ContiguousGridSliceView<Cell> slice(p, nativeSliceAxis, nativeSliceIndex);
+            if (row < 0 || col < 0 ||
+                row >= static_cast<int>(slice.rowCount()) ||
+                col >= static_cast<int>(slice.columnCount()))
+            {
+                return {};
+            }
+            return slice[static_cast<std::size_t>(row)][static_cast<std::size_t>(col)]
+                .stringEncoding(details);
+        }
+
         if (row < 0 || col < 0 || row >= static_cast<int>(p.size()))
             return {};
         if (col >= static_cast<int>(p[row].size()))
@@ -224,4 +333,7 @@ private:
     vtkSmartPointer<vtkVolume> nativeVolumeActor;
     vtkSmartPointer<vtkRenderer> nativeVolumeRenderer;
     NodeIndex nodeCountZ = 1;
+    bool nativeSliceEnabled = false;
+    GridSliceAxis nativeSliceAxis = GridSliceAxis::Z;
+    std::size_t nativeSliceIndex = 0;
 };
