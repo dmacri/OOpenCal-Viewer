@@ -152,31 +152,7 @@ public:
         return useCellRendering;
     }
 
-    /// @brief Set camera azimuth (rotation around Z axis) in degrees
-    void setCameraAzimuth(double angle);
-
-    /** @brief Set camera elevation (rotation around X axis).
-     * 
-     * @param angle Elevation angle in degrees */
-    void setCameraElevation(double angle);
-
-    /** @brief Get current camera azimuth.
-     * 
-     * @return Current azimuth angle in degrees */
-    double getCameraAzimuth() const
-    {
-        return cameraAzimuth;
-    }
-
-    /** @brief Get current camera elevation.
-     * 
-     * @return Current elevation angle in degrees */
-    double getCameraElevation() const
-    {
-        return cameraElevation;
-    }
-
-    /// @brief Set camera roll (rotation around Y axis) in degrees
+    /// @brief Set camera roll (rotation around X axis) in degrees
     void setCameraRoll(double angle);
 
     /** @brief Get current camera roll.
@@ -187,7 +163,7 @@ public:
         return cameraRoll;
     }
 
-    /// @brief Set camera pitch (rotation around Z axis) in degrees
+    /// @brief Set camera pitch (rotation around Y axis) in degrees
     void setCameraPitch(double angle);
 
     /** @brief Get current camera pitch.
@@ -198,7 +174,7 @@ public:
         return cameraPitch;
     }
 
-    /// @brief Set camera yaw (rotation around X axis) in degrees
+    /// @brief Set camera yaw (rotation around Z axis) in degrees
     void setCameraYaw(double angle);
 
     /** @brief Get current camera yaw.
@@ -286,13 +262,13 @@ public:
      * @param callData     Additional event-specific data (unused in this implementation). */
     static void mouseCallbackFunction(vtkObject* caller, long unsigned int eventId, void* clientData, void* callData);
 
-    /** @brief Callback function for VTK camera modified events.
+    /** @brief Callback function for VTK interactor-style rotation events.
      *
      * This function is triggered whenever the camera is modified (e.g., rotated via mouse).
      * It emits a Qt signal to notify UI elements (like sliders) to update.
      *
-     * @param caller       The VTK camera object that was modified.
-     * @param eventId      The ID of the event (expected to be vtkCommand::ModifiedEvent).
+     * @param caller       The VTK interactor style handling the gesture.
+     * @param eventId      InteractionEvent or EndInteractionEvent.
      * @param clientData   Pointer to user data (the owning SceneWidget instance).
      * @param callData     Additional event-specific data (unused). */
     static void cameraCallbackFunction(vtkObject* caller, long unsigned int eventId, void* clientData, void* callData);
@@ -310,15 +286,11 @@ signals:
      *  @param availableSteps Vector of available step numbers */
     void availableStepsReadFromConfigFile(std::vector<StepIndex> availableSteps);
 
-    /** @brief Signal emitted when camera orientation changes (e.g., via mouse interaction).
-     * 
-     * This allows UI elements (like sliders) to update when the user rotates the camera.
-     * @param azimuth Current camera azimuth in degrees
-     * @param elevation Current camera elevation in degrees
-     * @param roll Current camera roll in degrees (rotation around Y axis)
-     * @param pitch Current camera pitch in degrees (rotation around Z axis)
-     * @param yaw Current camera yaw in degrees (rotation around X axis) */
-    void cameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw);
+    /** @brief Signal emitted after VTK interaction changes camera orientation.
+     * @param roll Rotation around X in degrees
+     * @param pitch Rotation around Y in degrees
+     * @param yaw Rotation around Z in degrees */
+    void cameraOrientationChanged(double roll, double pitch, double yaw);
 
 public slots:
     /** @brief Slot called when color settings need to be reloaded (at least one of them was changed)
@@ -446,13 +418,10 @@ protected:
      * Used throughout the class to update the display after modifications. */
     void triggerRenderUpdate();
 
-    /** @brief Reset camera to default position and apply stored azimuth and elevation angles.
-     * 
-     * This method resets the camera to the default top-down view, then applies
-     * the currently stored azimuth and elevation transformations. This ensures
-     * consistent camera positioning when angles are modified. */
+    /** @brief Fit the camera and apply the stored Roll/Pitch/Yaw orientation. */
     void applyCameraAngles();
 
+    /// @brief Apply stored Roll/Pitch/Yaw while preserving camera distance.
     void applyCameraAnglesPreservingZoom();
 
     /// @brief Update cached camera pivot using current visible bounds
@@ -549,12 +518,6 @@ protected:
 
     /// @brief Names of the substate fields currently used for 2D visualization (empty if using default)
     std::vector<std::string> activeSubstatesForColorring;
-
-    /// @brief Current camera azimuth angle (cached to avoid recalculation)
-    double cameraAzimuth{};
-
-    /// @brief Current camera elevation angle (cached to avoid recalculation)
-    double cameraElevation{};
 
     /// @brief Current camera roll angle (cached to avoid recalculation)
     double cameraRoll{};

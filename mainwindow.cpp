@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <source_location>
 #include <algorithm>
+#include <cmath>
 #include <QCommonStyle>
 #include <QSettings>
 #include <QDebug>
@@ -47,8 +48,9 @@
 namespace
 {
 constexpr StepIndex FIRST_STEP_NUMBER = 0;
-constexpr int NATIVE_3D_DEFAULT_PITCH = 30;
+constexpr int NATIVE_3D_DEFAULT_PITCH = 0;
 constexpr int NATIVE_3D_DEFAULT_YAW = 0;
+constexpr int NATIVE_3D_DEFAULT_ROLL = 30;
 
 inline std::string sourceFileParentDirectoryAbsolutePath(const std::source_location& location = std::source_location::current())
 {
@@ -1472,6 +1474,9 @@ void MainWindow::onResetCameraRequested()
     const int defaultYaw = ui->sceneWidget->isNative3DModel()
                                ? NATIVE_3D_DEFAULT_YAW
                                : 0;
+    const int defaultRoll = ui->sceneWidget->isNative3DModel()
+                                ? NATIVE_3D_DEFAULT_ROLL
+                                : 0;
 
     // Block the controls while applying one coherent camera preset.
     QSignalBlocker rollBlocker(ui->rollSlider);
@@ -1481,26 +1486,22 @@ void MainWindow::onResetCameraRequested()
     QSignalBlocker pitchSpinBoxBlocker(ui->pitchSpinBox);
     QSignalBlocker yawSpinBoxBlocker(ui->yawSpinBox);
 
-    // Azimuth/elevation are not represented by GUI controls, so they must stay
-    // neutral. The native-3D oblique preset uses visible Pitch/Yaw instead.
-    ui->sceneWidget->setCameraAzimuth(0);
-    ui->sceneWidget->setCameraElevation(0);
-    ui->sceneWidget->setCameraRoll(0);
+    ui->sceneWidget->setCameraRoll(defaultRoll);
     ui->sceneWidget->setCameraPitch(defaultPitch);
     ui->sceneWidget->setCameraYaw(defaultYaw);
 
     // Reset zoom to default level
     ui->sceneWidget->resetCameraZoom();
 
-    ui->rollSlider->setValue(0);
-    ui->rollSpinBox->setValue(0);
+    ui->rollSlider->setValue(defaultRoll);
+    ui->rollSpinBox->setValue(defaultRoll);
     ui->pitchSlider->setValue(defaultPitch);
     ui->pitchSpinBox->setValue(defaultPitch);
     ui->yawSlider->setValue(defaultYaw);
     ui->yawSpinBox->setValue(defaultYaw);
 }
 
-void MainWindow::onCameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw)
+void MainWindow::onCameraOrientationChanged(double roll, double pitch, double yaw)
 {
     // Block signals to avoid circular updates
     QSignalBlocker rollBlocker(ui->rollSlider);
@@ -1510,12 +1511,16 @@ void MainWindow::onCameraOrientationChanged(double azimuth, double elevation, do
     QSignalBlocker pitchSpinBoxBlocker(ui->pitchSpinBox);
     QSignalBlocker yawSpinBoxBlocker(ui->yawSpinBox);
 
-    ui->rollSlider->setValue(static_cast<int>(roll));
-    ui->rollSpinBox->setValue(static_cast<int>(roll));
-    ui->pitchSlider->setValue(static_cast<int>(pitch));
-    ui->pitchSpinBox->setValue(static_cast<int>(pitch));
-    ui->yawSlider->setValue(static_cast<int>(yaw));
-    ui->yawSpinBox->setValue(static_cast<int>(yaw));
+    const int rollDegrees = static_cast<int>(std::lround(roll));
+    const int pitchDegrees = static_cast<int>(std::lround(pitch));
+    const int yawDegrees = static_cast<int>(std::lround(yaw));
+
+    ui->rollSlider->setValue(rollDegrees);
+    ui->rollSpinBox->setValue(rollDegrees);
+    ui->pitchSlider->setValue(pitchDegrees);
+    ui->pitchSpinBox->setValue(pitchDegrees);
+    ui->yawSlider->setValue(yawDegrees);
+    ui->yawSpinBox->setValue(yawDegrees);
 }
 
 // ============================================================================

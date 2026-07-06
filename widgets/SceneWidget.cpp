@@ -141,6 +141,129 @@ vtkColor3d toVtkColor(QColor color)
         color.blueF()
     };
 }
+
+struct CameraEulerAngles
+{
+    double roll = 0.0;  // X
+    double pitch = 0.0; // Y
+    double yaw = 0.0;   // Z
+};
+
+struct CameraBasis
+{
+    std::array<double, 3> right;
+    std::array<double, 3> up;
+    std::array<double, 3> backward;
+};
+
+constexpr double radiansToDegrees(double radians)
+{
+    return radians * 180.0 / vtkMath::Pi();
+}
+
+constexpr double degreesToRadians(double degrees)
+{
+    return degrees * vtkMath::Pi() / 180.0;
+}
+
+/** Build R = Rz(yaw) * Ry(pitch) * Rx(roll).
+ *
+ * Its columns are the camera's right, up and backward vectors, matching the
+ * baseline VTK camera (right=+X, up=+Y, position direction=+Z). */
+CameraBasis cameraBasisFromEuler(const CameraEulerAngles& angles)
+{
+    const double x = degreesToRadians(angles.roll);
+    const double y = degreesToRadians(angles.pitch);
+    const double z = degreesToRadians(angles.yaw);
+
+    const double cx = std::cos(x);
+    const double sx = std::sin(x);
+    const double cy = std::cos(y);
+    const double sy = std::sin(y);
+    const double cz = std::cos(z);
+    const double sz = std::sin(z);
+
+    return CameraBasis{
+        .right = {
+            cz * cy,
+            sz * cy,
+            -sy
+        },
+        .up = {
+            cz * sy * sx - sz * cx,
+            sz * sy * sx + cz * cx,
+            cy * sx
+        },
+        .backward = {
+            cz * sy * cx + sz * sx,
+            sz * sy * cx - cz * sx,
+            cy * cx
+        }
+    };
+}
+
+CameraEulerAngles cameraEulerFromVtk(vtkCamera& camera)
+{
+    double position[3];
+    double focalPoint[3];
+    double viewUp[3];
+    camera.GetPosition(position);
+    camera.GetFocalPoint(focalPoint);
+    camera.GetViewUp(viewUp);
+
+    double backward[3] = {
+        position[0] - focalPoint[0],
+        position[1] - focalPoint[1],
+        position[2] - focalPoint[2]
+    };
+    if (vtkMath::Normalize(backward) == 0.0)
+        return {};
+
+    // Gram-Schmidt removes numerical drift accumulated by the trackball.
+    const double upProjection = vtkMath::Dot(viewUp, backward);
+    double up[3] = {
+        viewUp[0] - upProjection * backward[0],
+        viewUp[1] - upProjection * backward[1],
+        viewUp[2] - upProjection * backward[2]
+    };
+    if (vtkMath::Normalize(up) == 0.0)
+        return {};
+
+    double right[3];
+    vtkMath::Cross(up, backward, right);
+    vtkMath::Normalize(right);
+    vtkMath::Cross(backward, right, up);
+    vtkMath::Normalize(up);
+
+    // Matrix columns are [right, up, backward]. Decompose the same
+    // Rz * Ry * Rx convention used by cameraBasisFromEuler().
+    const double r00 = right[0];
+    const double r10 = right[1];
+    const double r20 = right[2];
+    const double r01 = up[0];
+    const double r11 = up[1];
+    const double r21 = up[2];
+    const double r22 = backward[2];
+
+    CameraEulerAngles result;
+    result.pitch = radiansToDegrees(std::asin(std::clamp(-r20, -1.0, 1.0)));
+
+    const double cosPitch = std::cos(degreesToRadians(result.pitch));
+    if (std::abs(cosPitch) > 1e-7)
+    {
+        result.roll = radiansToDegrees(std::atan2(r21, r22));
+        result.yaw = radiansToDegrees(std::atan2(r10, r00));
+    }
+    else
+    {
+        // At gimbal lock Roll and Yaw are not independently observable.
+        // Keep the canonical solution Roll=0 and encode rotation in Yaw.
+        result.roll = 0.0;
+        result.yaw = radiansToDegrees(std::atan2(-r01, r11));
+    }
+
+    return result;
+}
 } // namespace
 
 
@@ -177,17 +300,6 @@ void SceneWidget::triggerRenderUpdate()
 
 void SceneWidget::applyCameraAngles()
 {
-    // Temporarily disable VTK warnings.
-    //
-    // Reason:
-    // When the camera elevation approaches ±90 degrees, the view-up vector becomes
-    // nearly parallel to the view-plane normal. VTK interprets this as an invalid
-    // camera configuration and emits warnings such as:
-    //   "Resetting view-up since view plane normal is parallel"
-    //
-    // These warnings normally occur during ResetCamera(), which internally adjusts
-    // the camera to maintain a valid orientation. Since we intentionally allow
-    // near-vertical camera angles, these warnings are expected and not useful here.
     bool oldWarningState = vtkObject::GetGlobalWarningDisplay();
     vtkObject::GlobalWarningDisplayOff();
 
@@ -198,34 +310,21 @@ void SceneWidget::applyCameraAngles()
         return;
     }
 
-    // Reset camera to a known baseline orientation
-    camera->SetPosition(0, 0, 1);
-    camera->SetFocalPoint(0, 0, 0);
-    camera->SetViewUp(0, 1, 0);
+    const CameraBasis basis = cameraBasisFromEuler({
+        .roll = cameraRoll,
+        .pitch = std::clamp(cameraPitch, -90.0, 90.0),
+        .yaw = cameraYaw
+    });
 
-    // Apply azimuth rotation (horizontal)
-    camera->Azimuth(cameraAzimuth);
-
-    // Clamp elevation to avoid exactly ±90° and prevent singularities
-    double clampedElevation = std::clamp(cameraElevation, -89.9, 89.9);
-    camera->Elevation(clampedElevation);
-
-    // Apply roll rotation (around Y axis)
-    camera->Roll(cameraRoll);
-
-    // Apply pitch rotation (around Z axis) with clamping to avoid gimbal lock
-    double clampedPitch = std::clamp(cameraPitch, -89.9, 89.9);
-    camera->Pitch(clampedPitch);
-
-    // Apply yaw rotation (around X axis)
-    camera->Yaw(cameraYaw);
-
-    // Recompute camera bounds for the current renderer
+    camera->SetPosition(cameraPivot[0] + basis.backward[0],
+                        cameraPivot[1] + basis.backward[1],
+                        cameraPivot[2] + basis.backward[2]);
+    camera->SetFocalPoint(cameraPivot.data());
+    camera->SetViewUp(basis.up.data());
+    camera->OrthogonalizeViewUp();
     renderer->ResetCamera();
 
     triggerRenderUpdate();
-
-    // Restore previous warning state
     vtkObject::SetGlobalWarningDisplay(oldWarningState);
 }
 
@@ -235,59 +334,25 @@ void SceneWidget::applyCameraAnglesPreservingZoom()
     if (! camera)
         return;
 
-    double originalPosition[3];
-    camera->GetPosition(originalPosition);
-
-    const double pivot[3] = {
-        cameraPivot[0],
-        cameraPivot[1],
-        cameraPivot[2]
-    };
-
-    double vectorFromPivot[3] = {
-        originalPosition[0] - pivot[0],
-        originalPosition[1] - pivot[1],
-        originalPosition[2] - pivot[2]
-    };
-
-    double distance = vtkMath::Norm(vectorFromPivot);
+    double distance = camera->GetDistance();
     if (distance < 1e-3)
-    {
         distance = 1.0;
-    }
 
     bool oldWarningState = vtkObject::GetGlobalWarningDisplay();
     vtkObject::GlobalWarningDisplayOff();
 
-    camera->SetPosition(0.0, 0.0, distance);
-    camera->SetFocalPoint(0.0, 0.0, 0.0);
-    camera->SetViewUp(0.0, 1.0, 0.0);
+    const CameraBasis basis = cameraBasisFromEuler({
+        .roll = cameraRoll,
+        .pitch = std::clamp(cameraPitch, -90.0, 90.0),
+        .yaw = cameraYaw
+    });
 
-    camera->Azimuth(cameraAzimuth);
-    const double clampedElevation = std::clamp(cameraElevation, -89.9, 89.9);
-    camera->Elevation(clampedElevation);
-    camera->Roll(cameraRoll);
-    
-    // Clamp pitch to avoid gimbal lock and flipping at ±90 degrees
-    const double clampedPitch = std::clamp(cameraPitch, -89.9, 89.9);
-    camera->Pitch(clampedPitch);
-    camera->Yaw(cameraYaw);
-
-    double rotatedPosition[3];
-    double rotatedFocal[3];
-    camera->GetPosition(rotatedPosition);
-    camera->GetFocalPoint(rotatedFocal);
-
-    const double translation[3] = {
-        pivot[0] - rotatedFocal[0],
-        pivot[1] - rotatedFocal[1],
-        pivot[2] - rotatedFocal[2]
-    };
-
-    camera->SetPosition(rotatedPosition[0] + translation[0],
-                        rotatedPosition[1] + translation[1],
-                        rotatedPosition[2] + translation[2]);
-    camera->SetFocalPoint(pivot[0], pivot[1], pivot[2]);
+    camera->SetPosition(cameraPivot[0] + distance * basis.backward[0],
+                        cameraPivot[1] + distance * basis.backward[1],
+                        cameraPivot[2] + distance * basis.backward[2]);
+    camera->SetFocalPoint(cameraPivot.data());
+    camera->SetViewUp(basis.up.data());
+    camera->OrthogonalizeViewUp();
 
     renderer->ResetCameraClippingRange();
     triggerRenderUpdate();
@@ -718,7 +783,6 @@ void SceneWidget::setupVtkScene()
 
     connectKeyboardCallback();
     connectMouseCallback();
-    connectCameraCallback();
 }
 
 void SceneWidget::setupAxesWidget()
@@ -824,15 +888,16 @@ void SceneWidget::connectKeyboardCallback()
 
 void SceneWidget::connectCameraCallback()
 {
-    if (! interactor())
+    if (!interactor() || !interactor()->GetInteractorStyle())
         return;
 
-    // Use EndInteractionEvent instead of camera ModifiedEvent
-    // This is only called when user finishes rotating (releases mouse button)
+    // Interaction events are emitted by vtkInteractorStyle, not by the render
+    // window interactor itself. Listen both during dragging and on release.
     vtkNew<vtkCallbackCommand> cameraCallback;
     cameraCallback->SetCallback(SceneWidget::cameraCallbackFunction);
     cameraCallback->SetClientData(this);
-    interactor()->AddObserver(vtkCommand::EndInteractionEvent, cameraCallback);
+    interactor()->GetInteractorStyle()->AddObserver(vtkCommand::InteractionEvent, cameraCallback);
+    interactor()->GetInteractorStyle()->AddObserver(vtkCommand::EndInteractionEvent, cameraCallback);
 }
 
 void SceneWidget::keypressCallbackFunction(vtkObject* caller, long unsigned int eventId, void* clientData, void* callData)
@@ -906,25 +971,15 @@ void SceneWidget::cameraCallbackFunction(vtkObject* caller, long unsigned int ev
         vtkCamera* camera = self->renderer->GetActiveCamera();
         if (camera)
         {
-            // Get actual camera orientation from VTK
-            const double* position = camera->GetPosition();
-            const double* focalPoint = camera->GetFocalPoint();
+            const CameraEulerAngles angles = cameraEulerFromVtk(*camera);
 
-            // Calculate azimuth and elevation from camera position
-            double dx = position[0] - focalPoint[0];
-            double dy = position[1] - focalPoint[1];
-            double dz = position[2] - focalPoint[2];
+            // Store the actual VTK orientation. The Qt side blocks slider signals
+            // while displaying these values, so this cannot feed back into VTK.
+            self->cameraRoll = angles.roll;
+            self->cameraPitch = angles.pitch;
+            self->cameraYaw = angles.yaw;
 
-            double azimuth = std::atan2(dy, dx) * 180.0 / vtkMath::Pi();
-            double elevation = std::atan2(dz, std::sqrt(dx * dx + dy * dy)) * 180.0 / vtkMath::Pi();
-
-            // Update internal state
-            self->cameraAzimuth = azimuth;
-            self->cameraElevation = elevation;
-            // Note: Roll, Pitch, and Yaw are not extracted from VTK camera here, they're maintained separately
-
-            // Emit signal with actual values
-            emit self->cameraOrientationChanged(azimuth, elevation, self->cameraRoll, self->cameraPitch, self->cameraYaw);
+            emit self->cameraOrientationChanged(angles.roll, angles.pitch, angles.yaw);
         }
     }
 }
@@ -1448,8 +1503,6 @@ void SceneWidget::setViewMode2D()
     setupInteractorStyleWithWaitCursor();
 
     // Reset camera angles
-    cameraAzimuth = {};
-    cameraElevation = {};
     cameraRoll = {};
     cameraPitch = {};
     cameraYaw = {};
@@ -1600,30 +1653,6 @@ void SceneWidget::refreshVisualization()
     triggerRenderUpdate();
 }
 
-void SceneWidget::setCameraAzimuth(double angle)
-{
-    // Store the new azimuth value
-    cameraAzimuth = angle;
-
-    // Apply camera angles using helper method
-    if (currentViewMode == ViewMode::Mode3D)
-        applyCameraAnglesPreservingZoom();
-    else
-        applyCameraAngles();
-}
-
-void SceneWidget::setCameraElevation(double angle)
-{
-    // Store the new elevation value
-    cameraElevation = angle;
-
-    // Apply camera angles using helper method
-    if (currentViewMode == ViewMode::Mode3D)
-        applyCameraAnglesPreservingZoom();
-    else
-        applyCameraAngles();
-}
-
 void SceneWidget::setCameraRoll(double angle)
 {
     // Store the new roll value
@@ -1770,6 +1799,7 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
     // Cost: ~5% overhead due to ray-plane calculations
     vtkNew<CustomInteractorStyle> style;
     interactor()->SetInteractorStyle(style);
+    connectCameraCallback();
 }
 
 void SceneWidget::applyGridLinesSettings()

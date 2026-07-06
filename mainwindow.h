@@ -88,7 +88,7 @@ private slots: // menu actions
     void onPitchChanged(int value);
     void onYawChanged(int value);
     void onResetCameraRequested();
-    void onCameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw);
+    void onCameraOrientationChanged(double roll, double pitch, double yaw);
     void syncCameraSliders();
 
     void onUse3dStateChanged(const std::string& fieldName, bool checked);
