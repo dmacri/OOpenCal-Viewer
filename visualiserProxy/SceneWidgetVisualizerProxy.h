@@ -18,6 +18,7 @@
 
 #include <string>
 #include <vector>
+#include <vtkVolume.h>
 #include "ISceneWidgetVisualizer.h"
 #include "data/ModelReader.hpp"
 #include "visualiserProxy/ContiguousGrid.h"
@@ -84,16 +85,55 @@ public:
 
     void readStageStateFromFilesForStep(SettingParameter* sp, Line* lines) override
     {
+        if (p.rowCount() != static_cast<std::size_t>(sp->numberOfRowsY) ||
+            p.columnCount() != static_cast<std::size_t>(sp->numberOfColumnX) ||
+            p.layerCount() != static_cast<std::size_t>(sp->numberOfSlicesZ))
+        {
+            p.resize(sp->numberOfRowsY, sp->numberOfColumnX, sp->numberOfSlicesZ);
+        }
         modelReader.readStageStateFromFilesForStep(p, sp, lines);
     }
 
     void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos, bool useCellRendering = false) override
     {
+        if (p.layerCount() > 1)
+        {
+            if (!nativeVolumeActor)
+                nativeVolumeActor = vtkSmartPointer<vtkVolume>::New();
+            nativeVolumeRenderer = renderer;
+            renderer->RemoveVolume(nativeVolumeActor);
+            visualiser.drawWithVTK3DVolume(p,
+                                           nRows,
+                                           nCols,
+                                           static_cast<int>(p.layerCount()),
+                                           renderer,
+                                           nativeVolumeActor,
+                                           colorSubstateInfos);
+            return;
+        }
+
+        if (nativeVolumeActor)
+            renderer->RemoveVolume(nativeVolumeActor);
         visualiser.drawWithVTK(p, nRows, nCols, renderer, gridActor, colorSubstateInfos, useCellRendering);
     }
 
     void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
+        if (p.layerCount() > 1)
+        {
+            if (!nativeVolumeActor)
+                nativeVolumeActor = vtkSmartPointer<vtkVolume>::New();
+            if (nativeVolumeRenderer)
+                nativeVolumeRenderer->RemoveVolume(nativeVolumeActor);
+            visualiser.drawWithVTK3DVolume(p,
+                                           nRows,
+                                           nCols,
+                                           static_cast<int>(p.layerCount()),
+                                           nativeVolumeRenderer,
+                                           nativeVolumeActor,
+                                           colorSubstateInfos);
+            return;
+        }
         visualiser.refreshWindowsVTK(p, nRows, nCols, gridActor, colorSubstateInfos);
     }
 
@@ -158,4 +198,6 @@ private:
     Visualizer visualiser;           ///< The visualizer instance for rendering the model
     ModelReader<Cell> modelReader;   ///< The reader for loading and managing model data
     ContiguousGrid<Cell> p;          ///< Temporary contiguous grid storage with a default single layer until std::mdspan is available
+    vtkSmartPointer<vtkVolume> nativeVolumeActor;
+    vtkSmartPointer<vtkRenderer> nativeVolumeRenderer;
 };

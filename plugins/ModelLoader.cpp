@@ -6,7 +6,9 @@
 #include <iostream>
 #include <memory>
 #include <format>
+#include <ranges>
 #include <string>
+#include <vector>
 #include <QString>
 #include <QLibrary>
 
@@ -38,6 +40,26 @@ bool isFileNewer(const std::filesystem::path& a, const std::filesystem::path& b)
 
     // Compare modification times
     return fs::last_write_time(a) > fs::last_write_time(b);
+}
+
+/** Plugins instantiate the reader/visualizer templates from Viewer headers.
+ * Rebuild them when one of those headers changes, even if the model header did not. */
+bool isGeneratedModuleStale(const std::filesystem::path& moduleFile,
+                            const std::filesystem::path& viewerRoot)
+{
+    if (!fs::exists(moduleFile))
+        return true;
+
+    const std::vector<fs::path> templateDependencies = {
+        viewerRoot / "visualiserProxy/SceneWidgetVisualizerProxy.h",
+        viewerRoot / "data/ModelReader.hpp",
+        viewerRoot / "visualiser/Visualizer.hpp"
+    };
+
+    return std::ranges::any_of(templateDependencies, [&](const fs::path& dependency)
+    {
+        return fs::exists(dependency) && fs::last_write_time(dependency) > fs::last_write_time(moduleFile);
+    });
 }
 
 std::string generateClassNameFromCppHeaderFileName(const std::string& cppHeaderFile)
@@ -101,7 +123,11 @@ ModelLoader::LoadResult ModelLoader::loadModelFromDirectory(const std::string& m
         const std::string moduleFileName = generateModuleNameForSourceFile(sourceFile);
 
         // Check if compilation is needed
-        const bool compilationNecessarily = ! moduleExists(moduleFileName) || forceCompilation;
+        const bool compilationNecessarily =
+            !moduleExists(moduleFileName) ||
+            forceCompilation ||
+            isFileNewer(sourceFile, moduleFileName) ||
+            isGeneratedModuleStale(moduleFileName, builder->getProjectRootPath());
         if (compilationNecessarily)
         {
             const std::string wrapperSource = modelDirectory + "/" + result.outputFileName + std::string(DirectoryConstants::WRAPPER_FILE_SUFFIX);

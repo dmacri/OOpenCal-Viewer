@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <vector>
 #include <vtkActor2D.h>
@@ -13,9 +14,13 @@
 #include <vtkCoordinate.h>
 #include <vtkDataSetMapper.h>
 #include <vtkDoubleArray.h>
+#include <vtkFloatArray.h>
 #include <vtkLookupTable.h>
 #include <vtkNamedColors.h>
+#include <vtkImageData.h>
 #include <vtkNew.h>
+#include <vtkColorTransferFunction.h>
+#include <vtkPiecewiseFunction.h>
 #include <vtkPointData.h>
 #include <vtkPoints.h>
 #include <vtkPolyData.h>
@@ -30,6 +35,9 @@
 #include <vtkPolyDataNormals.h>
 #include <vtkCellData.h>
 #include <vtkProperty.h>
+#include <vtkSmartVolumeMapper.h>
+#include <vtkVolume.h>
+#include <vtkVolumeProperty.h>
 
 #include "core/types.h"    // StepIndex
 #include "OOpenCAL/base/Cell.h" // Color
@@ -73,6 +81,18 @@ public:
     void drawWithVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos={}, bool useCellRendering=false);
     template<class Matrix>
     void refreshWindowsVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos);
+
+    /** @brief Render a native 3D cellular grid as a volume.
+     *
+     * This path is separate from the 2D "substate as altitude" surface. */
+    template<class Volume>
+    void drawWithVTK3DVolume(const Volume& p,
+                             int nRows,
+                             int nCols,
+                             int nSlices,
+                             vtkSmartPointer<vtkRenderer> renderer,
+                             vtkSmartPointer<vtkVolume> volumeActor,
+                             const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
@@ -170,7 +190,7 @@ private:
 
     /// @brief This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
     Color flatSceneBackgroundColor() const;
-    GlobalValueManager* gvm;
+    GlobalValueManager* gvm = nullptr;
 };
 
 ////////////////////////////////////////////////////////////////////
@@ -293,6 +313,125 @@ void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSma
     }
     else
         throw std::runtime_error("Invalid dynamic cast!");
+}
+
+template<class Volume>
+void Visualizer::drawWithVTK3DVolume(const Volume& p,
+                                     int nRows,
+                                     int nCols,
+                                     int nSlices,
+                                     vtkSmartPointer<vtkRenderer> renderer,
+                                     vtkSmartPointer<vtkVolume> volumeActor,
+                                     const std::vector<const SubstateInfo*>& colorSubstateInfos)
+{
+    if (!renderer || !volumeActor || nRows <= 0 || nCols <= 0 || nSlices <= 1)
+        return;
+
+    const char* fieldName = nullptr;
+    if (!colorSubstateInfos.empty() && colorSubstateInfos.front() &&
+        !colorSubstateInfos.front()->name.empty())
+    {
+        fieldName = colorSubstateInfos.front()->name.c_str();
+    }
+
+    const vtkIdType valueCount =
+        static_cast<vtkIdType>(nRows) * nCols * nSlices;
+    vtkNew<vtkFloatArray> scalars;
+    scalars->SetName("cell-value");
+    scalars->SetNumberOfValues(valueCount);
+
+    double minValue = std::numeric_limits<double>::infinity();
+    double maxValue = -std::numeric_limits<double>::infinity();
+    Color minColor(255, 255, 255);
+    Color maxColor(255, 255, 255);
+
+    for (int slice = 0; slice < nSlices; ++slice)
+    {
+        for (int row = 0; row < nRows; ++row)
+        {
+            for (int col = 0; col < nCols; ++col)
+            {
+                double value = 0.0;
+                try
+                {
+                    value = std::stod(p[row, col, slice].stringEncoding(fieldName));
+                }
+                catch (...)
+                {
+                    value = 0.0;
+                }
+
+                const Color color = p[row, col, slice].outputValue(fieldName, gvm);
+                if (value < minValue)
+                {
+                    minValue = value;
+                    minColor = color;
+                }
+                if (value > maxValue)
+                {
+                    maxValue = value;
+                    maxColor = color;
+                }
+
+                // VTK expects X to vary fastest. Invert Y just like the existing 2D renderer.
+                const vtkIdType index =
+                    (static_cast<vtkIdType>(slice) * nRows + (nRows - 1 - row)) *
+                    nCols +
+                    col;
+                scalars->SetValue(index, static_cast<float>(value));
+            }
+        }
+    }
+
+    if (!std::isfinite(minValue) || !std::isfinite(maxValue))
+        return;
+
+    vtkNew<vtkImageData> image;
+    image->SetDimensions(nCols, nRows, nSlices);
+    image->SetOrigin(0.0, 0.0, 0.0);
+    image->SetSpacing(1.0, 1.0, 1.0);
+    image->GetPointData()->SetScalars(scalars);
+
+    vtkNew<vtkColorTransferFunction> colors;
+    vtkNew<vtkPiecewiseFunction> opacity;
+
+    auto addColor = [&](double value, const Color& color)
+    {
+        colors->AddRGBPoint(value,
+                            toUnitColor(color.getRed()),
+                            toUnitColor(color.getGreen()),
+                            toUnitColor(color.getBlue()));
+    };
+
+    if (minValue < maxValue)
+    {
+        addColor(minValue, minColor);
+        addColor(maxValue, maxColor);
+        opacity->AddPoint(minValue, 0.0);
+        opacity->AddPoint(maxValue, 0.9);
+    }
+    else
+    {
+        addColor(minValue - 1.0, minColor);
+        addColor(minValue, minColor);
+        opacity->AddPoint(minValue - 1.0, 0.0);
+        opacity->AddPoint(minValue, minValue == 0.0 ? 0.0 : 0.9);
+    }
+
+    vtkNew<vtkVolumeProperty> property;
+    property->SetColor(colors);
+    property->SetScalarOpacity(opacity);
+    property->SetInterpolationTypeToNearest();
+    property->ShadeOff();
+
+    vtkNew<vtkSmartVolumeMapper> mapper;
+    mapper->SetInputData(image);
+    mapper->SetBlendModeToComposite();
+    mapper->SetAutoAdjustSampleDistances(true);
+
+    volumeActor->SetMapper(mapper);
+    volumeActor->SetProperty(property);
+    renderer->AddVolume(volumeActor);
 }
 
 template<class Matrix>

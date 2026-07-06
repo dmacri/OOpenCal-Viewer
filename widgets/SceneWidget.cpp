@@ -382,7 +382,9 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     }
     
     // Check if we should use 3D substate visualization
-    if (! activeSubstateFor3D.empty() && settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
+    if (settingParameter->numberOfSlicesZ <= 1 &&
+        ! activeSubstateFor3D.empty() &&
+        settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
     {
         const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
         if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
@@ -466,7 +468,9 @@ std::vector<const SubstateInfo*> SceneWidget::getColorSubstateInfos()
 void SceneWidget::refreshVisualizationWithOptional3DSubstate()
 {
     // Check if we should use 3D substate visualization
-    if (!activeSubstateFor3D.empty() && settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
+    if (settingParameter->numberOfSlicesZ <= 1 &&
+        !activeSubstateFor3D.empty() &&
+        settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
     {
         const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
         if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
@@ -531,9 +535,13 @@ void SceneWidget::setupSettingParameters(const std::string& configFilename, Step
 {
     readSettingsFromConfigFile(configFilename);
 
-    // Each node has 2 lines (top and left edges)
-    // Plus additional lines for bottom edge (nNodeX lines) and right edge (nNodeY lines)
-    settingParameter->numberOfLines = 2 * (settingParameter->nNodeX * settingParameter->nNodeY) + settingParameter->nNodeX + settingParameter->nNodeY;
+    // Each node has two XY boundary lines. Final edges are tracked for every Z node layer.
+    const auto totalNodes =
+        settingParameter->nNodeX * settingParameter->nNodeY * settingParameter->nNodeZ;
+    settingParameter->numberOfLines =
+        2 * totalNodes +
+        settingParameter->nNodeX * settingParameter->nNodeZ +
+        settingParameter->nNodeY * settingParameter->nNodeZ;
     settingParameter->step = stepNumber;
     settingParameter->changed = false;
 
@@ -1690,11 +1698,17 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
 
 void SceneWidget::applyGridLinesSettings()
 {
-    // Check if we're in 3D substate mode
-    bool isIn3DMode = !activeSubstateFor3D.empty() && settingParameter && 
-                     settingParameter->substateInfo.count(activeSubstateFor3D) > 0 &&
-                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].minValue) &&
-                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].maxValue);
+    // Native volumes never use the flat XY node overlay. The established
+    // 2D "substate as altitude" mode keeps its surface-line behavior.
+    const bool isNative3D = settingParameter && settingParameter->numberOfSlicesZ > 1;
+    const bool isSubstateSurface =
+        !isNative3D &&
+        settingParameter &&
+        !activeSubstateFor3D.empty() &&
+        settingParameter->substateInfo.count(activeSubstateFor3D) > 0 &&
+        !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].minValue) &&
+        !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].maxValue);
+    const bool isIn3DMode = isNative3D || isSubstateSurface;
     
     if (isIn3DMode)
     {

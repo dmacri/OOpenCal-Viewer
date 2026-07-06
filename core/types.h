@@ -56,3 +56,34 @@ struct ColumnAndRow
         return row;
     }
 };
+
+/** @struct ColumnRowSlice
+ * @brief Represents dimensions or coordinates in a three-dimensional grid. */
+struct ColumnRowSlice
+{
+    using CoordinateType = int;
+
+    CoordinateType column;
+    CoordinateType row;
+    CoordinateType slice;
+
+    static ColumnRowSlice xyz(CoordinateType x, CoordinateType y, CoordinateType z)
+    {
+        return ColumnRowSlice{ .column = x, .row = y, .slice = z };
+    }
+
+    auto x() const
+    {
+        return column;
+    }
+
+    auto y() const
+    {
+        return row;
+    }
+
+    auto z() const
+    {
+        return slice;
+    }
+};

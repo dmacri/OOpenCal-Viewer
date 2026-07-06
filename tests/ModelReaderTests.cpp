@@ -1,7 +1,135 @@
 #include <gtest/gtest.h>
+#include <filesystem>
+#include <fstream>
+#include <string>
 #include <vector>
 #include "core/types.h"
 #include "data/ModelReader.hpp"
+#include "visualiserProxy/ContiguousGrid.h"
+
+namespace
+{
+class TestCell
+{
+public:
+    void composeElement(char* text)
+    {
+        value = std::stoi(text);
+    }
+
+    std::string stringEncoding(const char* = nullptr) const
+    {
+        return std::to_string(value);
+    }
+
+    Color outputValue(const char*, GlobalValueManager*) const
+    {
+        return Color(static_cast<std::uint8_t>(value), 0, 0);
+    }
+
+    void startStep(int)
+    {
+    }
+
+    int value = 0;
+};
+}
+
+TEST(ParseGridDimensions, Supports2DAnd3DHeaders)
+{
+    const auto dimensions2D = ReaderHelpers::getDimensionsFromLine("250-500");
+    EXPECT_EQ(dimensions2D.column, 250);
+    EXPECT_EQ(dimensions2D.row, 500);
+    EXPECT_EQ(dimensions2D.slice, 1);
+
+    const auto dimensions3D = ReaderHelpers::getDimensionsFromLine("50-99-99 ");
+    EXPECT_EQ(dimensions3D.column, 50);
+    EXPECT_EQ(dimensions3D.row, 99);
+    EXPECT_EQ(dimensions3D.slice, 99);
+}
+
+TEST(CalculateXYZOffsetForNode, TwoByOneByTwo)
+{
+    const std::vector<ColumnRowSlice> dimensions = {
+        ColumnRowSlice::xyz(50, 99, 40),
+        ColumnRowSlice::xyz(49, 99, 40),
+        ColumnRowSlice::xyz(50, 99, 59),
+        ColumnRowSlice::xyz(49, 99, 59)
+    };
+
+    const auto node0 = ReaderHelpers::calculateXYZOffsetForNode(0, 2, 1, 2, dimensions);
+    const auto node1 = ReaderHelpers::calculateXYZOffsetForNode(1, 2, 1, 2, dimensions);
+    const auto node2 = ReaderHelpers::calculateXYZOffsetForNode(2, 2, 1, 2, dimensions);
+    const auto node3 = ReaderHelpers::calculateXYZOffsetForNode(3, 2, 1, 2, dimensions);
+
+    EXPECT_EQ(node0.x(), 0);
+    EXPECT_EQ(node0.z(), 0);
+    EXPECT_EQ(node1.x(), 50);
+    EXPECT_EQ(node1.z(), 0);
+    EXPECT_EQ(node2.x(), 0);
+    EXPECT_EQ(node2.z(), 40);
+    EXPECT_EQ(node3.x(), 50);
+    EXPECT_EQ(node3.z(), 40);
+}
+
+TEST(ReadStageState, StitchesAllSlicesFromMultipleTextNodes)
+{
+    namespace fs = std::filesystem;
+    const fs::path directory = fs::temp_directory_path() / "oopencal-viewer-reader-3d-test";
+    fs::remove_all(directory);
+    fs::create_directories(directory);
+    const std::string baseName = (directory / "volume").string();
+
+    {
+        std::ofstream index(baseName + "0_index.txt");
+        index << "0 0\n";
+        std::ofstream data(baseName + "0.txt");
+        data << "1-2-2\n"
+             << "1 \n"
+             << "2 \n"
+             << "3 \n"
+             << "4 \n";
+    }
+    {
+        std::ofstream index(baseName + "1_index.txt");
+        index << "0 0\n";
+        std::ofstream data(baseName + "1.txt");
+        data << "1-2-2\n"
+             << "5 \n"
+             << "6 \n"
+             << "7 \n"
+             << "8 \n";
+    }
+
+    ModelReader<TestCell> reader;
+    reader.readStepsOffsetsForAllNodesFromFiles(2, 1, 1, baseName);
+
+    SettingParameter settings{};
+    settings.step = 0;
+    settings.numberOfColumnX = 2;
+    settings.numberOfRowsY = 2;
+    settings.numberOfSlicesZ = 2;
+    settings.nNodeX = 2;
+    settings.nNodeY = 1;
+    settings.nNodeZ = 1;
+    settings.outputFileName = baseName;
+    settings.readMode = "text";
+
+    ContiguousGrid<TestCell> volume(2, 2, 2);
+    std::vector<Line> lines(7);
+    reader.readStageStateFromFilesForStep(volume, &settings, lines.data());
+
+    EXPECT_EQ((volume[0, 0, 0].value), 1);
+    EXPECT_EQ((volume[1, 0, 0].value), 2);
+    EXPECT_EQ((volume[0, 0, 1].value), 3);
+    EXPECT_EQ((volume[1, 0, 1].value), 4);
+    EXPECT_EQ((volume[0, 1, 0].value), 5);
+    EXPECT_EQ((volume[1, 1, 0].value), 6);
+    EXPECT_EQ((volume[0, 1, 1].value), 7);
+    EXPECT_EQ((volume[1, 1, 1].value), 8);
+
+    fs::remove_all(directory);
+}
 
 /**
  * Test Suite: calculateXYOffsetForNode
