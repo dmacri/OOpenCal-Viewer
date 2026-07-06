@@ -133,6 +133,9 @@ public:
         return currentViewMode;
     }
 
+    /// @brief Returns true when the loaded automaton has a real Z dimension.
+    bool isNative3DModel() const;
+
     /// @brief Get the current grid lines visibility state
     bool getGridLinesVisible() const
     {

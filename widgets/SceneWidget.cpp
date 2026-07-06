@@ -380,6 +380,42 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     {
         renderer->RemoveActor(gridLinesOnSurfaceActor);
     }
+
+    if (isNative3DModel())
+    {
+        if (flatSceneBackgroundVisible)
+        {
+            sceneWidgetVisualizerProxy->drawFlatSceneBackground(settingParameter->numberOfRowsY,
+                                                                settingParameter->numberOfColumnX,
+                                                                renderer,
+                                                                backgroundActor);
+        }
+
+        const auto colorSubstateInfos = getColorSubstateInfos();
+        sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY,
+                                                settingParameter->numberOfColumnX,
+                                                renderer,
+                                                gridActor,
+                                                colorSubstateInfos,
+                                                useCellRendering);
+
+        sceneWidgetVisualizerProxy->drawGridLinesOn3DSurface(settingParameter->numberOfRowsY,
+                                                             settingParameter->numberOfColumnX,
+                                                             lines,
+                                                             renderer,
+                                                             gridLinesOnSurfaceActor,
+                                                             {},
+                                                             0.0,
+                                                             1.0);
+
+        if (actorBuildLine)
+            actorBuildLine->SetVisibility(false);
+        if (gridLinesOnSurfaceActor)
+            gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+
+        updateCameraPivotFromBounds();
+        return;
+    }
     
     // Check if we should use 3D substate visualization
     if (settingParameter->numberOfSlicesZ <= 1 &&
@@ -467,6 +503,35 @@ std::vector<const SubstateInfo*> SceneWidget::getColorSubstateInfos()
 
 void SceneWidget::refreshVisualizationWithOptional3DSubstate()
 {
+    if (isNative3DModel())
+    {
+        if (flatSceneBackgroundVisible && backgroundActor && backgroundActor->GetMapper())
+        {
+            sceneWidgetVisualizerProxy->refreshFlatSceneBackground(settingParameter->numberOfRowsY,
+                                                                   settingParameter->numberOfColumnX,
+                                                                   backgroundActor);
+        }
+
+        const auto colorSubstateInfos = getColorSubstateInfos();
+        sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY,
+                                                      settingParameter->numberOfColumnX,
+                                                      gridActor,
+                                                      colorSubstateInfos);
+        sceneWidgetVisualizerProxy->refreshGridLinesOn3DSurface(settingParameter->numberOfRowsY,
+                                                                settingParameter->numberOfColumnX,
+                                                                lines,
+                                                                gridLinesOnSurfaceActor,
+                                                                {},
+                                                                0.0,
+                                                                1.0);
+
+        if (gridLinesOnSurfaceActor)
+            gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+
+        updateCameraPivotFromBounds();
+        return;
+    }
+
     // Check if we should use 3D substate visualization
     if (settingParameter->numberOfSlicesZ <= 1 &&
         !activeSubstateFor3D.empty() &&
@@ -1345,6 +1410,12 @@ void SceneWidget::refreshStepNumberTextColorFromSettings()
 
 void SceneWidget::setViewMode2D()
 {
+    if (isNative3DModel())
+    {
+        std::cerr << "2D view is unavailable for a native 3D model." << std::endl;
+        return;
+    }
+
     if (! interactor())
         return;
 
@@ -1458,7 +1529,7 @@ void SceneWidget::setViewMode3D()
     rulerAxisY->SetVisibility(false);
 
     // Clear any 2D background artifacts before rendering 3D scene
-    if (backgroundActor && renderer)
+    if (!isNative3DModel() && backgroundActor && renderer)
     {
         renderer->RemoveActor(backgroundActor);
         backgroundActor = vtkSmartPointer<vtkActor>::New();
@@ -1467,6 +1538,11 @@ void SceneWidget::setViewMode3D()
     std::cout << "Switched to 3D view mode" << std::endl;
     
     // Cursor restored automatically by WaitCursorGuard destructor
+}
+
+bool SceneWidget::isNative3DModel() const
+{
+    return settingParameter && settingParameter->numberOfSlicesZ > 1;
 }
 
 void SceneWidget::setAxesWidgetVisible(bool visible)

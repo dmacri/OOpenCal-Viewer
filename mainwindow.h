@@ -153,6 +153,7 @@ private:
     void recreateModelMenuActions();
     void createViewModeActionGroup();
     void updateCameraControlsVisibility();
+    void synchronizeViewModeWithLoadedModel();
 
     /// @brief Clear all active substates (2D and 3D)
     void clearActiveSubstates();

@@ -126,8 +126,31 @@ public:
 
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor);
+    /// @brief Draw a flat background plane at a selected Z coordinate.
+    void drawFlatSceneBackground(int nRows,
+                                 int nCols,
+                                 vtkSmartPointer<vtkRenderer> renderer,
+                                 vtkSmartPointer<vtkActor> backgroundActor,
+                                 double zPosition);
     /// @brief Refresh flat background plane colors.
     void refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor);
+
+    /// @brief Draw node-boundary wireframes around a native 3D volume.
+    void drawGridLinesFor3DVolume(int nRows,
+                                  int nCols,
+                                  int nSlices,
+                                  int nNodeZ,
+                                  const std::vector<Line>& lines,
+                                  vtkSmartPointer<vtkRenderer> renderer,
+                                  vtkSmartPointer<vtkActor> gridLinesActor);
+
+    /// @brief Refresh node-boundary wireframes around a native 3D volume.
+    void refreshGridLinesFor3DVolume(int nRows,
+                                     int nCols,
+                                     int nSlices,
+                                     int nNodeZ,
+                                     const std::vector<Line>& lines,
+                                     vtkSmartPointer<vtkActor> gridLinesActor);
 
     void buildLoadBalanceLine(const std::vector<Line>& lines, int nRows, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor2D> actorBuildLine);
     void refreshBuildLoadBalanceLine(const std::vector<Line> &lines, int nRows, vtkActor2D* lineActor);
@@ -187,6 +210,12 @@ private:
       * @param nRows Number of grid rows (used to invert Y coordinates)
       * @return vtkSmartPointer<vtkPolyData> with points and lines set */
     vtkSmartPointer<vtkPolyData> createLinePolyData(const std::vector<Line>& lines, int nRows);
+
+    vtkSmartPointer<vtkPolyData> create3DVolumeGridLinePolyData(int nRows,
+                                                                int nCols,
+                                                                int nSlices,
+                                                                int nNodeZ,
+                                                                const std::vector<Line>& lines);
 
     /// @brief This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
     Color flatSceneBackgroundColor() const;
@@ -386,6 +415,19 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
     if (!std::isfinite(minValue) || !std::isfinite(maxValue))
         return;
 
+    // A model may intentionally use pure black for occupied cells (Ball3D does).
+    // Pure black has no diffuse lighting response and therefore looks like a flat
+    // disk from every angle. Lift only near-black foreground colors to charcoal
+    // so the original hue remains intact while surface shading becomes visible.
+    auto makeShadeable = [](const Color& color)
+    {
+        const int brightness = color.getRed() + color.getGreen() + color.getBlue();
+        if (brightness < 48)
+            return Color(70, 82, 100);
+        return color;
+    };
+    maxColor = makeShadeable(maxColor);
+
     vtkNew<vtkImageData> image;
     image->SetDimensions(nCols, nRows, nSlices);
     image->SetOrigin(0.0, 0.0, 0.0);
@@ -422,7 +464,12 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
     property->SetColor(colors);
     property->SetScalarOpacity(opacity);
     property->SetInterpolationTypeToNearest();
-    property->ShadeOff();
+    property->ShadeOn();
+    property->SetAmbient(0.22);
+    property->SetDiffuse(0.78);
+    property->SetSpecular(0.35);
+    property->SetSpecularPower(18.0);
+    property->SetScalarOpacityUnitDistance(0.8);
 
     vtkNew<vtkSmartVolumeMapper> mapper;
     mapper->SetInputData(image);

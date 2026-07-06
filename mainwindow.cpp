@@ -956,6 +956,8 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
             updateSubstateDockeWidget();
         }
 
+        synchronizeViewModeWithLoadedModel();
+
         // Initialize reduction manager for this configuration
         // If config is provided, use it; otherwise read from file
         initializeReductionManager(configFileName, optionalConfig);
@@ -1330,6 +1332,15 @@ void MainWindow::createViewModeActionGroup()
 
 void MainWindow::on2DModeRequested()
 {
+    if (ui->sceneWidget->isNative3DModel())
+    {
+        QSignalBlocker blocker2D(ui->action2DMode);
+        QSignalBlocker blocker3D(ui->action3DMode);
+        ui->action2DMode->setChecked(false);
+        ui->action3DMode->setChecked(true);
+        return;
+    }
+
     ui->sceneWidget->setViewMode2D();
     updateCameraControlsVisibility();
 
@@ -1363,6 +1374,28 @@ void MainWindow::on3DModeRequested()
     syncFlatSceneBackgroundCheckbox();
 
     std::cout << "[DEBUG] View Mode Changed: Switched to 3D mode.\nYou can now rotate the camera using mouse or the sliders below." << std::endl;
+}
+
+void MainWindow::synchronizeViewModeWithLoadedModel()
+{
+    const bool native3D = ui->sceneWidget->isNative3DModel();
+
+    // A native 3D volume has no meaningful flat-view representation.
+    // A 2D model still keeps 3D available for "substate as altitude".
+    ui->action2DMode->setEnabled(!native3D);
+    ui->action3DMode->setEnabled(true);
+
+    if (native3D)
+    {
+        on3DModeRequested();
+        // Start from an oblique angle so a sphere/volume is visibly three-dimensional
+        // immediately, instead of presenting only its top-down circular silhouette.
+        ui->sceneWidget->setCameraAzimuth(-35.0);
+        ui->sceneWidget->setCameraElevation(25.0);
+        ui->sceneWidget->resetCameraZoom();
+    }
+    else
+        on2DModeRequested();
 }
 
 void MainWindow::onGridLinesToggled(bool checked)
@@ -1763,8 +1796,8 @@ void MainWindow::setWidgetsEnabledState(bool enabled)
     ui->actionExport_Video->setEnabled(enabled);
     ui->actionReloadData->setEnabled(enabled);
 
-    // View mode actions should always be enabled
-    ui->action2DMode->setEnabled(true);
+    // Native 3D models cannot be flattened; 2D models retain optional 3D substates.
+    ui->action2DMode->setEnabled(!ui->sceneWidget->isNative3DModel());
     ui->action3DMode->setEnabled(true);
 
     changeWhichButtonsAreEnabled();

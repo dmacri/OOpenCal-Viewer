@@ -70,6 +70,7 @@ public:
 
     void prepareStage(int nNodeX, int nNodeY, int nNodeZ = 1) override
     {
+        nodeCountZ = nNodeZ;
         modelReader.prepareStage(nNodeX, nNodeY, nNodeZ);
     }
 
@@ -149,7 +150,8 @@ public:
 
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor) override
     {
-        visualiser.drawFlatSceneBackground(nRows, nCols, renderer, backgroundActor);
+        const double zPosition = p.layerCount() > 1 ? -1.0 : 0.0;
+        visualiser.drawFlatSceneBackground(nRows, nCols, renderer, backgroundActor, zPosition);
     }
 
     void refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor) override
@@ -159,11 +161,32 @@ public:
 
     void drawGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue) override
     {
+        if (p.layerCount() > 1)
+        {
+            visualiser.drawGridLinesFor3DVolume(nRows,
+                                                nCols,
+                                                static_cast<int>(p.layerCount()),
+                                                static_cast<int>(nodeCountZ),
+                                                lines,
+                                                renderer,
+                                                gridLinesActor);
+            return;
+        }
         visualiser.drawGridLinesOn3DSurface(p, nRows, nCols, lines, renderer, gridLinesActor, substateFieldName, minValue, maxValue);
     }
 
     void refreshGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue) override
     {
+        if (p.layerCount() > 1)
+        {
+            visualiser.refreshGridLinesFor3DVolume(nRows,
+                                                   nCols,
+                                                   static_cast<int>(p.layerCount()),
+                                                   static_cast<int>(nodeCountZ),
+                                                   lines,
+                                                   gridLinesActor);
+            return;
+        }
         visualiser.refreshGridLinesOn3DSurface(p, nRows, nCols, lines, gridLinesActor, substateFieldName, minValue, maxValue);
     }
 
@@ -200,4 +223,5 @@ private:
     ContiguousGrid<Cell> p;          ///< Temporary contiguous grid storage with a default single layer until std::mdspan is available
     vtkSmartPointer<vtkVolume> nativeVolumeActor;
     vtkSmartPointer<vtkRenderer> nativeVolumeRenderer;
+    NodeIndex nodeCountZ = 1;
 };
