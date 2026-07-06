@@ -965,19 +965,22 @@ void SceneWidget::cameraCallbackFunction(vtkObject* caller, long unsigned int ev
     if (! self)
         return;
 
-    // Only emit signal in 3D mode (user finished rotating the camera)
+    // Synchronize only in 3D mode; 2D interaction has no rotation controls.
     if (self->currentViewMode == ViewMode::Mode3D && self->renderer)
     {
         vtkCamera* camera = self->renderer->GetActiveCamera();
         if (camera)
         {
             const CameraEulerAngles angles = cameraEulerFromVtk(*camera);
+            double focalPoint[3];
+            camera->GetFocalPoint(focalPoint);
 
             // Store the actual VTK orientation. The Qt side blocks slider signals
             // while displaying these values, so this cannot feed back into VTK.
             self->cameraRoll = angles.roll;
             self->cameraPitch = angles.pitch;
             self->cameraYaw = angles.yaw;
+            self->cameraPivot = { focalPoint[0], focalPoint[1], focalPoint[2] };
 
             emit self->cameraOrientationChanged(angles.roll, angles.pitch, angles.yaw);
         }
@@ -1798,6 +1801,7 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
     // Features: Ray-plane zoom (zoom towards cursor), wait cursor, Shift+Drag panning
     // Cost: ~5% overhead due to ray-plane calculations
     vtkNew<CustomInteractorStyle> style;
+    style->Set3DInteractionEnabled(currentViewMode == ViewMode::Mode3D);
     interactor()->SetInteractorStyle(style);
     connectCameraCallback();
 }
