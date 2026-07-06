@@ -47,6 +47,8 @@
 namespace
 {
 constexpr StepIndex FIRST_STEP_NUMBER = 0;
+constexpr int NATIVE_3D_DEFAULT_PITCH = 30;
+constexpr int NATIVE_3D_DEFAULT_YAW = 0;
 
 inline std::string sourceFileParentDirectoryAbsolutePath(const std::source_location& location = std::source_location::current())
 {
@@ -251,7 +253,7 @@ void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> avail
 {
     // Store the list of available steps for intelligent step navigation
     this->availableSteps = availableSteps;
-    
+
     // Update button states based on available steps
     changeWhichButtonsAreEnabled();
     
@@ -1386,14 +1388,7 @@ void MainWindow::synchronizeViewModeWithLoadedModel()
     ui->action3DMode->setEnabled(true);
 
     if (native3D)
-    {
         on3DModeRequested();
-        // Start from an oblique angle so a sphere/volume is visibly three-dimensional
-        // immediately, instead of presenting only its top-down circular silhouette.
-        ui->sceneWidget->setCameraAzimuth(-35.0);
-        ui->sceneWidget->setCameraElevation(25.0);
-        ui->sceneWidget->resetCameraZoom();
-    }
     else
         on2DModeRequested();
 }
@@ -1471,30 +1466,38 @@ void MainWindow::onYawChanged(int value)
 
 void MainWindow::onResetCameraRequested()
 {
-    // Reset all camera angles to initial state
-    ui->sceneWidget->setCameraAzimuth(0);
-    ui->sceneWidget->setCameraElevation(0);
-    ui->sceneWidget->setCameraRoll(0);
-    ui->sceneWidget->setCameraPitch(0);
-    ui->sceneWidget->setCameraYaw(0);
-    
-    // Reset zoom to default level
-    ui->sceneWidget->resetCameraZoom();
-    
-    // Reset all sliders to 0
+    const int defaultPitch = ui->sceneWidget->isNative3DModel()
+                                 ? NATIVE_3D_DEFAULT_PITCH
+                                 : 0;
+    const int defaultYaw = ui->sceneWidget->isNative3DModel()
+                               ? NATIVE_3D_DEFAULT_YAW
+                               : 0;
+
+    // Block the controls while applying one coherent camera preset.
     QSignalBlocker rollBlocker(ui->rollSlider);
     QSignalBlocker pitchBlocker(ui->pitchSlider);
     QSignalBlocker yawBlocker(ui->yawSlider);
     QSignalBlocker rollSpinBoxBlocker(ui->rollSpinBox);
     QSignalBlocker pitchSpinBoxBlocker(ui->pitchSpinBox);
     QSignalBlocker yawSpinBoxBlocker(ui->yawSpinBox);
-    
+
+    // Azimuth/elevation are not represented by GUI controls, so they must stay
+    // neutral. The native-3D oblique preset uses visible Pitch/Yaw instead.
+    ui->sceneWidget->setCameraAzimuth(0);
+    ui->sceneWidget->setCameraElevation(0);
+    ui->sceneWidget->setCameraRoll(0);
+    ui->sceneWidget->setCameraPitch(defaultPitch);
+    ui->sceneWidget->setCameraYaw(defaultYaw);
+
+    // Reset zoom to default level
+    ui->sceneWidget->resetCameraZoom();
+
     ui->rollSlider->setValue(0);
     ui->rollSpinBox->setValue(0);
-    ui->pitchSlider->setValue(0);
-    ui->pitchSpinBox->setValue(0);
-    ui->yawSlider->setValue(0);
-    ui->yawSpinBox->setValue(0);
+    ui->pitchSlider->setValue(defaultPitch);
+    ui->pitchSpinBox->setValue(defaultPitch);
+    ui->yawSlider->setValue(defaultYaw);
+    ui->yawSpinBox->setValue(defaultYaw);
 }
 
 void MainWindow::onCameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw)
