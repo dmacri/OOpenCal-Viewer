@@ -21,6 +21,7 @@
 #include <vtkRenderer.h>
 
 #include "core/types.h"
+#include "visualiserProxy/ContiguousGrid.h"
 
 // Forward declarations
 struct SettingParameter;
@@ -68,11 +69,38 @@ public:
     /// @brief Refresh the VTK windows.
     virtual void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos) = 0;
 
+    /// @brief Enable an axis-aligned 2D slice for a native 3D model.
+    virtual void setNative3DSlice(GridSliceAxis axis, int fixedIndex) = 0;
+
+    /// @brief Return from a native 3D slice to volume rendering.
+    virtual void clearNative3DSlice() = 0;
+
+    /// @brief Return true while a native 3D slice is being rendered.
+    virtual bool isNative3DSliceEnabled() const = 0;
+
+    /// @brief Axis currently held constant by the native 3D slice.
+    virtual GridSliceAxis native3DSliceAxis() const = 0;
+
+    /// @brief Index currently held constant by the native 3D slice.
+    virtual int native3DSliceIndex() const = 0;
+
     /// @brief Draw the visualization using VTK with 3D substate as quad mesh surface.
     virtual void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) = 0;
 
     /// @brief Refresh the VTK windows with 3D substate quad mesh surface.
     virtual void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) = 0;
+
+    /// @brief Draw a vertical profile through a 2D model visualized as a height field.
+    virtual void drawWithVTK3DSubstateSlice(int nRows,
+                                            int nCols,
+                                            vtkSmartPointer<vtkRenderer> renderer,
+                                            vtkSmartPointer<vtkActor> gridActor,
+                                            const std::string& substateFieldName,
+                                            double minValue,
+                                            double maxValue,
+                                            const std::vector<const SubstateInfo*>& colorSubstateInfos,
+                                            GridSliceAxis fixedAxis,
+                                            int fixedIndex) = 0;
 
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
     virtual void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor) = 0;

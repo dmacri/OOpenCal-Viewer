@@ -34,6 +34,20 @@ public:
 
     CustomInteractorStyle();
 
+    /** @brief Enable full trackball navigation.
+     *
+     * When disabled (2D mode), only the custom cursor-centered mouse-wheel
+     * zoom remains active. Rotation, pan and right-button dolly are blocked. */
+    void Set3DInteractionEnabled(bool enabled) noexcept
+    {
+        m_3dInteractionEnabled = enabled;
+    }
+
+    [[nodiscard]] bool Get3DInteractionEnabled() const noexcept
+    {
+        return m_3dInteractionEnabled;
+    }
+
     /** @brief Handle mouse wheel forward event (zoom in).
      * 
      * Zooms in towards the cursor position. */
@@ -53,6 +67,11 @@ public:
      * 
      * Stops panning when left button is released. */
     void OnLeftButtonUp() override;
+
+    void OnMiddleButtonDown() override;
+    void OnMiddleButtonUp() override;
+    void OnRightButtonDown() override;
+    void OnRightButtonUp() override;
 
     /** @brief Handle mouse move event during panning.
      * 
@@ -76,6 +95,9 @@ private:
 
     /// @brief Flag indicating if panning is active
     bool m_isPanning = false;
+
+    /// @brief False in 2D mode, where only cursor-centered wheel zoom is allowed.
+    bool m_3dInteractionEnabled = true;
 
     /// @brief Picker used to find world position under cursor
     vtkSmartPointer<vtkCellPicker> m_picker;

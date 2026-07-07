@@ -88,8 +88,11 @@ private slots: // menu actions
     void onPitchChanged(int value);
     void onYawChanged(int value);
     void onResetCameraRequested();
-    void onCameraOrientationChanged(double azimuth, double elevation, double roll, double pitch, double yaw);
+    void onCameraOrientationChanged(double roll, double pitch, double yaw);
     void syncCameraSliders();
+    void onCrossSectionControlsToggled(bool checked);
+    void onSliceViewChanged(int viewIndex);
+    void onSliceChanged(int fixedIndex);
 
     void onUse3dStateChanged(const std::string& fieldName, bool checked);
     void onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
@@ -153,6 +156,8 @@ private:
     void recreateModelMenuActions();
     void createViewModeActionGroup();
     void updateCameraControlsVisibility();
+    void updateSliceControls(bool resetSelection = false);
+    void synchronizeViewModeWithLoadedModel();
 
     /// @brief Clear all active substates (2D and 3D)
     void clearActiveSubstates();

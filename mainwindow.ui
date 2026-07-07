@@ -40,7 +40,7 @@
     <property name="spacing">
      <number>0</number>
     </property>
-    <item row="16" column="2" colspan="2">
+    <item row="17" column="2" colspan="2">
      <widget class="QWidget" name="camera3DControlsWidget" native="true">
       <property name="visible">
        <bool>false</bool>
@@ -201,6 +201,117 @@
       </layout>
      </widget>
     </item>
+    <item row="15" column="2" colspan="2">
+     <widget class="QWidget" name="sliceControlsWidget" native="true">
+      <property name="visible">
+       <bool>false</bool>
+      </property>
+      <layout class="QHBoxLayout" name="sliceControlsLayout">
+       <property name="leftMargin">
+        <number>5</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>5</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="sliceViewLabel">
+         <property name="text">
+          <string>Cross-section:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="sliceViewComboBox">
+         <property name="toolTip">
+          <string>Show the complete volume or an axis-aligned 2D cross-section</string>
+         </property>
+         <item>
+          <property name="text">
+           <string>Volume</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>XY plane (fixed Z)</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>XZ plane (fixed Y)</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>YZ plane (fixed X)</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="sliceAxisLabel">
+         <property name="text">
+          <string>Z:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSlider" name="sliceSlider">
+         <property name="toolTip">
+          <string>Index of the fixed axis</string>
+         </property>
+         <property name="minimum">
+          <number>0</number>
+         </property>
+         <property name="maximum">
+          <number>0</number>
+         </property>
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="sliceSpinBox">
+         <property name="toolTip">
+          <string>Index of the fixed axis</string>
+         </property>
+         <property name="minimum">
+          <number>0</number>
+         </property>
+         <property name="maximum">
+          <number>0</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="sliceRangeLabel">
+         <property name="text">
+          <string>/ 0</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="sliceHorizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </item>
     <item row="14" column="2">
      <widget class="QLabel" name="openConfigurationFileLabel">
       <property name="text">
@@ -211,7 +322,7 @@
       </property>
      </widget>
     </item>
-    <item row="15" column="2">
+    <item row="16" column="2">
      <layout class="QVBoxLayout" name="verticalLayout">
       <property name="leftMargin">
        <number>6</number>
@@ -249,7 +360,7 @@
       </item>
      </layout>
     </item>
-    <item row="17" column="2" colspan="2">
+    <item row="18" column="2" colspan="2">
      <layout class="QHBoxLayout" name="buttonBoxLayout">
       <property name="spacing">
        <number>8</number>
@@ -470,7 +581,7 @@
       </property>
      </widget>
     </item>
-    <item row="18" column="1" colspan="2">
+    <item row="19" column="1" colspan="2">
      <widget class="QFrame" name="frame">
       <property name="frameShape">
        <enum>QFrame::Shape::StyledPanel</enum>
@@ -693,6 +804,8 @@
     <addaction name="action2DMode"/>
     <addaction name="action3DMode"/>
     <addaction name="separator"/>
+    <addaction name="actionCrossSectionControls"/>
+    <addaction name="separator"/>
     <addaction name="actionGridLines"/>
     <addaction name="actionFlatSceneBackground"/>
    </widget>
@@ -872,6 +985,17 @@
    </property>
    <property name="toolTip">
     <string>Switch to 3D perspective view with rotation controls</string>
+   </property>
+  </action>
+  <action name="actionCrossSectionControls">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Cross-section controls</string>
+   </property>
+   <property name="toolTip">
+    <string>Show controls for axis-aligned cross-sections</string>
    </property>
   </action>
   <action name="actionShow_reduction">

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <vector>
 #include <vtkActor2D.h>
@@ -13,9 +14,13 @@
 #include <vtkCoordinate.h>
 #include <vtkDataSetMapper.h>
 #include <vtkDoubleArray.h>
+#include <vtkFloatArray.h>
 #include <vtkLookupTable.h>
 #include <vtkNamedColors.h>
+#include <vtkImageData.h>
 #include <vtkNew.h>
+#include <vtkColorTransferFunction.h>
+#include <vtkPiecewiseFunction.h>
 #include <vtkPointData.h>
 #include <vtkPoints.h>
 #include <vtkPolyData.h>
@@ -30,6 +35,9 @@
 #include <vtkPolyDataNormals.h>
 #include <vtkCellData.h>
 #include <vtkProperty.h>
+#include <vtkSmartVolumeMapper.h>
+#include <vtkVolume.h>
+#include <vtkVolumeProperty.h>
 
 #include "core/types.h"    // StepIndex
 #include "OOpenCAL/base/Cell.h" // Color
@@ -74,12 +82,38 @@ public:
     template<class Matrix>
     void refreshWindowsVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
+    /** @brief Render a native 3D cellular grid as a volume.
+     *
+     * This path is separate from the 2D "substate as altitude" surface. */
+    template<class Volume>
+    void drawWithVTK3DVolume(const Volume& p,
+                             int nRows,
+                             int nCols,
+                             int nSlices,
+                             vtkSmartPointer<vtkRenderer> renderer,
+                             vtkSmartPointer<vtkVolume> volumeActor,
+                             const std::vector<const SubstateInfo*>& colorSubstateInfos);
+
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
     void drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos);
     /// @brief Refresh 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
     void refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos);
+
+    /// @brief Draw a vertical XZ or YZ profile through a 2D height-field substate.
+    template<class Matrix>
+    void drawWithVTK3DSubstateSlice(const Matrix& p,
+                                    int nRows,
+                                    int nCols,
+                                    vtkSmartPointer<vtkRenderer> renderer,
+                                    vtkSmartPointer<vtkActor> gridActor,
+                                    const std::string& substateFieldName,
+                                    double minValue,
+                                    double maxValue,
+                                    const std::vector<const SubstateInfo*>& colorSubstateInfos,
+                                    GridSliceAxis fixedAxis,
+                                    int fixedIndex);
 
     /// @brief Draw node grid lines projected onto the 3D substate surface.
     template<class Matrix>
@@ -106,8 +140,31 @@ public:
 
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor);
+    /// @brief Draw a flat background plane at a selected Z coordinate.
+    void drawFlatSceneBackground(int nRows,
+                                 int nCols,
+                                 vtkSmartPointer<vtkRenderer> renderer,
+                                 vtkSmartPointer<vtkActor> backgroundActor,
+                                 double zPosition);
     /// @brief Refresh flat background plane colors.
     void refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor);
+
+    /// @brief Draw node-boundary wireframes around a native 3D volume.
+    void drawGridLinesFor3DVolume(int nRows,
+                                  int nCols,
+                                  int nSlices,
+                                  int nNodeZ,
+                                  const std::vector<Line>& lines,
+                                  vtkSmartPointer<vtkRenderer> renderer,
+                                  vtkSmartPointer<vtkActor> gridLinesActor);
+
+    /// @brief Refresh node-boundary wireframes around a native 3D volume.
+    void refreshGridLinesFor3DVolume(int nRows,
+                                     int nCols,
+                                     int nSlices,
+                                     int nNodeZ,
+                                     const std::vector<Line>& lines,
+                                     vtkSmartPointer<vtkActor> gridLinesActor);
 
     void buildLoadBalanceLine(const std::vector<Line>& lines, int nRows, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor2D> actorBuildLine);
     void refreshBuildLoadBalanceLine(const std::vector<Line> &lines, int nRows, vtkActor2D* lineActor);
@@ -168,9 +225,15 @@ private:
       * @return vtkSmartPointer<vtkPolyData> with points and lines set */
     vtkSmartPointer<vtkPolyData> createLinePolyData(const std::vector<Line>& lines, int nRows);
 
+    vtkSmartPointer<vtkPolyData> create3DVolumeGridLinePolyData(int nRows,
+                                                                int nCols,
+                                                                int nSlices,
+                                                                int nNodeZ,
+                                                                const std::vector<Line>& lines);
+
     /// @brief This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
     Color flatSceneBackgroundColor() const;
-    GlobalValueManager* gvm;
+    GlobalValueManager* gvm = nullptr;
 };
 
 ////////////////////////////////////////////////////////////////////
@@ -293,6 +356,143 @@ void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSma
     }
     else
         throw std::runtime_error("Invalid dynamic cast!");
+}
+
+template<class Volume>
+void Visualizer::drawWithVTK3DVolume(const Volume& p,
+                                     int nRows,
+                                     int nCols,
+                                     int nSlices,
+                                     vtkSmartPointer<vtkRenderer> renderer,
+                                     vtkSmartPointer<vtkVolume> volumeActor,
+                                     const std::vector<const SubstateInfo*>& colorSubstateInfos)
+{
+    if (!renderer || !volumeActor || nRows <= 0 || nCols <= 0 || nSlices <= 1)
+        return;
+
+    const char* fieldName = nullptr;
+    if (!colorSubstateInfos.empty() && colorSubstateInfos.front() &&
+        !colorSubstateInfos.front()->name.empty())
+    {
+        fieldName = colorSubstateInfos.front()->name.c_str();
+    }
+
+    const vtkIdType valueCount =
+        static_cast<vtkIdType>(nRows) * nCols * nSlices;
+    vtkNew<vtkFloatArray> scalars;
+    scalars->SetName("cell-value");
+    scalars->SetNumberOfValues(valueCount);
+
+    double minValue = std::numeric_limits<double>::infinity();
+    double maxValue = -std::numeric_limits<double>::infinity();
+    Color minColor(255, 255, 255);
+    Color maxColor(255, 255, 255);
+
+    for (int slice = 0; slice < nSlices; ++slice)
+    {
+        for (int row = 0; row < nRows; ++row)
+        {
+            for (int col = 0; col < nCols; ++col)
+            {
+                double value = 0.0;
+                try
+                {
+                    value = std::stod(p[row, col, slice].stringEncoding(fieldName));
+                }
+                catch (...)
+                {
+                    value = 0.0;
+                }
+
+                const Color color = p[row, col, slice].outputValue(fieldName, gvm);
+                if (value < minValue)
+                {
+                    minValue = value;
+                    minColor = color;
+                }
+                if (value > maxValue)
+                {
+                    maxValue = value;
+                    maxColor = color;
+                }
+
+                // VTK expects X to vary fastest. Invert Y just like the existing 2D renderer.
+                const vtkIdType index =
+                    (static_cast<vtkIdType>(slice) * nRows + (nRows - 1 - row)) *
+                    nCols +
+                    col;
+                scalars->SetValue(index, static_cast<float>(value));
+            }
+        }
+    }
+
+    if (!std::isfinite(minValue) || !std::isfinite(maxValue))
+        return;
+
+    // A model may intentionally use pure black for occupied cells (Ball3D does).
+    // Pure black has no diffuse lighting response and therefore looks like a flat
+    // disk from every angle. Lift only near-black foreground colors to charcoal
+    // so the original hue remains intact while surface shading becomes visible.
+    auto makeShadeable = [](const Color& color)
+    {
+        const int brightness = color.getRed() + color.getGreen() + color.getBlue();
+        if (brightness < 48)
+            return Color(70, 82, 100);
+        return color;
+    };
+    maxColor = makeShadeable(maxColor);
+
+    vtkNew<vtkImageData> image;
+    image->SetDimensions(nCols, nRows, nSlices);
+    image->SetOrigin(0.0, 0.0, 0.0);
+    image->SetSpacing(1.0, 1.0, 1.0);
+    image->GetPointData()->SetScalars(scalars);
+
+    vtkNew<vtkColorTransferFunction> colors;
+    vtkNew<vtkPiecewiseFunction> opacity;
+
+    auto addColor = [&](double value, const Color& color)
+    {
+        colors->AddRGBPoint(value,
+                            toUnitColor(color.getRed()),
+                            toUnitColor(color.getGreen()),
+                            toUnitColor(color.getBlue()));
+    };
+
+    if (minValue < maxValue)
+    {
+        addColor(minValue, minColor);
+        addColor(maxValue, maxColor);
+        opacity->AddPoint(minValue, 0.0);
+        opacity->AddPoint(maxValue, 0.9);
+    }
+    else
+    {
+        addColor(minValue - 1.0, minColor);
+        addColor(minValue, minColor);
+        opacity->AddPoint(minValue - 1.0, 0.0);
+        opacity->AddPoint(minValue, minValue == 0.0 ? 0.0 : 0.9);
+    }
+
+    vtkNew<vtkVolumeProperty> property;
+    property->SetColor(colors);
+    property->SetScalarOpacity(opacity);
+    property->SetInterpolationTypeToNearest();
+    property->ShadeOn();
+    property->SetAmbient(0.22);
+    property->SetDiffuse(0.78);
+    property->SetSpecular(0.35);
+    property->SetSpecularPower(18.0);
+    property->SetScalarOpacityUnitDistance(0.8);
+
+    vtkNew<vtkSmartVolumeMapper> mapper;
+    mapper->SetInputData(image);
+    mapper->SetBlendModeToComposite();
+    mapper->SetAutoAdjustSampleDistances(true);
+
+    volumeActor->SetMapper(mapper);
+    volumeActor->SetProperty(property);
+    renderer->AddVolume(volumeActor);
 }
 
 template<class Matrix>
@@ -850,4 +1050,91 @@ void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCo
 
     mapper->SetInputData(surfacePolyData);
     mapper->Update();
+}
+
+template<class Matrix>
+void Visualizer::drawWithVTK3DSubstateSlice(
+    const Matrix& p,
+    int nRows,
+    int nCols,
+    vtkSmartPointer<vtkRenderer> renderer,
+    vtkSmartPointer<vtkActor> gridActor,
+    const std::string& substateFieldName,
+    double minValue,
+    double maxValue,
+    const std::vector<const SubstateInfo*>& colorSubstateInfos,
+    GridSliceAxis fixedAxis,
+    int fixedIndex)
+{
+    if (!renderer || !gridActor ||
+        (fixedAxis != GridSliceAxis::X && fixedAxis != GridSliceAxis::Y) ||
+        std::isnan(minValue) || std::isnan(maxValue) || minValue >= maxValue)
+    {
+        return;
+    }
+
+    const int sampleCount = fixedAxis == GridSliceAxis::Y ? nCols : nRows;
+    const int clampedFixedIndex = fixedAxis == GridSliceAxis::Y
+        ? std::clamp(fixedIndex, 0, nRows - 1)
+        : std::clamp(fixedIndex, 0, nCols - 1);
+
+    vtkNew<vtkPoints> points;
+    vtkNew<vtkCellArray> cells;
+    vtkNew<vtkUnsignedCharArray> cellColors;
+    cellColors->SetNumberOfComponents(3);
+
+    for (int sample = 0; sample < sampleCount; ++sample)
+    {
+        const int row = fixedAxis == GridSliceAxis::Y ? clampedFixedIndex : sample;
+        const int col = fixedAxis == GridSliceAxis::Y ? sample : clampedFixedIndex;
+
+        double value = minValue;
+        try
+        {
+            value = std::stod(p[row][col].stringEncoding(substateFieldName.c_str()));
+        }
+        catch (...)
+        {
+            continue;
+        }
+
+        if (!std::isfinite(value) || value <= minValue)
+            continue;
+
+        value = std::clamp(value, minValue, maxValue);
+        const double x0 = static_cast<double>(sample);
+        const double x1 = static_cast<double>(sample + 1);
+        const vtkIdType ids[4] = {
+            points->InsertNextPoint(x0, minValue, 1.0),
+            points->InsertNextPoint(x1, minValue, 1.0),
+            points->InsertNextPoint(x1, value, 1.0),
+            points->InsertNextPoint(x0, value, 1.0)
+        };
+
+        cells->InsertNextCell(4);
+        for (const vtkIdType id : ids)
+            cells->InsertCellPoint(id);
+
+        const Color color = calculateCellColor(row, col, p, colorSubstateInfos);
+        cellColors->InsertNextTuple3(color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    vtkNew<vtkPolyData> profile;
+    profile->SetPoints(points);
+    profile->SetPolys(cells);
+    profile->GetCellData()->SetScalars(cellColors);
+
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputData(profile);
+    mapper->SetScalarModeToUseCellData();
+    mapper->ScalarVisibilityOn();
+
+    renderer->RemoveActor(gridActor);
+    gridActor->SetMapper(mapper);
+    gridActor->GetProperty()->SetInterpolationToFlat();
+    gridActor->GetProperty()->SetAmbient(1.0);
+    gridActor->GetProperty()->SetDiffuse(0.0);
+    gridActor->GetProperty()->SetSpecular(0.0);
+    gridActor->GetProperty()->EdgeVisibilityOff();
+    renderer->AddActor(gridActor);
 }

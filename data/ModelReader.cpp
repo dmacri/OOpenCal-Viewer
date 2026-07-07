@@ -3,11 +3,16 @@
 
 ColumnAndRow ReaderHelpers::getColumnAndRowFromLine(const std::string& line)
 {
-    /// input format: "C-R" for 2D or "C-R-S" for 3D where C, R, and S are numbers
-    /// For 3D models, we only extract C and R (columns and rows), ignoring slices
+    const auto dimensions = getDimensionsFromLine(line);
+    return ColumnAndRow::xy(dimensions.column, dimensions.row);
+}
+
+ColumnRowSlice ReaderHelpers::getDimensionsFromLine(const std::string& line)
+{
+    /// Input format: "C-R" for 2D or "C-R-S" for 3D.
     if (line.empty())
     {
-        throw std::invalid_argument("Line is empty, but it should contain columns and row!");
+        throw std::invalid_argument("Line is empty, but it should contain grid dimensions!");
     }
 
     const auto firstDelimiterPos = line.find('-');
@@ -16,25 +21,19 @@ ColumnAndRow ReaderHelpers::getColumnAndRowFromLine(const std::string& line)
         throw std::runtime_error("No delimiter '-' found in the line: >" + line + "<");
     }
 
-    const auto x = std::stoi(line.substr(0, firstDelimiterPos));
-    
-    // Find second delimiter to check if this is 3D format (C-R-S)
+    const auto columns = std::stoi(line.substr(0, firstDelimiterPos));
     const auto secondDelimiterPos = line.find('-', firstDelimiterPos + 1);
-    
-    int y;
+
     if (secondDelimiterPos != std::string::npos)
     {
-        // 3D format: C-R-S, extract R from between first and second delimiter
-        y = std::stoi(line.substr(firstDelimiterPos + 1, secondDelimiterPos - firstDelimiterPos - 1));
-        // Note: We ignore the slice count (S) here as it's handled separately
+        const auto rows = std::stoi(line.substr(firstDelimiterPos + 1,
+                                                secondDelimiterPos - firstDelimiterPos - 1));
+        const auto slices = std::stoi(line.substr(secondDelimiterPos + 1));
+        return ColumnRowSlice::xyz(columns, rows, slices);
     }
-    else
-    {
-        // 2D format: C-R
-        y = std::stoi(line.substr(firstDelimiterPos + 1));
-    }
-    
-    return ColumnAndRow::xy(x, y);
+
+    const auto rows = std::stoi(line.substr(firstDelimiterPos + 1));
+    return ColumnRowSlice::xyz(columns, rows, 1);
 }
 
 ColumnAndRow ReaderHelpers::calculateXYOffsetForNode(NodeIndex node,
@@ -59,4 +58,43 @@ ColumnAndRow ReaderHelpers::calculateXYOffsetForNode(NodeIndex node,
         }
     }
     return ColumnAndRow::xy(offsetX, offsetY);
+}
+
+ColumnRowSlice ReaderHelpers::calculateXYZOffsetForNode(
+    NodeIndex node,
+    NodeIndex nNodeX,
+    NodeIndex nNodeY,
+    NodeIndex nNodeZ,
+    const std::vector<ColumnRowSlice>& dimensions)
+{
+    const auto totalNodes = nNodeX * nNodeY * nNodeZ;
+    if (nNodeX == 0 || nNodeY == 0 || nNodeZ == 0 ||
+        node >= totalNodes || dimensions.size() < totalNodes)
+    {
+        throw std::invalid_argument("Invalid node grid while calculating a 3D offset");
+    }
+
+    const NodeIndex nodeX = node % nNodeX;
+    const NodeIndex nodeY = (node / nNodeX) % nNodeY;
+    const NodeIndex nodeZ = node / (nNodeX * nNodeY);
+
+    int offsetX = 0;
+    int offsetY = 0;
+    int offsetZ = 0;
+
+    auto nodeIndex = [=](NodeIndex x, NodeIndex y, NodeIndex z)
+    {
+        return z * nNodeX * nNodeY + y * nNodeX + x;
+    };
+
+    for (NodeIndex x = 0; x < nodeX; ++x)
+        offsetX += dimensions[nodeIndex(x, nodeY, nodeZ)].column;
+
+    for (NodeIndex y = 0; y < nodeY; ++y)
+        offsetY += dimensions[nodeIndex(nodeX, y, nodeZ)].row;
+
+    for (NodeIndex z = 0; z < nodeZ; ++z)
+        offsetZ += dimensions[nodeIndex(nodeX, nodeY, z)].slice;
+
+    return ColumnRowSlice::xyz(offsetX, offsetY, offsetZ);
 }

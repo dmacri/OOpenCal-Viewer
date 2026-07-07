@@ -10,6 +10,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "core/types.h"
+
 /** @class ContiguousGrid
  * @brief Stores grid data in a single contiguous std::vector.
  *
@@ -178,4 +180,102 @@ private:
     size_type rowCount_ = 0;
     size_type columnCount_ = 0;
     size_type layerCount_ = 1;
+};
+
+/** @class ContiguousGridSliceView
+ * @brief Non-owning 2D view of one axis-aligned plane in a 3D grid.
+ *
+ * The view presents the selected plane through the familiar `view[row][column]`
+ * interface used by the existing 2D renderer. XZ and YZ planes reverse their
+ * Z-backed row so Z=0 is displayed at the bottom of the 2D view. */
+template<typename T>
+class ContiguousGridSliceView
+{
+public:
+    using size_type = typename ContiguousGrid<T>::size_type;
+
+    class RowProxy
+    {
+    public:
+        [[nodiscard]] const T& operator[](size_type column) const noexcept
+        {
+            return view_->at(row_, column);
+        }
+
+    private:
+        friend class ContiguousGridSliceView;
+
+        RowProxy(const ContiguousGridSliceView* view, size_type row) noexcept
+            : view_(view)
+            , row_(row)
+        {
+        }
+
+        const ContiguousGridSliceView* view_;
+        size_type row_;
+    };
+
+    ContiguousGridSliceView(const ContiguousGrid<T>& grid,
+                            GridSliceAxis axis,
+                            size_type fixedIndex) noexcept
+        : grid_(grid)
+        , axis_(axis)
+        , fixedIndex_(fixedIndex)
+    {
+        assert(fixedIndex_ < fixedAxisSize());
+    }
+
+    [[nodiscard]] size_type rowCount() const noexcept
+    {
+        return axis_ == GridSliceAxis::Z ? grid_.rowCount() : grid_.layerCount();
+    }
+
+    [[nodiscard]] size_type columnCount() const noexcept
+    {
+        return axis_ == GridSliceAxis::X ? grid_.rowCount() : grid_.columnCount();
+    }
+
+    [[nodiscard]] RowProxy operator[](size_type row) const noexcept
+    {
+        assert(row < rowCount());
+        return RowProxy(this, row);
+    }
+
+private:
+    [[nodiscard]] size_type fixedAxisSize() const noexcept
+    {
+        switch (axis_)
+        {
+            case GridSliceAxis::X:
+                return grid_.columnCount();
+            case GridSliceAxis::Y:
+                return grid_.rowCount();
+            case GridSliceAxis::Z:
+                return grid_.layerCount();
+        }
+        return 0;
+    }
+
+    [[nodiscard]] const T& at(size_type row, size_type column) const noexcept
+    {
+        assert(row < rowCount());
+        assert(column < columnCount());
+
+        switch (axis_)
+        {
+            case GridSliceAxis::X:
+                return grid_[column, fixedIndex_, grid_.layerCount() - 1 - row];
+            case GridSliceAxis::Y:
+                return grid_[fixedIndex_, column, grid_.layerCount() - 1 - row];
+            case GridSliceAxis::Z:
+                return grid_[row, column, fixedIndex_];
+        }
+
+        assert(false);
+        return grid_[0, 0, 0];
+    }
+
+    const ContiguousGrid<T>& grid_;
+    GridSliceAxis axis_;
+    size_type fixedIndex_;
 };
