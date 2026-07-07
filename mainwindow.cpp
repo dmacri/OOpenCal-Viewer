@@ -17,6 +17,7 @@
 #include <QFileInfo>
 #include <QDateTime>
 #include <QDir>
+#include <QSizePolicy>
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
@@ -177,33 +178,55 @@ QString describeGroupCount(const FileGroup& group)
         .arg(formatByteSize(group.totalBytes));
 }
 
-QString fileListHtml(const QString& title, const FileGroup& group, int maxItems = 80)
+QString formatModifiedDate(const QFileInfo& fileInfo)
 {
-    QString html = QString("<b>%1:</b><br/>").arg(title.toHtmlEscaped());
+    return fileInfo.lastModified().toString("yyyy-MM-dd HH:mm:ss");
+}
+
+QString fileTableHtml(const QString& title, const FileGroup& group, int maxItems = 80)
+{
+    QString html =
+        QString("<p style='margin-top:10px; margin-bottom:3px;'>"
+                "<span style='font-size:10pt; font-weight:600; color:#24527a;'>%1</span><br/>"
+                "<span style='color:#666666;'>%2</span>"
+                "</p>")
+            .arg(title.toHtmlEscaped())
+            .arg(describeGroupCount(group).toHtmlEscaped());
+
     if (group.files.isEmpty())
     {
-        return html + QObject::tr("&nbsp;&nbsp;none<br/><br/>");
+        return html + QObject::tr("<span style='color:#777777;'>&nbsp;&nbsp;none</span><br/>");
     }
+
+    html += "<table cellspacing='0' cellpadding='3' border='0'>"
+            "<tr bgcolor='#eeeeee'>"
+            "<td><b>Name</b></td>"
+            "<td align='right'><b>Size</b></td>"
+            "<td><b>Modified</b></td>"
+            "</tr>";
 
     int shown = 0;
     for (const QFileInfo& fileInfo : group.files)
     {
         if (shown >= maxItems)
         {
-            html += QString("&nbsp;&nbsp;… %1<br/>")
-                        .arg(QObject::tr("%n more file(s)", nullptr, group.files.size() - shown));
+            html += QString("<tr><td colspan='3' style='color:#777777;'>… %1</td></tr>")
+                        .arg(QObject::tr("%n more file(s)", nullptr, group.files.size() - shown).toHtmlEscaped());
             break;
         }
 
-        html += QString("&nbsp;&nbsp;%1 — %2<br/>")
+        html += QString("<tr>"
+                        "<td><span style='font-family:monospace;'>%1</span></td>"
+                        "<td align='right'>%2</td>"
+                        "<td>%3</td>"
+                        "</tr>")
                     .arg(fileInfo.fileName().toHtmlEscaped())
-                    .arg(formatByteSize(fileInfo.size()));
+                    .arg(formatByteSize(fileInfo.size()).toHtmlEscaped())
+                    .arg(formatModifiedDate(fileInfo).toHtmlEscaped());
         ++shown;
     }
 
-    html += QString("<i>%1: %2</i><br/><br/>")
-                .arg(QObject::tr("Total").toHtmlEscaped())
-                .arg(formatByteSize(group.totalBytes));
+    html += "</table>";
     return html;
 }
 
@@ -313,74 +336,52 @@ SimulationDirectorySummary inspectSimulationDirectory(const QString& configFileP
     return summary;
 }
 
-QString buildSimulationDirectoryStatusHtml(const SimulationDirectorySummary& summary)
-{
-    QString html = QString("<span style='color:gray'>%1</span> <b>%2</b>")
-                       .arg(QObject::tr("Input directory:").toHtmlEscaped())
-                       .arg(summary.directoryPath.toHtmlEscaped());
-
-    html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
-                .arg(QObject::tr("prefix:").toHtmlEscaped())
-                .arg(summary.outputPrefix.isEmpty() ? QObject::tr("unknown").toHtmlEscaped() : summary.outputPrefix.toHtmlEscaped());
-
-    if (!summary.nodeDescription.isEmpty())
-    {
-        html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
-                    .arg(QObject::tr("nodes:").toHtmlEscaped())
-                    .arg(summary.nodeDescription.toHtmlEscaped());
-    }
-
-    html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
-                .arg(QObject::tr("data:").toHtmlEscaped())
-                .arg(describeGroupCount(summary.dataFiles).toHtmlEscaped());
-
-    html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
-                .arg(QObject::tr("index:").toHtmlEscaped())
-                .arg(QObject::tr("%n file(s)", nullptr, summary.indexFiles.files.size()).toHtmlEscaped());
-
-    html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
-                .arg(QObject::tr("module:").toHtmlEscaped())
-                .arg(describeGroupCount(summary.compiledModules).toHtmlEscaped());
-
-    html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
-                .arg(QObject::tr("C++:").toHtmlEscaped())
-                .arg(describeGroupCount(summary.sourceHeaders).toHtmlEscaped());
-
-    return html;
-}
-
 QString buildSimulationDirectoryTooltipHtml(const SimulationDirectorySummary& summary)
 {
-    QString html = QString("<b>%1</b><br/>%2<br/><br/>")
-                       .arg(QObject::tr("Simulation directory").toHtmlEscaped())
-                       .arg(summary.directoryPath.toHtmlEscaped());
+    const QFileInfo headerInfo(summary.headerPath);
+    QString html =
+        QString("<qt>"
+                "<div style='font-family:Sans Serif; font-size:9pt;'>"
+                "<p style='margin:0 0 6px 0;'>"
+                "<span style='font-size:12pt; font-weight:700; color:#1d3557;'>%1</span><br/>"
+                "<span style='font-family:monospace;'>%2</span>"
+                "</p>")
+            .arg(QObject::tr("Simulation directory").toHtmlEscaped())
+            .arg(summary.directoryPath.toHtmlEscaped());
 
-    html += QString("<b>%1:</b> %2 (%3)<br/>")
-                .arg(QObject::tr("Header").toHtmlEscaped())
-                .arg(QFileInfo(summary.headerPath).fileName().toHtmlEscaped())
-                .arg(formatByteSize(summary.headerBytes));
-    html += QString("<b>%1:</b> %2<br/>")
-                .arg(QObject::tr("Output prefix").toHtmlEscaped())
-                .arg(summary.outputPrefix.isEmpty() ? QObject::tr("unknown").toHtmlEscaped() : summary.outputPrefix.toHtmlEscaped());
-    html += QString("<b>%1:</b> %2<br/>")
-                .arg(QObject::tr("Grid").toHtmlEscaped())
-                .arg(summary.gridDescription.isEmpty() ? QObject::tr("unknown").toHtmlEscaped() : summary.gridDescription.toHtmlEscaped());
-    html += QString("<b>%1:</b> %2<br/>")
-                .arg(QObject::tr("Nodes").toHtmlEscaped())
-                .arg(summary.nodeDescription.isEmpty() ? QObject::tr("unknown").toHtmlEscaped() : summary.nodeDescription.toHtmlEscaped());
-    html += QString("<b>%1:</b> %2<br/>")
-                .arg(QObject::tr("Read mode").toHtmlEscaped())
-                .arg(summary.readMode.isEmpty() ? QObject::tr("default").toHtmlEscaped() : summary.readMode.toHtmlEscaped());
-    html += QString("<b>%1:</b> %2<br/><br/>")
-                .arg(QObject::tr("Substates").toHtmlEscaped())
-                .arg(summary.substates.isEmpty() ? QObject::tr("not specified").toHtmlEscaped() : summary.substates.toHtmlEscaped());
+    html += "<table cellspacing='0' cellpadding='3' border='0'>";
+    auto addSummaryRow = [&](const QString& label, const QString& value)
+    {
+        html += QString("<tr>"
+                        "<td style='color:#666666;'>%1</td>"
+                        "<td><b>%2</b></td>"
+                        "</tr>")
+                    .arg(label.toHtmlEscaped())
+                    .arg(value.toHtmlEscaped());
+    };
 
-    html += fileListHtml(QObject::tr("C++ header files"), summary.sourceHeaders);
-    html += fileListHtml(QObject::tr("Compiled modules"), summary.compiledModules);
-    html += fileListHtml(QObject::tr("Data files"), summary.dataFiles);
-    html += fileListHtml(QObject::tr("Index files"), summary.indexFiles);
-    html += fileListHtml(QObject::tr("Reduction files"), summary.reductionFiles);
+    addSummaryRow(QObject::tr("Header"),
+                  QString("%1, %2, %3")
+                      .arg(headerInfo.fileName())
+                      .arg(formatByteSize(summary.headerBytes))
+                      .arg(formatModifiedDate(headerInfo)));
+    addSummaryRow(QObject::tr("Output prefix"), summary.outputPrefix.isEmpty() ? QObject::tr("unknown") : summary.outputPrefix);
+    addSummaryRow(QObject::tr("Grid"), summary.gridDescription.isEmpty() ? QObject::tr("unknown") : summary.gridDescription);
+    addSummaryRow(QObject::tr("Nodes"), summary.nodeDescription.isEmpty() ? QObject::tr("unknown") : summary.nodeDescription);
+    addSummaryRow(QObject::tr("Read mode"), summary.readMode.isEmpty() ? QObject::tr("default") : summary.readMode);
+    addSummaryRow(QObject::tr("Substates"), summary.substates.isEmpty() ? QObject::tr("not specified") : summary.substates);
+    addSummaryRow(QObject::tr("Data files"), describeGroupCount(summary.dataFiles));
+    addSummaryRow(QObject::tr("Index files"), describeGroupCount(summary.indexFiles));
+    addSummaryRow(QObject::tr("Reduction files"), describeGroupCount(summary.reductionFiles));
+    html += "</table>";
 
+    html += fileTableHtml(QObject::tr("C++ model header files"), summary.sourceHeaders);
+    html += fileTableHtml(QObject::tr("Compiled model modules (.so, .dll, .dylib)"), summary.compiledModules);
+    html += fileTableHtml(QObject::tr("Simulation data files"), summary.dataFiles, 40);
+    html += fileTableHtml(QObject::tr("Index files"), summary.indexFiles, 40);
+    html += fileTableHtml(QObject::tr("Reduction files"), summary.reductionFiles, 20);
+
+    html += "</div></qt>";
     return html;
 }
 
@@ -412,6 +413,11 @@ MainWindow::MainWindow(QWidget* parent)
 {
     ui->setupUi(this);
     setWindowTitle(QApplication::applicationName());
+    ui->inputFilePathLabel->setMinimumWidth(160);
+    ui->inputFilePathLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    ui->reductionWidget->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+    ui->horizontalLayout->setStretchFactor(ui->inputFilePathLabel, 1);
+    ui->horizontalLayout->setStretchFactor(ui->reductionWidget, 0);
 
     // Initialize substate dock widget from UI
     ui->substatesDockWidget->initializeFromUI();
@@ -508,7 +514,7 @@ void MainWindow::showInputDirectoryOnBarLabel(const QString& configFilePath)
     }
 
     const auto summary = inspectSimulationDirectory(configFilePath);
-    ui->inputFilePathLabel->setText(buildSimulationDirectoryStatusHtml(summary));
+    ui->inputFilePathLabel->setDisplayDirectoryPath(summary.directoryPath);
     ui->inputFilePathLabel->setToolTip(buildSimulationDirectoryTooltipHtml(summary));
 }
 
@@ -645,7 +651,8 @@ void MainWindow::showConfigDetailsDialog()
         return;
     }
 
-    ConfigDetailsDialog dialog(configFileName.toStdString(), this);
+    const auto summary = inspectSimulationDirectory(configFileName);
+    ConfigDetailsDialog dialog(configFileName.toStdString(), buildSimulationDirectoryTooltipHtml(summary), this);
     dialog.exec();
 }
 

@@ -4,24 +4,33 @@
 #include <QFont>
 #include <QHeaderView>
 #include <QLabel>
+#include <QFileInfo>
+#include <QDir>
 #include <QPushButton>
 #include <QScreen>
+#include <QTabWidget>
 #include <QTableWidget>
+#include <QTextBrowser>
 #include <QVBoxLayout>
+#include <algorithm>
 
 #include "config/Config.h"
 
 
-ConfigDetailsDialog::ConfigDetailsDialog(const std::string& configFilePath, QWidget* parent)
+ConfigDetailsDialog::ConfigDetailsDialog(const std::string& configFilePath, const QString& simulationDetailsHtml, QWidget* parent)
     : QDialog(parent)
     , tableWidget(new QTableWidget(this))
     , mainLayout(new QVBoxLayout(this))
     , filePathLabel(new QLabel(this))
+    , detailsBrowser(new QTextBrowser(this))
+    , tabWidget(new QTabWidget(this))
 {
     setupUI();
+    loadSimulationDetails(simulationDetailsHtml);
     loadConfigData(configFilePath);
 
-    filePathLabel->setText(QString::fromStdString(configFilePath));
+    const QFileInfo headerInfo(QString::fromStdString(configFilePath));
+    filePathLabel->setText(tr("Loaded simulation: %1").arg(headerInfo.dir().absolutePath()));
 
     adjustSizeToContent();
 }
@@ -30,8 +39,8 @@ ConfigDetailsDialog::~ConfigDetailsDialog() = default;
 
 void ConfigDetailsDialog::setupUI()
 {
-    setWindowTitle(tr("Configuration Details"));
-    setMinimumSize(600, 600);
+    setWindowTitle(tr("Simulation Details"));
+    setMinimumSize(760, 620);
 
     // Setup file path label
     QFont pathFont;
@@ -41,7 +50,11 @@ void ConfigDetailsDialog::setupUI()
     filePathLabel->setStyleSheet("QLabel { padding: 5px; background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 3px; }");
     mainLayout->addWidget(filePathLabel);
 
-    // Setup table
+    // Setup directory details browser
+    detailsBrowser->setOpenExternalLinks(false);
+    detailsBrowser->setReadOnly(true);
+
+    // Setup Header.txt table
     tableWidget->setColumnCount(2);
     tableWidget->setHorizontalHeaderLabels({ tr("Parameter"), tr("Value") });
     tableWidget->horizontalHeader()->setStretchLastSection(true);
@@ -50,8 +63,9 @@ void ConfigDetailsDialog::setupUI()
     tableWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
     tableWidget->setAlternatingRowColors(true);
 
-    // Add table to layout
-    mainLayout->addWidget(tableWidget);
+    tabWidget->addTab(detailsBrowser, tr("Directory contents"));
+    tabWidget->addTab(tableWidget, tr("Header parameters"));
+    mainLayout->addWidget(tabWidget);
 
     // Add close button
     QPushButton* closeButton = new QPushButton(tr("Close"), this);
@@ -59,6 +73,17 @@ void ConfigDetailsDialog::setupUI()
     mainLayout->addWidget(closeButton);
 
     setLayout(mainLayout);
+}
+
+void ConfigDetailsDialog::loadSimulationDetails(const QString& simulationDetailsHtml)
+{
+    if (simulationDetailsHtml.isEmpty())
+    {
+        detailsBrowser->setHtml(tr("<p>No directory details available.</p>"));
+        return;
+    }
+
+    detailsBrowser->setHtml(simulationDetailsHtml);
 }
 
 void ConfigDetailsDialog::loadConfigData(const std::string& configFilePath)
@@ -148,6 +173,10 @@ void ConfigDetailsDialog::adjustSizeToContent()
     // Add height for file path label
     totalHeight += filePathLabel->sizeHint().height();
 
+    // Add height for tab headers and the directory details preview area
+    totalHeight += 40;
+    totalHeight = std::max(totalHeight, 620);
+
     // Add height for close button (approximate)
     totalHeight += 50;
 
@@ -165,6 +194,6 @@ void ConfigDetailsDialog::adjustSizeToContent()
     // Set height, but don't exceed screen height
     int finalHeight = qMin(totalHeight, maxHeight);
 
-    // Keep minimum width at 600
-    resize(600, finalHeight);
+    // Keep a readable width for the file tables.
+    resize(860, finalHeight);
 }

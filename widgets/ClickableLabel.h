@@ -7,6 +7,7 @@
 #include <QLabel>
 
 class QMouseEvent;
+class QResizeEvent;
 
 /** @class ClickableLabel
  * @brief A QLabel that emits a signal when double-clicked.
@@ -23,6 +24,12 @@ public:
     /// @brief Sets the loaded Header.txt path associated with this label.
     void setFileName(QString fileName);
 
+    /// @brief Sets the simulation directory path displayed in the label.
+    void setDisplayDirectoryPath(QString directoryPath);
+
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
+
     /// @brief Returns the loaded Header.txt path associated with this label.
     const QString& getFileName() const
     {
@@ -36,7 +43,12 @@ signals:
 protected:
     /// @brief Handles mouse double-click events.
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
+    void updateDisplayedDirectoryPath();
+
     QString fileName;
+    QString displayDirectoryPath;
+    bool autoDisplayDirectoryPath = false;
 };

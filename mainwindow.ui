@@ -593,7 +593,7 @@
        <item>
         <widget class="ClickableLabel" name="inputFilePathLabel">
          <property name="sizePolicy">
-          <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
@@ -850,7 +850,7 @@
     <iconset theme="QIcon::ThemeIcon::DocumentProperties"/>
    </property>
    <property name="text">
-    <string>Show Header.txt details</string>
+    <string>Show Simulation Details...</string>
    </property>
   </action>
   <action name="actionExport_Video">
