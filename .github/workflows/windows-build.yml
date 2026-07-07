@@ -9,13 +9,13 @@ on:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { build_type: "Release", generator: "Visual Studio 17 2022" }
+          - { build_type: "Release", generator: "Ninja Multi-Config" }
 
     steps:
     - name: Checkout repository
@@ -34,6 +34,11 @@ jobs:
       with:
         cmakeVersion: "~3.27"
         ninjaVersion: "^1.11"
+
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
 
     - name: Cache vcpkg and packages
       uses: actions/cache@v4
@@ -84,15 +89,12 @@ jobs:
         Write-Host "Project root: $project_root"
         Write-Host "OOpenCAL parent (OOPENCAL_DIR): $oopencal_dir"
         
-        mkdir -p build
-        cd build
-        
-        cmake -G "${{ matrix.generator }}" `
+        cmake -S . -B build -G "${{ matrix.generator }}" `
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+          -DCMAKE_CONFIGURATION_TYPES=${{ matrix.build_type }} `
           -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" `
           -DOOPENCAL_DIR="$oopencal_dir" `
-          -DUSE_QT6=ON `
-          ..
+          -DUSE_QT6=ON
 
     - name: Build project
       shell: pwsh
