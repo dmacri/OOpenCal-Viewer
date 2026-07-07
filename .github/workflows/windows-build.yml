@@ -46,8 +46,9 @@ jobs:
         path: |
           ${{ runner.temp }}/vcpkg
           C:\vcpkg
-        key: vcpkg-vtk-${{ runner.os }}-x64-windows-v2
+        key: vcpkg-vtk-qttools-${{ runner.os }}-x64-windows-v3
         restore-keys: |
+          vcpkg-vtk-qttools-${{ runner.os }}-x64-windows-
           vcpkg-vtk-${{ runner.os }}-x64-windows-
 
     - name: Setup vcpkg
@@ -71,9 +72,10 @@ jobs:
           Write-Host "vcpkg already bootstrapped"
         }
         
-        # Install VTK with Qt and OpenGL support
-        Write-Host "Installing/updating VTK with Qt and OpenGL support..."
-        & "$vcpkg_exe" install vtk[qt,opengl]:x64-windows --recurse
+        # Install VTK with Qt and OpenGL support. qttools provides windeployqt.exe
+        # which is needed in the packaging step.
+        Write-Host "Installing/updating VTK with Qt/OpenGL support and Qt deployment tools..."
+        & "$vcpkg_exe" install vtk[qt,opengl]:x64-windows qttools:x64-windows --recurse
         
         # Make vcpkg root available for next steps
         Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$vcpkg_root"
@@ -106,6 +108,7 @@ jobs:
       shell: pwsh
       run: |
         $vcpkg_root = "${{ runner.temp }}/vcpkg"
+        $vcpkg_exe = Join-Path $vcpkg_root "vcpkg.exe"
         $build_type = "${{ matrix.build_type }}"
         $exe_path = "build/$build_type/OOpenCal-Viewer.exe"
         $package_dir = "build/package/$build_type"
@@ -113,8 +116,20 @@ jobs:
         New-Item -ItemType Directory -Force -Path $package_dir | Out-Null
         Copy-Item $exe_path $package_dir -Force
         
-        $windeployqt = Get-ChildItem -Path "$vcpkg_root/installed/x64-windows" -Recurse -Filter windeployqt.exe | Select-Object -First 1
-        if (-not $windeployqt) { throw "windeployqt.exe not found under vcpkg." }
+        $installedRoot = Join-Path $vcpkg_root "installed/x64-windows"
+        $installedBin = Join-Path $installedRoot "bin"
+        $env:PATH = "$installedBin;$env:PATH"
+
+        $windeployqt = Get-ChildItem -Path $installedRoot -Recurse -Filter windeployqt.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $windeployqt) {
+          Write-Host "windeployqt.exe was not found under $installedRoot."
+          Write-Host "Installed Qt-related vcpkg packages:"
+          & "$vcpkg_exe" list | Select-String -Pattern "^(qt|vtk)" | ForEach-Object { Write-Host $_ }
+          Write-Host "Qt tool directories, if any:"
+          Get-ChildItem -Path $installedRoot -Directory -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "tools.*Qt|qt" } | Select-Object -First 50 | ForEach-Object { Write-Host $_.FullName }
+          throw "windeployqt.exe not found under vcpkg. The qttools:x64-windows package is required for packaging."
+        }
+        Write-Host "Using windeployqt: $($windeployqt.FullName)"
         
         $deployArgs = @("--no-translations")
         if ($build_type -eq "Debug") { $deployArgs += "--debug" } else { $deployArgs += "--release" }
