@@ -1,6 +1,6 @@
 /** @file ClickableLabel.h
  * @brief Declaration of the ClickableLabel class widget (used in GUI), a QLabel with double click handling.
- * The class should contain path to config file. */
+ * The class stores the path to the loaded Header.txt while displaying the selected simulation directory. */
 
 #pragma once
 
@@ -11,7 +11,7 @@ class QMouseEvent;
 /** @class ClickableLabel
  * @brief A QLabel that emits a signal when double-clicked.
  * 
- * This class extends QLabel to provide double-click functionality and file name association. */
+ * This class extends QLabel to provide double-click functionality and loaded path association. */
 class ClickableLabel : public QLabel
 {
     Q_OBJECT
@@ -20,10 +20,10 @@ public:
     /// @brief Constructs a ClickableLabel with the given parent.
     explicit ClickableLabel(QWidget* parent = nullptr);
 
-    /// @brief Sets the file name associated with this label. The filename is shown on the widged.
+    /// @brief Sets the loaded Header.txt path associated with this label.
     void setFileName(QString fileName);
 
-    /// @brief Returns the file name associated with this label.
+    /// @brief Returns the loaded Header.txt path associated with this label.
     const QString& getFileName() const
     {
         return fileName;

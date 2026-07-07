@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Load Model from Directory</string>
+   <string>Open Model Directory</string>
   </property>
   <property name="modal">
    <bool>true</bool>

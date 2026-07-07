@@ -115,6 +115,275 @@ QString getOOpenCalStartPath()
     return dir.absolutePath();
 }
 
+struct FileGroup
+{
+    QFileInfoList files;
+    qint64 totalBytes = 0;
+};
+
+struct SimulationDirectorySummary
+{
+    QString directoryPath;
+    QString headerPath;
+    qint64 headerBytes = 0;
+    QString outputPrefix;
+    QString gridDescription;
+    QString nodeDescription;
+    QString readMode;
+    QString substates;
+    FileGroup dataFiles;
+    FileGroup indexFiles;
+    FileGroup reductionFiles;
+    FileGroup sourceHeaders;
+    FileGroup compiledModules;
+};
+
+QString formatByteSize(qint64 bytes)
+{
+    static constexpr double KIB = 1024.0;
+    static constexpr double MIB = KIB * 1024.0;
+    static constexpr double GIB = MIB * 1024.0;
+
+    if (bytes < 1024)
+    {
+        return QString("%1 B").arg(bytes);
+    }
+    if (bytes < static_cast<qint64>(MIB))
+    {
+        return QString("%1 KiB").arg(QString::number(bytes / KIB, 'f', 1));
+    }
+    if (bytes < static_cast<qint64>(GIB))
+    {
+        return QString("%1 MiB").arg(QString::number(bytes / MIB, 'f', 1));
+    }
+    return QString("%1 GiB").arg(QString::number(bytes / GIB, 'f', 2));
+}
+
+void addFileToGroup(FileGroup& group, const QFileInfo& fileInfo)
+{
+    group.files.append(fileInfo);
+    group.totalBytes += fileInfo.size();
+}
+
+QString describeGroupCount(const FileGroup& group)
+{
+    if (group.files.isEmpty())
+    {
+        return QStringLiteral("none");
+    }
+
+    return QString("%1, %2")
+        .arg(QObject::tr("%n file(s)", nullptr, group.files.size()))
+        .arg(formatByteSize(group.totalBytes));
+}
+
+QString fileListHtml(const QString& title, const FileGroup& group, int maxItems = 80)
+{
+    QString html = QString("<b>%1:</b><br/>").arg(title.toHtmlEscaped());
+    if (group.files.isEmpty())
+    {
+        return html + QObject::tr("&nbsp;&nbsp;none<br/><br/>");
+    }
+
+    int shown = 0;
+    for (const QFileInfo& fileInfo : group.files)
+    {
+        if (shown >= maxItems)
+        {
+            html += QString("&nbsp;&nbsp;… %1<br/>")
+                        .arg(QObject::tr("%n more file(s)", nullptr, group.files.size() - shown));
+            break;
+        }
+
+        html += QString("&nbsp;&nbsp;%1 — %2<br/>")
+                    .arg(fileInfo.fileName().toHtmlEscaped())
+                    .arg(formatByteSize(fileInfo.size()));
+        ++shown;
+    }
+
+    html += QString("<i>%1: %2</i><br/><br/>")
+                .arg(QObject::tr("Total").toHtmlEscaped())
+                .arg(formatByteSize(group.totalBytes));
+    return html;
+}
+
+SimulationDirectorySummary inspectSimulationDirectory(const QString& configFilePath)
+{
+    SimulationDirectorySummary summary;
+
+    const QFileInfo headerInfo(configFilePath);
+    summary.headerPath = headerInfo.absoluteFilePath();
+    summary.directoryPath = headerInfo.dir().absolutePath();
+    summary.headerBytes = headerInfo.exists() ? headerInfo.size() : 0;
+
+    try
+    {
+        Config config(summary.headerPath.toStdString(), /*printWarnings=*/false);
+        if (ConfigCategory* general = config.getConfigCategory(ConfigConstants::CATEGORY_GENERAL, /*ignoreCase=*/true))
+        {
+            if (const ConfigParameter* output = general->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME))
+            {
+                summary.outputPrefix = QString::fromStdString(output->getValue<std::string>());
+            }
+
+            const auto readInt = [&](const std::string& parameterName, int fallback = 1)
+            {
+                if (const ConfigParameter* parameter = general->getConfigParameter(parameterName))
+                {
+                    return parameter->getValue<int>();
+                }
+                return fallback;
+            };
+
+            const int columns = readInt(ConfigConstants::PARAM_NUMBER_OF_COLUMNS);
+            const int rows = readInt(ConfigConstants::PARAM_NUMBER_OF_ROWS);
+            const int slices = readInt(ConfigConstants::PARAM_NUMBER_OF_SLICES);
+            summary.gridDescription = QString("%1×%2×%3").arg(columns).arg(rows).arg(slices);
+        }
+
+        if (ConfigCategory* distributed = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED, /*ignoreCase=*/true))
+        {
+            const auto readInt = [&](const std::string& parameterName, int fallback = 1)
+            {
+                if (const ConfigParameter* parameter = distributed->getConfigParameter(parameterName))
+                {
+                    return parameter->getValue<int>();
+                }
+                return fallback;
+            };
+
+            const int nodeX = readInt(ConfigConstants::PARAM_NUMBER_NODE_X);
+            const int nodeY = readInt(ConfigConstants::PARAM_NUMBER_NODE_Y);
+            const int nodeZ = readInt(ConfigConstants::PARAM_NUMBER_NODE_Z);
+            summary.nodeDescription = QString("%1×%2×%3").arg(nodeX).arg(nodeY).arg(nodeZ);
+        }
+
+        if (ConfigCategory* visualization = config.getConfigCategory(ConfigConstants::CATEGORY_VISUALIZATION, /*ignoreCase=*/true))
+        {
+            if (const ConfigParameter* mode = visualization->getConfigParameter(ConfigConstants::PARAM_MODE))
+            {
+                summary.readMode = QString::fromStdString(mode->getValue<std::string>());
+            }
+            if (const ConfigParameter* substates = visualization->getConfigParameter(ConfigConstants::PARAM_SUBSTATES))
+            {
+                summary.substates = QString::fromStdString(substates->getDefaultValue());
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Could not inspect simulation Header.txt: " << e.what() << std::endl;
+    }
+
+    QDir directory(summary.directoryPath);
+    const QFileInfoList files = directory.entryInfoList(QDir::Files | QDir::NoSymLinks, QDir::Name | QDir::IgnoreCase);
+
+    for (const QFileInfo& fileInfo : files)
+    {
+        const QString fileName = fileInfo.fileName();
+        const QString lowerName = fileName.toLower();
+        const bool startsWithOutputPrefix = !summary.outputPrefix.isEmpty() && fileName.startsWith(summary.outputPrefix);
+
+        if (lowerName == QString::fromLatin1(DirectoryConstants::HEADER_FILE_NAME).toLower())
+        {
+            continue;
+        }
+        if (lowerName.endsWith(".h") || lowerName.endsWith(".hpp"))
+        {
+            addFileToGroup(summary.sourceHeaders, fileInfo);
+        }
+        else if (lowerName.endsWith(".so") || lowerName.endsWith(".dll") || lowerName.endsWith(".dylib"))
+        {
+            addFileToGroup(summary.compiledModules, fileInfo);
+        }
+        else if (startsWithOutputPrefix && lowerName.endsWith("_index.txt"))
+        {
+            addFileToGroup(summary.indexFiles, fileInfo);
+        }
+        else if (startsWithOutputPrefix && lowerName.endsWith("-red.txt"))
+        {
+            addFileToGroup(summary.reductionFiles, fileInfo);
+        }
+        else if (startsWithOutputPrefix && (lowerName.endsWith(".bin") || lowerName.endsWith(".txt")))
+        {
+            addFileToGroup(summary.dataFiles, fileInfo);
+        }
+    }
+
+    return summary;
+}
+
+QString buildSimulationDirectoryStatusHtml(const SimulationDirectorySummary& summary)
+{
+    QString html = QString("<span style='color:gray'>%1</span> <b>%2</b>")
+                       .arg(QObject::tr("Input directory:").toHtmlEscaped())
+                       .arg(summary.directoryPath.toHtmlEscaped());
+
+    html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
+                .arg(QObject::tr("prefix:").toHtmlEscaped())
+                .arg(summary.outputPrefix.isEmpty() ? QObject::tr("unknown").toHtmlEscaped() : summary.outputPrefix.toHtmlEscaped());
+
+    if (!summary.nodeDescription.isEmpty())
+    {
+        html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
+                    .arg(QObject::tr("nodes:").toHtmlEscaped())
+                    .arg(summary.nodeDescription.toHtmlEscaped());
+    }
+
+    html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
+                .arg(QObject::tr("data:").toHtmlEscaped())
+                .arg(describeGroupCount(summary.dataFiles).toHtmlEscaped());
+
+    html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
+                .arg(QObject::tr("index:").toHtmlEscaped())
+                .arg(QObject::tr("%n file(s)", nullptr, summary.indexFiles.files.size()).toHtmlEscaped());
+
+    html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
+                .arg(QObject::tr("module:").toHtmlEscaped())
+                .arg(describeGroupCount(summary.compiledModules).toHtmlEscaped());
+
+    html += QString(" <span style='color:gray'>| %1</span> <b>%2</b>")
+                .arg(QObject::tr("C++:").toHtmlEscaped())
+                .arg(describeGroupCount(summary.sourceHeaders).toHtmlEscaped());
+
+    return html;
+}
+
+QString buildSimulationDirectoryTooltipHtml(const SimulationDirectorySummary& summary)
+{
+    QString html = QString("<b>%1</b><br/>%2<br/><br/>")
+                       .arg(QObject::tr("Simulation directory").toHtmlEscaped())
+                       .arg(summary.directoryPath.toHtmlEscaped());
+
+    html += QString("<b>%1:</b> %2 (%3)<br/>")
+                .arg(QObject::tr("Header").toHtmlEscaped())
+                .arg(QFileInfo(summary.headerPath).fileName().toHtmlEscaped())
+                .arg(formatByteSize(summary.headerBytes));
+    html += QString("<b>%1:</b> %2<br/>")
+                .arg(QObject::tr("Output prefix").toHtmlEscaped())
+                .arg(summary.outputPrefix.isEmpty() ? QObject::tr("unknown").toHtmlEscaped() : summary.outputPrefix.toHtmlEscaped());
+    html += QString("<b>%1:</b> %2<br/>")
+                .arg(QObject::tr("Grid").toHtmlEscaped())
+                .arg(summary.gridDescription.isEmpty() ? QObject::tr("unknown").toHtmlEscaped() : summary.gridDescription.toHtmlEscaped());
+    html += QString("<b>%1:</b> %2<br/>")
+                .arg(QObject::tr("Nodes").toHtmlEscaped())
+                .arg(summary.nodeDescription.isEmpty() ? QObject::tr("unknown").toHtmlEscaped() : summary.nodeDescription.toHtmlEscaped());
+    html += QString("<b>%1:</b> %2<br/>")
+                .arg(QObject::tr("Read mode").toHtmlEscaped())
+                .arg(summary.readMode.isEmpty() ? QObject::tr("default").toHtmlEscaped() : summary.readMode.toHtmlEscaped());
+    html += QString("<b>%1:</b> %2<br/><br/>")
+                .arg(QObject::tr("Substates").toHtmlEscaped())
+                .arg(summary.substates.isEmpty() ? QObject::tr("not specified").toHtmlEscaped() : summary.substates.toHtmlEscaped());
+
+    html += fileListHtml(QObject::tr("C++ header files"), summary.sourceHeaders);
+    html += fileListHtml(QObject::tr("Compiled modules"), summary.compiledModules);
+    html += fileListHtml(QObject::tr("Data files"), summary.dataFiles);
+    html += fileListHtml(QObject::tr("Index files"), summary.indexFiles);
+    html += fileListHtml(QObject::tr("Reduction files"), summary.reductionFiles);
+
+    return html;
+}
+
 void updateMenu2ShowTheSelectedModeAsActive(const QString& modelName, QActionGroup *modelActionGroup)
 {
     if (modelActionGroup)
@@ -146,14 +415,13 @@ MainWindow::MainWindow(QWidget* parent)
 
     // Initialize substate dock widget from UI
     ui->substatesDockWidget->initializeFromUI();
-    ui->substatesDockWidget->hide();  // Hidden by default until configuration is loaded
+    ui->substatesDockWidget->hide();  // Hidden by default until simulation data is loaded
 
     setupConnections();
     configureButtons();
     loadStrings();
     recreateModelMenuActions();
     createViewModeActionGroup();
-    updateRecentFilesMenu();
     updateRecentDirectoriesMenu();
 
     enterNoConfigurationFileMode();
@@ -162,7 +430,7 @@ MainWindow::MainWindow(QWidget* parent)
 void MainWindow::configureUIElements(const QString& configFileName)
 {
     initializeSceneWidget(configFileName);
-    showInputFilePathOnBarLabel(configFileName);
+    showInputDirectoryOnBarLabel(configFileName);
 
     setWidgetsEnabledState(true);
     changeWhichButtonsAreEnabled();
@@ -190,7 +458,6 @@ void MainWindow::connectMenuActions()
     connect(ui->actionAbout, &QAction::triggered, this, &MainWindow::showAboutThisApplicationDialog);
     connect(ui->actionShow_config_details, &QAction::triggered, this, &MainWindow::showConfigDetailsDialog);
     connect(ui->actionExport_Video, &QAction::triggered, this, &MainWindow::exportVideoDialog);
-    connect(ui->actionOpenConfiguration, &QAction::triggered, this, &MainWindow::onOpenConfigurationRequested);
     connect(ui->actionReloadData, &QAction::triggered, this, &MainWindow::onReloadDataRequested);
     connect(ui->actionLoadPlugin, &QAction::triggered, this, &MainWindow::onLoadPluginRequested);
     connect(ui->actionLoadModelFromDirectory, &QAction::triggered, this, &MainWindow::onLoadModelFromDirectoryRequested);
@@ -230,9 +497,19 @@ void MainWindow::configureButton(QPushButton* button, QStyle::StandardPixmap ico
 }
 
 
-void MainWindow::showInputFilePathOnBarLabel(const QString& inputFilePath)
+void MainWindow::showInputDirectoryOnBarLabel(const QString& configFilePath)
 {
-    ui->inputFilePathLabel->setFileName(inputFilePath);
+    ui->inputFilePathLabel->setFileName(configFilePath);
+    ui->inputFilePathLabel->setToolTip(QString());
+
+    if (configFilePath.isEmpty())
+    {
+        return;
+    }
+
+    const auto summary = inspectSimulationDirectory(configFilePath);
+    ui->inputFilePathLabel->setText(buildSimulationDirectoryStatusHtml(summary));
+    ui->inputFilePathLabel->setToolTip(buildSimulationDirectoryTooltipHtml(summary));
 }
 
 void MainWindow::initializeSceneWidget(const QString& configFileName)
@@ -263,7 +540,7 @@ void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> avail
     const auto lastStepAvailableInAvailableSteps = std::ranges::contains(availableSteps, totalSteps());
     if (! lastStepAvailableInAvailableSteps)
     {
-        std::cerr << tr("[Warning] Number of steps mismatch: total number of steps from config file is %1, but last step number from index file is %2")
+        std::cerr << tr("[Warning] Number of steps mismatch: total number of steps from Header.txt is %1, but last step number from index file is %2")
                          .arg(totalSteps())
                          .arg(availableSteps.back()).toStdString() << std::endl;
     }
@@ -363,8 +640,8 @@ void MainWindow::showConfigDetailsDialog()
     const auto configFileName = ui->inputFilePathLabel->getFileName();
     if (configFileName.isEmpty())
     {
-        QMessageBox::warning(this, tr("No Configuration"),
-                           tr("No configuration file has been loaded."));
+        QMessageBox::warning(this, tr("No Simulation Directory"),
+                           tr("No simulation directory has been loaded."));
         return;
     }
 
@@ -856,8 +1133,8 @@ void MainWindow::switchToModel(const QString& modelName)
 
         std::cout << "[DEBUG] Model Changed: " <<
             tr("Successfully switched to %1 model, but no data was reloaded from files.\n"
-               "Use 'Reload Data' (F5), or open another configuration file to load data files.\n"
-               "Notice: Model has to be compatible with configuration file, if not - the behaviour is undefined")
+               "Use 'Reload Data' (F5), or open another simulation directory to load data files.\n"
+               "Notice: Model has to be compatible with the loaded directory, if not - the behaviour is undefined")
                 .arg(modelName).toStdString() << std::endl;
 
     }
@@ -916,35 +1193,6 @@ void MainWindow::onReloadDataRequested()
     }
 }
 
-void MainWindow::onOpenConfigurationRequested()
-{
-    if (SceneWidgetVisualizerFactory::getAvailableModels().empty())
-    {
-        QMessageBox::information(this,
-                                 tr("No Models Loaded"),
-                                 tr("No models are currently loaded.\n\n"
-                                    "Load a model first using:\n"
-                                    "• Model → Load Plugin...\n"
-                                    "• File → Load Model from Directory..."));
-        return;
-    }
-
-    // Open file dialog to select configuration file
-    QString configFileName = QFileDialog::getOpenFileName(
-        this,
-        tr("Open Configuration File"),
-        getOOpenCalStartPath(),
-        tr("Configuration Files (*.txt *.ini);;All Files (*)")
-    );
-    
-    if (configFileName.isEmpty())
-    {
-        return; // User cancelled
-    }
-
-    openConfigurationFile(configFileName);
-}
-
 void MainWindow::openConfigurationFile(const QString& configFileName, std::shared_ptr<Config> optionalConfig)
 {
     try
@@ -956,14 +1204,14 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
                                      tr("No models are currently loaded.\n\n"
                                         "Load a model first using:\n"
                                         "• Model → Load Plugin...\n"
-                                        "• File → Load Model from Directory..."));
+                                    "• File → Open Model Directory..."));
             return;
         }
 
         // Stop any ongoing playback
         playbackTimer.stop();
 
-        // Clear active substates when opening new configuration
+        // Clear active substates when opening a new simulation directory
         clearActiveSubstates();
 
         if (bool isFirstConfiguration [[maybe_unused]] = ui->inputFilePathLabel->getFileName().isEmpty())
@@ -972,16 +1220,16 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         }
         else
         {
-            // Reload with new configuration
+            // Reload with the new Header.txt
             ui->sceneWidget->loadNewConfiguration(configFileName.toStdString(), 0);
 
-            // Update substate dock widget for new configuration
+            // Update substate dock widget for the new simulation data
             updateSubstateDockeWidget();
         }
 
         synchronizeViewModeWithLoadedModel();
 
-        // Initialize reduction manager for this configuration
+        // Initialize reduction manager for this Header.txt
         // If config is provided, use it; otherwise read from file
         initializeReductionManager(configFileName, optionalConfig);
 
@@ -994,24 +1242,21 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Synchronize cell rendering checkbox with current setting
         syncCellRenderingCheckbox();
 
-        // Update UI with new configuration
-        showInputFilePathOnBarLabel(configFileName);
+        // Update UI with the simulation directory that owns this Header.txt
+        showInputDirectoryOnBarLabel(configFileName);
 
         // Reset to first step
         currentStep = 0;
         setPositionOnWidgets(currentStep);
 
-        // Enable all widgets now that we have configuration
+        // Enable all widgets now that we have simulation data
         setWidgetsEnabledState(true);
 
-        // Add to recent files
-        addToRecentFiles(configFileName);
-
-        std::cout << "[DEBUG] Configuration Loaded: Successfully loaded configuration: " << configFileName.toStdString() << std::endl;
+        std::cout << "[DEBUG] Simulation Directory Loaded: Successfully loaded Header.txt: " << configFileName.toStdString() << std::endl;
     }
     catch (const std::exception& e)
     {
-        QMessageBox::critical(this, tr("Load Failed"), tr("Failed to load configuration:\n%1").arg(e.what()));
+        QMessageBox::critical(this, tr("Load Failed"), tr("Failed to load simulation directory:\n%1").arg(e.what()));
     }
 }
 
@@ -1067,15 +1312,16 @@ void MainWindow::enterNoConfigurationFileMode()
 {
     ui->sceneWidget->setHidden(true);
 
-    // Set UI to show no configuration loaded
+    // Set UI to show no simulation directory loaded
     ui->inputFilePathLabel->setFileName("");
+    ui->inputFilePathLabel->setToolTip(QString());
     if (SceneWidgetVisualizerFactory::getAvailableModels().empty())
     {
-        ui->inputFilePathLabel->setText(tr("No models loaded - use Model → Load Plugin or File → Load Model from Directory"));
+        ui->inputFilePathLabel->setText(tr("No models loaded - use Model → Load Plugin or File → Open Model Directory"));
     }
     else
     {
-        ui->inputFilePathLabel->setText(tr("No configuration loaded - use File → Open Configuration"));
+        ui->inputFilePathLabel->setText(tr("No simulation directory loaded - use File → Open Model Directory"));
     }
 
     totalStepsNumberChanged(0);
@@ -1308,7 +1554,7 @@ void MainWindow::loadModelDataWithExistingModel(const QString& modelDirectory, c
             return;
         }
 
-        // Clear scene before loading new configuration to avoid stale data
+        // Clear scene before loading new simulation data to avoid stale data
         ui->sceneWidget->clearScene();
 
         switchToModel(existingModelName);
@@ -1323,7 +1569,7 @@ void MainWindow::loadModelDataWithExistingModel(const QString& modelDirectory, c
             return;
         }
 
-        // Load configuration from Header.txt
+        // Load settings and data from Header.txt in the selected directory
         openConfigurationFile(QString::fromStdString(headerPath.string()));
 
         // Add directory to recent directories list
@@ -1747,255 +1993,6 @@ void MainWindow::onCameraOrientationChanged(double roll, double pitch, double ya
     ui->yawSpinBox->setValue(yawDegrees);
 }
 
-// ============================================================================
-// Recent Files Management
-// ============================================================================
-
-void MainWindow::updateRecentFilesMenu()
-{
-    ui->menuRecentFiles->clear();
-    ui->menuRecentFiles->setToolTipsVisible(true);
-
-    QStringList recentFiles = loadRecentFiles();
-
-    // Remove files that don't exist anymore
-    recentFiles.erase(std::remove_if(recentFiles.begin(),
-                                     recentFiles.end(),
-                                     [](const QString& path)
-                                     {
-                                         return ! QFileInfo::exists(path);
-                                     }),
-                      recentFiles.end());
-
-    if (recentFiles.isEmpty())
-    {
-        QAction* noFilesAction = ui->menuRecentFiles->addAction(tr("No recent files"));
-        noFilesAction->setEnabled(false);
-        return;
-    }
-
-    // Save cleaned list
-    saveRecentFiles(recentFiles);
-
-    for (const QString& filePath : recentFiles)
-    {
-        QString displayName = getSmartDisplayName(filePath, recentFiles);
-
-        // Get last opened time from QSettings
-        QSettings settings;
-        QString timeKey = QString("recentFiles/time_%1").arg(QString(filePath.toUtf8().toBase64()));
-        QDateTime lastOpened = settings.value(timeKey, QDateTime::currentDateTime()).toDateTime();
-
-        // Format: "filename [2024-10-20 15:30:25]"
-        QString actionText = QString("%1 [%2]").arg(displayName).arg(lastOpened.toString("yyyy-MM-dd HH:mm:ss"));
-
-        QAction* action = ui->menuRecentFiles->addAction(actionText);
-        action->setData(filePath);
-        action->setToolTip(generateTooltipForFile(filePath));
-
-        connect(action, &QAction::triggered, this, &MainWindow::onRecentFileTriggered);
-    }
-
-    ui->menuRecentFiles->addSeparator();
-    QAction* clearAction = ui->menuRecentFiles->addAction(tr("Clear Recent Files"));
-    connect(clearAction,
-            &QAction::triggered,
-            this,
-            [this]()
-            {
-                saveRecentFiles(QStringList());
-                updateRecentFilesMenu();
-            });
-}
-
-void MainWindow::addToRecentFiles(const QString& filePath)
-{
-    QStringList recentFiles = loadRecentFiles();
-
-    // Remove if already exists (to move it to the top)
-    recentFiles.removeAll(filePath);
-
-    // Add to the beginning
-    recentFiles.prepend(filePath);
-
-    // Limit to MAX_RECENT_FILES
-    while (recentFiles.size() > MAX_RECENT_FILES)
-    {
-        recentFiles.removeLast();
-    }
-
-    saveRecentFiles(recentFiles);
-
-    // Store the timestamp when this file was opened
-    QSettings settings;
-    QString timeKey = QString("recentFiles/time_%1").arg(QString(filePath.toUtf8().toBase64()));
-    settings.setValue(timeKey, QDateTime::currentDateTime());
-
-    updateRecentFilesMenu();
-}
-
-QStringList MainWindow::loadRecentFiles() const
-{
-    QSettings settings;
-    return settings.value("recentFiles/list").toStringList();
-}
-
-void MainWindow::saveRecentFiles(const QStringList& files) const
-{
-    QSettings settings;
-    settings.setValue("recentFiles/list", files);
-}
-
-QString MainWindow::getSmartDisplayName(const QString& filePath, const QStringList& allPaths) const
-{
-    QFileInfo fileInfo(filePath);
-    QString fileName = fileInfo.fileName();
-    QDir fileDir = fileInfo.dir();
-
-    // Start with parent/filename as default (depth = 1)
-    QString displayName = fileDir.dirName() + "/" + fileName;
-
-    // Count how many files have the same filename
-    const int sameNameCount = std::count_if(allPaths.begin(), allPaths.end(), [&](const QString& otherPath)
-        {
-            return QFileInfo(otherPath).fileName() == fileName;
-        });
-
-    // If unique filename, return parent/filename
-    if (sameNameCount == 1)
-    {
-        return displayName;
-    }
-
-    // Otherwise, check if parent/filename is already unique
-    for (int depth = 1; depth <= 4; ++depth) // Try up to 4 parent directories
-    {
-        // Build display name with current depth
-        QDir currentDir = fileInfo.dir();
-        QString currentDisplayName = fileInfo.fileName();
-        for (int d = 0; d < depth; ++d)
-        {
-            currentDisplayName = currentDir.dirName() + "/" + currentDisplayName;
-            currentDir.cdUp();
-        }
-
-        // Check if this display name is unique among conflicting files
-        bool isUnique = true;
-        for (const QString& otherPath : allPaths)
-        {
-            if (otherPath == filePath)
-                continue;
-
-            QFileInfo otherInfo(otherPath);
-            if (otherInfo.fileName() != fileName)
-                continue; // Not a conflicting file
-
-            // Build same-depth display name for other file
-            QDir otherDir = otherInfo.dir();
-            QString otherDisplayName = otherInfo.fileName();
-            for (int d = 0; d < depth; ++d)
-            {
-                otherDisplayName = otherDir.dirName() + "/" + otherDisplayName;
-                otherDir.cdUp();
-            }
-
-            if (otherDisplayName == currentDisplayName)
-            {
-                isUnique = false;
-                break;
-            }
-        }
-
-        if (isUnique)
-        {
-            return currentDisplayName;
-        }
-    }
-
-    // If still not unique, return full path
-    return filePath;
-}
-
-QString MainWindow::generateTooltipForFile(const QString& filePath) const
-{
-    QFileInfo fileInfo(filePath);
-
-    if (! fileInfo.exists())
-    {
-        return tr("File does not exist:\n%1").arg(filePath);
-    }
-
-    QString tooltip = QString("<b>%1</b><br/>").arg(tr("Full path:"));
-    tooltip += QString("%1<br/><br/>").arg(filePath);
-    
-    tooltip += QString("<b>%1</b> %2<br/>")
-        .arg(tr("Created:"))
-        .arg(fileInfo.birthTime().toString("yyyy-MM-dd HH:mm:ss"));
-    
-    tooltip += QString("<b>%1</b> %2<br/><br/>")
-        .arg(tr("Modified:"))
-        .arg(fileInfo.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
-    
-    // Try to read configuration parameters
-    try
-    {
-        Config config(filePath.toStdString(), /*printWarnings=*/false);
-
-        tooltip += QString("<b>%1</b><br/>").arg(tr("Configuration parameters:"));
-
-        auto addParam = [&](const QString& category, const QString& paramName)
-        {
-            ConfigCategory* cat = config.getConfigCategory(category.toStdString(), /*ignoreCase=*/true);
-            if (cat)
-            {
-                const ConfigParameter* param = cat->getConfigParameter(paramName.toStdString());
-                if (param)
-                {
-                    tooltip += QString("&nbsp;&nbsp;• <b>%1:</b> %2<br/>")
-                                   .arg(paramName)
-                                   .arg(QString::fromStdString(param->getDefaultValue()));
-                }
-            }
-        };
-
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_STEPS);
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_ROWS);
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_COLUMNS);
-        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_X);
-        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_Y);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_MODE);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_SUBSTATES);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_REDUCTION);
-    }
-    catch (const std::exception& e)
-    {
-        tooltip += QString("<br/><i>%1: %2</i>")
-            .arg(tr("Could not read configuration"))
-            .arg(e.what());
-    }
-
-    return tooltip;
-}
-
-void MainWindow::onRecentFileTriggered()
-{
-    QAction* action = qobject_cast<QAction*>(sender());
-    if (! action)
-        return;
-
-    QString filePath = action->data().toString();
-
-    if (! QFileInfo::exists(filePath))
-    {
-        QMessageBox::warning(this, tr("File Not Found"),
-            tr("The file no longer exists:\n%1").arg(filePath));
-        updateRecentFilesMenu();
-        return;
-    }
-
-    openConfigurationFile(filePath);
-}
-
 void MainWindow::setWidgetsEnabledState(bool enabled)
 {
     // Playback controls
@@ -2020,10 +2017,10 @@ void MainWindow::setWidgetsEnabledState(bool enabled)
     // Menu actions - some should remain enabled
     // actionQuit - always enabled
     // actionAbout - always enabled
-    // actionOpenConfiguration - always enabled
+    // actionLoadModelFromDirectory - always enabled
     // Model actions - always enabled (can switch before loading config)
 
-    // These should be disabled without configuration:
+    // These should be disabled without loaded simulation data:
     ui->actionShow_config_details->setEnabled(enabled);
     ui->actionExport_Video->setEnabled(enabled);
     ui->actionReloadData->setEnabled(enabled);
@@ -2053,7 +2050,7 @@ void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
             // Switch to the model (switchToModel now handles menu update)
             switchToModel(modelQStr);
 
-            // Reload data with the new model only if configuration was loaded
+            // Reload data with the new model only if simulation data was loaded
             if (cmdParser.getConfigFile())
             {
                 try
@@ -2140,7 +2137,7 @@ void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
         }
     }
 
-    // Handle autoPlay - automatically start playback when configuration loads
+    // Handle autoPlay - automatically start playback when simulation data loads
     if (cmdParser.isAutoPlayRequested())
     {
         // Set flag so we know to exit after playback completes
@@ -2160,7 +2157,7 @@ void MainWindow::initializeReductionManager(const QString& configFileName, std::
 {
     ui->reductionWidget->setReductionManager(nullptr);
 
-    // Get reduction configuration from SettingParameter
+    // Get reduction settings from SettingParameter
     const auto* settingParam = this->ui->sceneWidget->getSettingParameter();
     if (!settingParam || settingParam->reduction.empty())
     {
@@ -2196,7 +2193,7 @@ void MainWindow::initializeReductionManager(const QString& configFileName, std::
             reductionFilePath = reductionDir / (outputFileNameFromCfg + "-red.txt");
         }
         
-        // Create ReductionManager with the reduction file path and configuration
+        // Create ReductionManager with the reduction file path and settings
         reductionManager = std::make_unique<ReductionManager>(
             QString::fromStdString(reductionFilePath.string()),
             QString::fromStdString(settingParam->reduction)
@@ -2220,7 +2217,7 @@ void MainWindow::onShowReductionRequested()
     if (!reductionManager || !reductionManager->isAvailable())
     {
         QMessageBox::warning(this, tr("No Reduction Data"),
-            tr("Reduction data is not available for the current configuration."));
+            tr("Reduction data is not available for the current simulation directory."));
         return;
     }
 
@@ -2249,8 +2246,8 @@ void MainWindow::addToRecentDirectories(const QString& directoryPath)
     // Add to the beginning
     recentDirectories.prepend(directoryPath);
 
-    // Limit to MAX_RECENT_FILES
-    while (recentDirectories.size() > MAX_RECENT_FILES)
+    // Limit to MAX_RECENT_DIRECTORIES
+    while (recentDirectories.size() > MAX_RECENT_DIRECTORIES)
     {
         recentDirectories.removeLast();
     }
@@ -2356,56 +2353,7 @@ QString MainWindow::generateTooltipForDirectory(const QString& directoryPath) co
         return tr("Directory is empty or does not contain %2:\n%1").arg(directoryPath, DirectoryConstants::HEADER_FILE_NAME);
     }
 
-    QString tooltip = QString("<b>%1</b><br/>").arg(tr("Full path:"));
-    tooltip += QString("%1<br/><br/>").arg(directoryPath);
-
-    tooltip += QString("<b>%1</b> %2<br/>")
-        .arg(tr("Created:"))
-        .arg(dirInfo.birthTime().toString("yyyy-MM-dd HH:mm:ss"));
-
-    tooltip += QString("<b>%1</b> %2<br/><br/>")
-        .arg(tr("Modified:"))
-        .arg(dirInfo.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
-
-    // Try to read configuration parameters from Header.txt
-    try
-    {
-        Config config(headerPath.toStdString(), /*printWarnings=*/false);
-
-        tooltip += QString("<b>%1</b><br/>").arg(tr("Configuration parameters:"));
-
-        auto addParam = [&](const QString& category, const QString& paramName)
-        {
-            ConfigCategory* cat = config.getConfigCategory(category.toStdString(), /*ignoreCase=*/true);
-            if (cat)
-            {
-                const ConfigParameter* param = cat->getConfigParameter(paramName.toStdString());
-                if (param)
-                {
-                    tooltip += QString("&nbsp;&nbsp;• <b>%1:</b> %2<br/>")
-                                   .arg(paramName)
-                                   .arg(QString::fromStdString(param->getDefaultValue()));
-                }
-            }
-        };
-
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_STEPS);
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_ROWS);
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_COLUMNS);
-        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_X);
-        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_Y);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_MODE);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_SUBSTATES);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_REDUCTION);
-    }
-    catch (const std::exception& e)
-    {
-        tooltip += QString("<br/><i>%1: %2</i>")
-            .arg(tr("Could not read configuration"))
-            .arg(e.what());
-    }
-
-    return tooltip;
+    return buildSimulationDirectoryTooltipHtml(inspectSimulationDirectory(headerPath));
 }
 
 void MainWindow::updateRecentDirectoriesMenu()
