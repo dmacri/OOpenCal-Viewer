@@ -4,6 +4,7 @@
 #include <source_location>
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <QCommonStyle>
 #include <QSettings>
 #include <QDebug>
@@ -17,6 +18,7 @@
 #include <QFileInfo>
 #include <QDateTime>
 #include <QDir>
+#include <QCollator>
 #include <QSizePolicy>
 
 #include "mainwindow.h"
@@ -122,6 +124,13 @@ struct FileGroup
     qint64 totalBytes = 0;
 };
 
+struct NodeOutputFiles
+{
+    int nodeNumber = -1;
+    QFileInfo indexFile;
+    QFileInfo dataFile;
+};
+
 struct SimulationDirectorySummary
 {
     QString directoryPath;
@@ -166,6 +175,21 @@ void addFileToGroup(FileGroup& group, const QFileInfo& fileInfo)
     group.totalBytes += fileInfo.size();
 }
 
+void sortFileGroupNaturally(FileGroup& group)
+{
+    QCollator collator;
+    collator.setNumericMode(true);
+    collator.setCaseSensitivity(Qt::CaseInsensitive);
+
+    std::sort(group.files.begin(), group.files.end(), [&](const QFileInfo& lhs, const QFileInfo& rhs)
+    {
+        const int result = collator.compare(lhs.fileName(), rhs.fileName());
+        if (result != 0)
+            return result < 0;
+        return lhs.absoluteFilePath() < rhs.absoluteFilePath();
+    });
+}
+
 QString describeGroupCount(const FileGroup& group)
 {
     if (group.files.isEmpty())
@@ -180,7 +204,107 @@ QString describeGroupCount(const FileGroup& group)
 
 QString formatModifiedDate(const QFileInfo& fileInfo)
 {
+    if (!fileInfo.exists())
+        return {};
     return fileInfo.lastModified().toString("yyyy-MM-dd HH:mm:ss");
+}
+
+QString fileNameOrDashHtml(const QFileInfo& fileInfo)
+{
+    if (!fileInfo.exists())
+        return QStringLiteral("<span style='color:#777777;'>—</span>");
+
+    return QString("<span style='font-family:monospace;'>%1</span>")
+        .arg(fileInfo.fileName().toHtmlEscaped());
+}
+
+QString fileSizeOrDashHtml(const QFileInfo& fileInfo)
+{
+    if (!fileInfo.exists())
+        return QStringLiteral("<span style='color:#777777;'>—</span>");
+
+    return formatByteSize(fileInfo.size()).toHtmlEscaped();
+}
+
+QDateTime newestModificationDate(const QFileInfo& lhs, const QFileInfo& rhs)
+{
+    const QDateTime lhsDate = lhs.exists() ? lhs.lastModified() : QDateTime{};
+    const QDateTime rhsDate = rhs.exists() ? rhs.lastModified() : QDateTime{};
+    return lhsDate > rhsDate ? lhsDate : rhsDate;
+}
+
+QString formatModifiedDate(const QDateTime& dateTime)
+{
+    return dateTime.isValid() ? dateTime.toString("yyyy-MM-dd HH:mm:ss") : QString{};
+}
+
+bool extractOutputNodeNumber(const QFileInfo& fileInfo, const QString& outputPrefix, bool indexFile, int& nodeNumber)
+{
+    if (outputPrefix.isEmpty())
+        return false;
+
+    QString fileName = fileInfo.fileName();
+    if (!fileName.startsWith(outputPrefix))
+        return false;
+
+    QString suffix = fileName.mid(outputPrefix.size());
+    if (indexFile)
+    {
+        const QString indexSuffix = QStringLiteral("_index.txt");
+        if (!suffix.endsWith(indexSuffix, Qt::CaseInsensitive))
+            return false;
+        suffix.chop(indexSuffix.size());
+    }
+    else
+    {
+        const int dotIndex = suffix.lastIndexOf('.');
+        if (dotIndex <= 0)
+            return false;
+        suffix = suffix.left(dotIndex);
+    }
+
+    bool ok = false;
+    const int parsedNodeNumber = suffix.toInt(&ok);
+    if (!ok || parsedNodeNumber < 0)
+        return false;
+
+    nodeNumber = parsedNodeNumber;
+    return true;
+}
+
+std::vector<NodeOutputFiles> buildNodeOutputFiles(const SimulationDirectorySummary& summary)
+{
+    std::map<int, NodeOutputFiles> filesByNode;
+
+    for (const QFileInfo& fileInfo : summary.indexFiles.files)
+    {
+        int nodeNumber = -1;
+        if (extractOutputNodeNumber(fileInfo, summary.outputPrefix, /*indexFile=*/true, nodeNumber))
+        {
+            auto& entry = filesByNode[nodeNumber];
+            entry.nodeNumber = nodeNumber;
+            entry.indexFile = fileInfo;
+        }
+    }
+
+    for (const QFileInfo& fileInfo : summary.dataFiles.files)
+    {
+        int nodeNumber = -1;
+        if (extractOutputNodeNumber(fileInfo, summary.outputPrefix, /*indexFile=*/false, nodeNumber))
+        {
+            auto& entry = filesByNode[nodeNumber];
+            entry.nodeNumber = nodeNumber;
+            entry.dataFile = fileInfo;
+        }
+    }
+
+    std::vector<NodeOutputFiles> nodeFiles;
+    nodeFiles.reserve(filesByNode.size());
+    for (auto& [nodeNumber, entry] : filesByNode)
+    {
+        nodeFiles.push_back(entry);
+    }
+    return nodeFiles;
 }
 
 QString fileTableHtml(const QString& title, const FileGroup& group, int maxItems = 80)
@@ -225,6 +349,79 @@ QString fileTableHtml(const QString& title, const FileGroup& group, int maxItems
                     .arg(formatModifiedDate(fileInfo).toHtmlEscaped());
         ++shown;
     }
+
+    html += "</table>";
+    return html;
+}
+
+QString nodeOutputFilesTableHtml(const SimulationDirectorySummary& summary, int maxItems = 10)
+{
+    const auto nodeFiles = buildNodeOutputFiles(summary);
+    const int totalNodes = static_cast<int>(nodeFiles.size());
+    const qint64 totalIndexBytes = summary.indexFiles.totalBytes;
+    const qint64 totalDataBytes = summary.dataFiles.totalBytes;
+
+    QString html =
+        QString("<p style='margin-top:10px; margin-bottom:3px;'>"
+                "<span style='font-size:10pt; font-weight:600; color:#24527a;'>%1</span><br/>"
+                "<span style='color:#666666;'>%2; %3; %4</span>"
+                "</p>")
+            .arg(QObject::tr("Simulation node files").toHtmlEscaped())
+            .arg(QObject::tr("%n node(s)", nullptr, totalNodes).toHtmlEscaped())
+            .arg(describeGroupCount(summary.indexFiles).toHtmlEscaped())
+            .arg(describeGroupCount(summary.dataFiles).toHtmlEscaped());
+
+    if (nodeFiles.empty())
+    {
+        return html + QObject::tr("<span style='color:#777777;'>&nbsp;&nbsp;none</span><br/>");
+    }
+
+    html += "<table cellspacing='0' cellpadding='3' border='0'>"
+            "<tr bgcolor='#eeeeee'>"
+            "<td align='right'><b>Node</b></td>"
+            "<td><b>Index file</b></td>"
+            "<td><b>Simulation data</b></td>"
+            "<td align='right'><b>Index size</b></td>"
+            "<td align='right'><b>Data size</b></td>"
+            "<td><b>Newest modified</b></td>"
+            "</tr>";
+
+    int shown = 0;
+    for (const NodeOutputFiles& nodeFile : nodeFiles)
+    {
+        if (shown >= maxItems)
+        {
+            html += QString("<tr><td colspan='6' style='color:#777777;'>… %1</td></tr>")
+                        .arg(QObject::tr("%n more node(s)", nullptr, totalNodes - shown).toHtmlEscaped());
+            break;
+        }
+
+        html += QString("<tr>"
+                        "<td align='right'>%1</td>"
+                        "<td>%2</td>"
+                        "<td>%3</td>"
+                        "<td align='right'>%4</td>"
+                        "<td align='right'>%5</td>"
+                        "<td>%6</td>"
+                        "</tr>")
+                    .arg(nodeFile.nodeNumber)
+                    .arg(fileNameOrDashHtml(nodeFile.indexFile))
+                    .arg(fileNameOrDashHtml(nodeFile.dataFile))
+                    .arg(fileSizeOrDashHtml(nodeFile.indexFile))
+                    .arg(fileSizeOrDashHtml(nodeFile.dataFile))
+                    .arg(formatModifiedDate(newestModificationDate(nodeFile.indexFile, nodeFile.dataFile)).toHtmlEscaped());
+        ++shown;
+    }
+
+    html += QString("<tr bgcolor='#f6f6f6'>"
+                    "<td colspan='3'><b>%1</b></td>"
+                    "<td align='right'><b>%2</b></td>"
+                    "<td align='right'><b>%3</b></td>"
+                    "<td></td>"
+                    "</tr>")
+                .arg(QObject::tr("Total for all node files").toHtmlEscaped())
+                .arg(formatByteSize(totalIndexBytes).toHtmlEscaped())
+                .arg(formatByteSize(totalDataBytes).toHtmlEscaped());
 
     html += "</table>";
     return html;
@@ -333,6 +530,12 @@ SimulationDirectorySummary inspectSimulationDirectory(const QString& configFileP
         }
     }
 
+    sortFileGroupNaturally(summary.dataFiles);
+    sortFileGroupNaturally(summary.indexFiles);
+    sortFileGroupNaturally(summary.reductionFiles);
+    sortFileGroupNaturally(summary.sourceHeaders);
+    sortFileGroupNaturally(summary.compiledModules);
+
     return summary;
 }
 
@@ -377,8 +580,7 @@ QString buildSimulationDirectoryTooltipHtml(const SimulationDirectorySummary& su
 
     html += fileTableHtml(QObject::tr("C++ model header files"), summary.sourceHeaders);
     html += fileTableHtml(QObject::tr("Compiled model modules (.so, .dll, .dylib)"), summary.compiledModules);
-    html += fileTableHtml(QObject::tr("Simulation data files"), summary.dataFiles, 40);
-    html += fileTableHtml(QObject::tr("Index files"), summary.indexFiles, 40);
+    html += nodeOutputFilesTableHtml(summary, 10);
     html += fileTableHtml(QObject::tr("Reduction files"), summary.reductionFiles, 20);
 
     html += "</div></qt>";
