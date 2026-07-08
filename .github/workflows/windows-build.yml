@@ -46,8 +46,9 @@ jobs:
         path: |
           ${{ runner.temp }}/vcpkg
           C:\vcpkg
-        key: vcpkg-vtk-qttools-${{ runner.os }}-x64-windows-v3
+        key: vcpkg-vtk-qtdeploy-${{ runner.os }}-x64-windows-v4
         restore-keys: |
+          vcpkg-vtk-qtdeploy-${{ runner.os }}-x64-windows-
           vcpkg-vtk-qttools-${{ runner.os }}-x64-windows-
           vcpkg-vtk-${{ runner.os }}-x64-windows-
 
@@ -72,10 +73,10 @@ jobs:
           Write-Host "vcpkg already bootstrapped"
         }
         
-        # Install VTK with Qt and OpenGL support. qttools provides windeployqt.exe
-        # which is needed in the packaging step.
+        # Install VTK with Qt/OpenGL support and Qt deployment tooling.
+        # windeployqt.exe is provided by the qtbase[windeployqt] feature.
         Write-Host "Installing/updating VTK with Qt/OpenGL support and Qt deployment tools..."
-        & "$vcpkg_exe" install vtk[qt,opengl]:x64-windows qttools:x64-windows --recurse
+        & "$vcpkg_exe" install vtk[qt,opengl]:x64-windows qtbase[windeployqt]:x64-windows qttools:x64-windows --recurse
         
         # Make vcpkg root available for next steps
         Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$vcpkg_root"
@@ -120,20 +121,23 @@ jobs:
         $installedBin = Join-Path $installedRoot "bin"
         $env:PATH = "$installedBin;$env:PATH"
 
-        $windeployqt = Get-ChildItem -Path $installedRoot -Recurse -Filter windeployqt.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $windeployqt) {
-          Write-Host "windeployqt.exe was not found under $installedRoot."
+        $windeployqt = Get-ChildItem -Path $installedRoot -Recurse -File -Filter "*deployqt*.exe" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "^windeployqt(6)?\.exe$" } | Select-Object -First 1
+        if ($windeployqt) {
+          Write-Host "Using windeployqt: $($windeployqt.FullName)"
+        } else {
+          Write-Warning "windeployqt.exe was not found under $installedRoot."
           Write-Host "Installed Qt-related vcpkg packages:"
           & "$vcpkg_exe" list | Select-String -Pattern "^(qt|vtk)" | ForEach-Object { Write-Host $_ }
-          Write-Host "Qt tool directories, if any:"
-          Get-ChildItem -Path $installedRoot -Directory -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "tools.*Qt|qt" } | Select-Object -First 50 | ForEach-Object { Write-Host $_.FullName }
-          throw "windeployqt.exe not found under vcpkg. The qttools:x64-windows package is required for packaging."
+          Write-Host "Qt directories detected under vcpkg:"
+          Get-ChildItem -Path $installedRoot -Directory -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "[\\/](Qt6|qt)([\\/]|$)" } | Select-Object -First 80 | ForEach-Object { Write-Host $_.FullName }
+          Write-Warning "Falling back to manual Qt plugin deployment."
         }
-        Write-Host "Using windeployqt: $($windeployqt.FullName)"
         
         $deployArgs = @("--no-translations")
         if ($build_type -eq "Debug") { $deployArgs += "--debug" } else { $deployArgs += "--release" }
-        & $windeployqt.FullName @deployArgs "$package_dir/OOpenCal-Viewer.exe"
+        if ($windeployqt) {
+          & $windeployqt.FullName @deployArgs "$package_dir/OOpenCal-Viewer.exe"
+        }
         
         $applocal = Join-Path $vcpkg_root "scripts/buildsystems/msbuild/applocal.ps1"
         if (-not (Test-Path $applocal)) { throw "applocal.ps1 not found at $applocal" }
@@ -141,6 +145,42 @@ jobs:
         $installedDir = Join-Path $vcpkg_root "installed/x64-windows/bin"
         if ($build_type -eq "Debug") { $installedDir = Join-Path $vcpkg_root "installed/x64-windows/debug/bin" }
         & $applocal -targetBinary "$package_dir/OOpenCal-Viewer.exe" -installedDir "$installedDir"
+
+        if (-not $windeployqt) {
+          $qtRuntimeRoot = Join-Path $installedRoot "Qt6"
+          if ($build_type -eq "Debug") {
+            $debugQtRuntimeRoot = Join-Path $installedRoot "debug/Qt6"
+            if (Test-Path $debugQtRuntimeRoot) { $qtRuntimeRoot = $debugQtRuntimeRoot }
+          }
+
+          $sourcePluginsRoot = Join-Path $qtRuntimeRoot "plugins"
+          if (-not (Test-Path $sourcePluginsRoot)) {
+            throw "Qt plugins directory not found at $sourcePluginsRoot"
+          }
+
+          $targetPluginsRoot = Join-Path $package_dir "Qt6/plugins"
+          New-Item -ItemType Directory -Force -Path $targetPluginsRoot | Out-Null
+
+          $pluginDirs = @(
+            "platforms",
+            "styles",
+            "imageformats",
+            "iconengines",
+            "generic",
+            "networkinformation",
+            "tls"
+          )
+
+          foreach ($pluginDir in $pluginDirs) {
+            $sourcePluginDir = Join-Path $sourcePluginsRoot $pluginDir
+            if (Test-Path $sourcePluginDir) {
+              Write-Host "Copying Qt plugin directory: $sourcePluginDir"
+              Copy-Item -Path $sourcePluginDir -Destination $targetPluginsRoot -Recurse -Force
+            }
+          }
+
+          Set-Content -Path (Join-Path $package_dir "qt.conf") -Value @("[Paths]", "Plugins = Qt6/plugins") -Encoding ASCII
+        }
         
         Compress-Archive -Path "$package_dir/*" -DestinationPath "build/OOpenCal-Viewer-${{ matrix.build_type }}-windows.zip" -Force
 
