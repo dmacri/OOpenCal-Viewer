@@ -172,6 +172,15 @@ vtkNew<vtkActor2D> Visualizer::buildStepText(StepIndex step,
 
 void Visualizer::drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor)
 {
+    drawFlatSceneBackground(nRows, nCols, renderer, backgroundActor, 0.0);
+}
+
+void Visualizer::drawFlatSceneBackground(int nRows,
+                                         int nCols,
+                                         vtkSmartPointer<vtkRenderer> renderer,
+                                         vtkSmartPointer<vtkActor> backgroundActor,
+                                         double zPosition)
+{
     // Validate inputs
     if (!backgroundActor || !renderer)
     {
@@ -199,14 +208,13 @@ void Visualizer::drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<v
     const QColor sceneColor = ColorSettings::instance().flatSceneBackgroundColor();
     lut->SetTableValue(0, sceneColor.redF(), sceneColor.greenF(), sceneColor.blueF(), 1.0);
 
-    // Create flat plane at Z=0
+    // Create the plane at the requested elevation.
     vtkNew<vtkPoints> points;
     for (int row = 0; row < nRows; row++)
     {
         for (int col = 0; col < nCols; col++)
         {
-            // Z=0 for flat background plane
-            points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/0);
+            points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/zPosition);
         }
     }
 
@@ -223,6 +231,104 @@ void Visualizer::drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<v
 
     backgroundActor->SetMapper(backgroundMapper);
     renderer->AddActor(backgroundActor);
+}
+
+vtkSmartPointer<vtkPolyData> Visualizer::create3DVolumeGridLinePolyData(
+    int nRows,
+    int nCols,
+    int nSlices,
+    int nNodeZ,
+    const std::vector<Line>& lines)
+{
+    vtkNew<vtkPoints> points;
+    vtkNew<vtkCellArray> cellLines;
+
+    auto addSegment = [&](double x1, double y1, double z1,
+                          double x2, double y2, double z2)
+    {
+        const vtkIdType first = points->InsertNextPoint(x1, y1, z1);
+        const vtkIdType second = points->InsertNextPoint(x2, y2, z2);
+        cellLines->InsertNextCell(2);
+        cellLines->InsertCellPoint(first);
+        cellLines->InsertCellPoint(second);
+    };
+
+    const double maxX = std::max(0, nCols - 1);
+    const double maxY = std::max(0, nRows - 1);
+    const double maxZ = std::max(0, nSlices - 1);
+
+    for (const auto& line : lines)
+    {
+        const double x1 = std::clamp(static_cast<double>(line.x1), 0.0, maxX);
+        const double x2 = std::clamp(static_cast<double>(line.x2), 0.0, maxX);
+        const double y1 = std::clamp(maxY - line.y1, 0.0, maxY);
+        const double y2 = std::clamp(maxY - line.y2, 0.0, maxY);
+
+        // Extruding every XY node edge through Z produces a wireframe for each
+        // distributed node partition without covering the volume with a solid plane.
+        addSegment(x1, y1, 0.0, x2, y2, 0.0);
+        addSegment(x1, y1, maxZ, x2, y2, maxZ);
+        addSegment(x1, y1, 0.0, x1, y1, maxZ);
+        addSegment(x2, y2, 0.0, x2, y2, maxZ);
+    }
+
+    // XY lines carry exact X/Y partition offsets. Z partition offsets are not
+    // represented by Line, so derive their regular slice boundaries here.
+    for (int nodeZ = 1; nodeZ < nNodeZ; ++nodeZ)
+    {
+        const double z = std::clamp(
+            static_cast<double>(nodeZ * nSlices) / nNodeZ,
+            0.0,
+            maxZ);
+        addSegment(0.0, 0.0, z, maxX, 0.0, z);
+        addSegment(maxX, 0.0, z, maxX, maxY, z);
+        addSegment(maxX, maxY, z, 0.0, maxY, z);
+        addSegment(0.0, maxY, z, 0.0, 0.0, z);
+    }
+
+    vtkNew<vtkPolyData> polyData;
+    polyData->SetPoints(points);
+    polyData->SetLines(cellLines);
+    return polyData;
+}
+
+void Visualizer::drawGridLinesFor3DVolume(int nRows,
+                                          int nCols,
+                                          int nSlices,
+                                          int nNodeZ,
+                                          const std::vector<Line>& lines,
+                                          vtkSmartPointer<vtkRenderer> renderer,
+                                          vtkSmartPointer<vtkActor> gridLinesActor)
+{
+    if (!renderer || !gridLinesActor)
+        return;
+
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputData(create3DVolumeGridLinePolyData(nRows, nCols, nSlices, nNodeZ, lines));
+    gridLinesActor->SetMapper(mapper);
+    gridLinesActor->GetProperty()->SetLineWidth(1.25);
+    gridLinesActor->GetProperty()->SetOpacity(0.8);
+    applyGridColorTo3DGridLinesActor(gridLinesActor);
+    renderer->AddActor(gridLinesActor);
+}
+
+void Visualizer::refreshGridLinesFor3DVolume(int nRows,
+                                             int nCols,
+                                             int nSlices,
+                                             int nNodeZ,
+                                             const std::vector<Line>& lines,
+                                             vtkSmartPointer<vtkActor> gridLinesActor)
+{
+    if (!gridLinesActor)
+        return;
+
+    auto* mapper = vtkPolyDataMapper::SafeDownCast(gridLinesActor->GetMapper());
+    if (!mapper)
+        return;
+
+    mapper->SetInputData(create3DVolumeGridLinePolyData(nRows, nCols, nSlices, nNodeZ, lines));
+    mapper->Update();
+    applyGridColorTo3DGridLinesActor(gridLinesActor);
 }
 
 void Visualizer::refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor)

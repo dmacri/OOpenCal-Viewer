@@ -183,6 +183,7 @@ list(APPEND Sources
     widgets/SubstatesDockWidget.cpp
     widgets/CustomInteractorStyle.cpp
     widgets/CustomDirectoryDialog.cpp
+    widgets/PerformanceSettingsDialog.cpp
     plugins/PluginLoader.cpp
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp
@@ -263,6 +264,8 @@ find_package(VTK QUIET COMPONENTS
     RenderingFreeType
     RenderingGL2PSOpenGL2
     RenderingOpenGL2
+    RenderingVolume
+    RenderingVolumeOpenGL2
     IOXML
     IOOggTheora
     GUISupportQt
@@ -503,7 +506,7 @@ endif()
 
 vtk_module_autoinit(
     TARGETS ${PROJECT_NAME}
-    MODULES VTK::GUISupportQt VTK::IOLegacy
+    MODULES VTK::GUISupportQt VTK::IOLegacy VTK::RenderingVolumeOpenGL2
 )
 
 # ============================================

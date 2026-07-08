@@ -38,6 +38,7 @@
 #include "widgets/ColorSettings.h"
 #include "widgets/SubstatesDockWidget.h"
 #include "widgets/CustomInteractorStyle.h"
+#include "data/PerformanceMetrics.h"
 
 
 namespace
@@ -52,8 +53,14 @@ public:
     void readStageStateFromFilesForStep(SettingParameter*, Line*) override {}
     void drawWithVTK(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, bool) override {}
     void refreshWindowsVTK(int, int, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&) override {}
+    void setNative3DSlice(GridSliceAxis, int) override {}
+    void clearNative3DSlice() override {}
+    bool isNative3DSliceEnabled() const override { return false; }
+    GridSliceAxis native3DSliceAxis() const override { return GridSliceAxis::Z; }
+    int native3DSliceIndex() const override { return 0; }
     void drawWithVTK3DSubstate(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&) override {}
     void refreshWindowsVTK3DSubstate(int, int, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&) override {}
+    void drawWithVTK3DSubstateSlice(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&, GridSliceAxis, int) override {}
     void drawFlatSceneBackground(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>) override {}
     void refreshFlatSceneBackground(int, int, vtkSmartPointer<vtkActor>) override {}
     void drawGridLinesOn3DSurface(int, int, const std::vector<Line>&, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double) override {}
@@ -140,6 +147,129 @@ vtkColor3d toVtkColor(QColor color)
         color.blueF()
     };
 }
+
+struct CameraEulerAngles
+{
+    double roll = 0.0;  // X
+    double pitch = 0.0; // Y
+    double yaw = 0.0;   // Z
+};
+
+struct CameraBasis
+{
+    std::array<double, 3> right;
+    std::array<double, 3> up;
+    std::array<double, 3> backward;
+};
+
+constexpr double radiansToDegrees(double radians)
+{
+    return radians * 180.0 / vtkMath::Pi();
+}
+
+constexpr double degreesToRadians(double degrees)
+{
+    return degrees * vtkMath::Pi() / 180.0;
+}
+
+/** Build R = Rz(yaw) * Ry(pitch) * Rx(roll).
+ *
+ * Its columns are the camera's right, up and backward vectors, matching the
+ * baseline VTK camera (right=+X, up=+Y, position direction=+Z). */
+CameraBasis cameraBasisFromEuler(const CameraEulerAngles& angles)
+{
+    const double x = degreesToRadians(angles.roll);
+    const double y = degreesToRadians(angles.pitch);
+    const double z = degreesToRadians(angles.yaw);
+
+    const double cx = std::cos(x);
+    const double sx = std::sin(x);
+    const double cy = std::cos(y);
+    const double sy = std::sin(y);
+    const double cz = std::cos(z);
+    const double sz = std::sin(z);
+
+    return CameraBasis{
+        .right = {
+            cz * cy,
+            sz * cy,
+            -sy
+        },
+        .up = {
+            cz * sy * sx - sz * cx,
+            sz * sy * sx + cz * cx,
+            cy * sx
+        },
+        .backward = {
+            cz * sy * cx + sz * sx,
+            sz * sy * cx - cz * sx,
+            cy * cx
+        }
+    };
+}
+
+CameraEulerAngles cameraEulerFromVtk(vtkCamera& camera)
+{
+    double position[3];
+    double focalPoint[3];
+    double viewUp[3];
+    camera.GetPosition(position);
+    camera.GetFocalPoint(focalPoint);
+    camera.GetViewUp(viewUp);
+
+    double backward[3] = {
+        position[0] - focalPoint[0],
+        position[1] - focalPoint[1],
+        position[2] - focalPoint[2]
+    };
+    if (vtkMath::Normalize(backward) == 0.0)
+        return {};
+
+    // Gram-Schmidt removes numerical drift accumulated by the trackball.
+    const double upProjection = vtkMath::Dot(viewUp, backward);
+    double up[3] = {
+        viewUp[0] - upProjection * backward[0],
+        viewUp[1] - upProjection * backward[1],
+        viewUp[2] - upProjection * backward[2]
+    };
+    if (vtkMath::Normalize(up) == 0.0)
+        return {};
+
+    double right[3];
+    vtkMath::Cross(up, backward, right);
+    vtkMath::Normalize(right);
+    vtkMath::Cross(backward, right, up);
+    vtkMath::Normalize(up);
+
+    // Matrix columns are [right, up, backward]. Decompose the same
+    // Rz * Ry * Rx convention used by cameraBasisFromEuler().
+    const double r00 = right[0];
+    const double r10 = right[1];
+    const double r20 = right[2];
+    const double r01 = up[0];
+    const double r11 = up[1];
+    const double r21 = up[2];
+    const double r22 = backward[2];
+
+    CameraEulerAngles result;
+    result.pitch = radiansToDegrees(std::asin(std::clamp(-r20, -1.0, 1.0)));
+
+    const double cosPitch = std::cos(degreesToRadians(result.pitch));
+    if (std::abs(cosPitch) > 1e-7)
+    {
+        result.roll = radiansToDegrees(std::atan2(r21, r22));
+        result.yaw = radiansToDegrees(std::atan2(r10, r00));
+    }
+    else
+    {
+        // At gimbal lock Roll and Yaw are not independently observable.
+        // Keep the canonical solution Roll=0 and encode rotation in Yaw.
+        result.roll = 0.0;
+        result.yaw = radiansToDegrees(std::atan2(-r01, r11));
+    }
+
+    return result;
+}
 } // namespace
 
 
@@ -176,17 +306,6 @@ void SceneWidget::triggerRenderUpdate()
 
 void SceneWidget::applyCameraAngles()
 {
-    // Temporarily disable VTK warnings.
-    //
-    // Reason:
-    // When the camera elevation approaches ±90 degrees, the view-up vector becomes
-    // nearly parallel to the view-plane normal. VTK interprets this as an invalid
-    // camera configuration and emits warnings such as:
-    //   "Resetting view-up since view plane normal is parallel"
-    //
-    // These warnings normally occur during ResetCamera(), which internally adjusts
-    // the camera to maintain a valid orientation. Since we intentionally allow
-    // near-vertical camera angles, these warnings are expected and not useful here.
     bool oldWarningState = vtkObject::GetGlobalWarningDisplay();
     vtkObject::GlobalWarningDisplayOff();
 
@@ -197,34 +316,21 @@ void SceneWidget::applyCameraAngles()
         return;
     }
 
-    // Reset camera to a known baseline orientation
-    camera->SetPosition(0, 0, 1);
-    camera->SetFocalPoint(0, 0, 0);
-    camera->SetViewUp(0, 1, 0);
+    const CameraBasis basis = cameraBasisFromEuler({
+        .roll = cameraRoll,
+        .pitch = std::clamp(cameraPitch, -90.0, 90.0),
+        .yaw = cameraYaw
+    });
 
-    // Apply azimuth rotation (horizontal)
-    camera->Azimuth(cameraAzimuth);
-
-    // Clamp elevation to avoid exactly ±90° and prevent singularities
-    double clampedElevation = std::clamp(cameraElevation, -89.9, 89.9);
-    camera->Elevation(clampedElevation);
-
-    // Apply roll rotation (around Y axis)
-    camera->Roll(cameraRoll);
-
-    // Apply pitch rotation (around Z axis) with clamping to avoid gimbal lock
-    double clampedPitch = std::clamp(cameraPitch, -89.9, 89.9);
-    camera->Pitch(clampedPitch);
-
-    // Apply yaw rotation (around X axis)
-    camera->Yaw(cameraYaw);
-
-    // Recompute camera bounds for the current renderer
+    camera->SetPosition(cameraPivot[0] + basis.backward[0],
+                        cameraPivot[1] + basis.backward[1],
+                        cameraPivot[2] + basis.backward[2]);
+    camera->SetFocalPoint(cameraPivot.data());
+    camera->SetViewUp(basis.up.data());
+    camera->OrthogonalizeViewUp();
     renderer->ResetCamera();
 
     triggerRenderUpdate();
-
-    // Restore previous warning state
     vtkObject::SetGlobalWarningDisplay(oldWarningState);
 }
 
@@ -234,59 +340,25 @@ void SceneWidget::applyCameraAnglesPreservingZoom()
     if (! camera)
         return;
 
-    double originalPosition[3];
-    camera->GetPosition(originalPosition);
-
-    const double pivot[3] = {
-        cameraPivot[0],
-        cameraPivot[1],
-        cameraPivot[2]
-    };
-
-    double vectorFromPivot[3] = {
-        originalPosition[0] - pivot[0],
-        originalPosition[1] - pivot[1],
-        originalPosition[2] - pivot[2]
-    };
-
-    double distance = vtkMath::Norm(vectorFromPivot);
+    double distance = camera->GetDistance();
     if (distance < 1e-3)
-    {
         distance = 1.0;
-    }
 
     bool oldWarningState = vtkObject::GetGlobalWarningDisplay();
     vtkObject::GlobalWarningDisplayOff();
 
-    camera->SetPosition(0.0, 0.0, distance);
-    camera->SetFocalPoint(0.0, 0.0, 0.0);
-    camera->SetViewUp(0.0, 1.0, 0.0);
+    const CameraBasis basis = cameraBasisFromEuler({
+        .roll = cameraRoll,
+        .pitch = std::clamp(cameraPitch, -90.0, 90.0),
+        .yaw = cameraYaw
+    });
 
-    camera->Azimuth(cameraAzimuth);
-    const double clampedElevation = std::clamp(cameraElevation, -89.9, 89.9);
-    camera->Elevation(clampedElevation);
-    camera->Roll(cameraRoll);
-    
-    // Clamp pitch to avoid gimbal lock and flipping at ±90 degrees
-    const double clampedPitch = std::clamp(cameraPitch, -89.9, 89.9);
-    camera->Pitch(clampedPitch);
-    camera->Yaw(cameraYaw);
-
-    double rotatedPosition[3];
-    double rotatedFocal[3];
-    camera->GetPosition(rotatedPosition);
-    camera->GetFocalPoint(rotatedFocal);
-
-    const double translation[3] = {
-        pivot[0] - rotatedFocal[0],
-        pivot[1] - rotatedFocal[1],
-        pivot[2] - rotatedFocal[2]
-    };
-
-    camera->SetPosition(rotatedPosition[0] + translation[0],
-                        rotatedPosition[1] + translation[1],
-                        rotatedPosition[2] + translation[2]);
-    camera->SetFocalPoint(pivot[0], pivot[1], pivot[2]);
+    camera->SetPosition(cameraPivot[0] + distance * basis.backward[0],
+                        cameraPivot[1] + distance * basis.backward[1],
+                        cameraPivot[2] + distance * basis.backward[2]);
+    camera->SetFocalPoint(cameraPivot.data());
+    camera->SetViewUp(basis.up.data());
+    camera->OrthogonalizeViewUp();
 
     renderer->ResetCameraClippingRange();
     triggerRenderUpdate();
@@ -331,8 +403,19 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
         // Resize lines vector to match expected number of lines
         lines.resize(settingParameter->numberOfLines);
 
-        // Read stage state from files for the current step
-        sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+        {
+            // Create a performance session for step loading (latency measurement)
+            PerformanceSession perfSession("Step Loading",
+                                           static_cast<uint32_t>(settingParameter->numberOfColumnX),
+                                           static_cast<uint32_t>(settingParameter->numberOfRowsY),
+                                           static_cast<uint32_t>(settingParameter->numberOfSlicesZ),
+                                           1);  // Single timestep
+            perfSession.setStepNumber(settingParameter->step);
+            perfSession.setCategory(PerformanceMetrics::MetricsCategory::Rendering);
+
+            // Read stage state from files for the current step
+            sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+        } // Session destructor prints metrics here
 
         // Refresh VTK visualization with optional 3D substate support
         refreshVisualizationWithOptional3DSubstate();
@@ -368,13 +451,81 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     {
         renderer->RemoveActor(gridLinesOnSurfaceActor);
     }
+
+    if (isNative3DModel())
+    {
+        const bool sliceView = isNative3DSliceView();
+        if (flatSceneBackgroundVisible && !sliceView)
+        {
+            sceneWidgetVisualizerProxy->drawFlatSceneBackground(settingParameter->numberOfRowsY,
+                                                                settingParameter->numberOfColumnX,
+                                                                renderer,
+                                                                backgroundActor);
+        }
+
+        const auto colorSubstateInfos = getColorSubstateInfos();
+        sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY,
+                                                settingParameter->numberOfColumnX,
+                                                renderer,
+                                                gridActor,
+                                                colorSubstateInfos,
+                                                useCellRendering);
+
+        if (!sliceView)
+        {
+            sceneWidgetVisualizerProxy->drawGridLinesOn3DSurface(settingParameter->numberOfRowsY,
+                                                                 settingParameter->numberOfColumnX,
+                                                                 lines,
+                                                                 renderer,
+                                                                 gridLinesOnSurfaceActor,
+                                                                 {},
+                                                                 0.0,
+                                                                 1.0);
+        }
+
+        if (actorBuildLine)
+            actorBuildLine->SetVisibility(false);
+        if (gridLinesOnSurfaceActor)
+            gridLinesOnSurfaceActor->SetVisibility(!sliceView && gridLinesVisible);
+
+        updateCameraPivotFromBounds();
+        return;
+    }
     
     // Check if we should use 3D substate visualization
-    if (! activeSubstateFor3D.empty() && settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
+    if (settingParameter->numberOfSlicesZ <= 1 &&
+        ! activeSubstateFor3D.empty() &&
+        settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
     {
         const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
         if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
         {
+            if (substateSliceEnabled)
+            {
+                const auto colorSubstateInfos = getColorSubstateInfos();
+                sceneWidgetVisualizerProxy->drawWithVTK3DSubstateSlice(
+                    settingParameter->numberOfRowsY,
+                    settingParameter->numberOfColumnX,
+                    renderer,
+                    gridActor,
+                    activeSubstateFor3D,
+                    substateInfo.minValue,
+                    substateInfo.maxValue,
+                    colorSubstateInfos,
+                    substateSliceAxis,
+                    substateSliceIndex);
+
+                if (backgroundActor)
+                    backgroundActor->SetVisibility(false);
+                if (actorBuildLine)
+                    actorBuildLine->SetVisibility(false);
+                if (gridLinesOnSurfaceActor)
+                    gridLinesOnSurfaceActor->SetVisibility(false);
+
+                updateCameraPivotFromBounds();
+                return;
+            }
+
             // Clear old background actor to remove any 2D artifacts
             if (backgroundActor && renderer)
             {
@@ -453,12 +604,61 @@ std::vector<const SubstateInfo*> SceneWidget::getColorSubstateInfos()
 
 void SceneWidget::refreshVisualizationWithOptional3DSubstate()
 {
+    if (isNative3DModel())
+    {
+        if (isNative3DSliceView())
+        {
+            // Rebuild instead of only replacing the lookup table: changing the
+            // selected plane can also change its row/column dimensions.
+            drawVisualizationWithOptional3DSubstate();
+            update2DRulerAxesBounds();
+            triggerRenderUpdate();
+            return;
+        }
+
+        if (flatSceneBackgroundVisible && backgroundActor && backgroundActor->GetMapper())
+        {
+            sceneWidgetVisualizerProxy->refreshFlatSceneBackground(settingParameter->numberOfRowsY,
+                                                                   settingParameter->numberOfColumnX,
+                                                                   backgroundActor);
+        }
+
+        const auto colorSubstateInfos = getColorSubstateInfos();
+        sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY,
+                                                      settingParameter->numberOfColumnX,
+                                                      gridActor,
+                                                      colorSubstateInfos);
+        sceneWidgetVisualizerProxy->refreshGridLinesOn3DSurface(settingParameter->numberOfRowsY,
+                                                                settingParameter->numberOfColumnX,
+                                                                lines,
+                                                                gridLinesOnSurfaceActor,
+                                                                {},
+                                                                0.0,
+                                                                1.0);
+
+        if (gridLinesOnSurfaceActor)
+            gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+
+        updateCameraPivotFromBounds();
+        return;
+    }
+
     // Check if we should use 3D substate visualization
-    if (!activeSubstateFor3D.empty() && settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
+    if (settingParameter->numberOfSlicesZ <= 1 &&
+        !activeSubstateFor3D.empty() &&
+        settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
     {
         const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
         if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
         {
+            if (substateSliceEnabled)
+            {
+                drawVisualizationWithOptional3DSubstate();
+                update2DRulerAxesBounds();
+                triggerRenderUpdate();
+                return;
+            }
+
             // Refresh flat background scene if enabled
             if (flatSceneBackgroundVisible && backgroundActor && backgroundActor->GetMapper())
             {
@@ -519,9 +719,13 @@ void SceneWidget::setupSettingParameters(const std::string& configFilename, Step
 {
     readSettingsFromConfigFile(configFilename);
 
-    // Each node has 2 lines (top and left edges)
-    // Plus additional lines for bottom edge (nNodeX lines) and right edge (nNodeY lines)
-    settingParameter->numberOfLines = 2 * (settingParameter->nNodeX * settingParameter->nNodeY) + settingParameter->nNodeX + settingParameter->nNodeY;
+    // Each node has two XY boundary lines. Final edges are tracked for every Z node layer.
+    const auto totalNodes =
+        settingParameter->nNodeX * settingParameter->nNodeY * settingParameter->nNodeZ;
+    settingParameter->numberOfLines =
+        2 * totalNodes +
+        settingParameter->nNodeX * settingParameter->nNodeZ +
+        settingParameter->nNodeY * settingParameter->nNodeZ;
     settingParameter->step = stepNumber;
     settingParameter->changed = false;
 
@@ -633,7 +837,6 @@ void SceneWidget::setupVtkScene()
 
     connectKeyboardCallback();
     connectMouseCallback();
-    connectCameraCallback();
 }
 
 void SceneWidget::setupAxesWidget()
@@ -729,6 +932,37 @@ void SceneWidget::update2DRulerAxesBounds()
               << "], Y=[" << bounds[2] << ", " << bounds[3] << "]" << std::endl;
 }
 
+void SceneWidget::update2DRulerAxisTitles()
+{
+    const char* horizontalAxis = "X";
+    const char* verticalAxis = "Y";
+
+    if (isNative3DSliceView())
+    {
+        switch (sceneWidgetVisualizerProxy->native3DSliceAxis())
+        {
+            case GridSliceAxis::X:
+                horizontalAxis = "Y";
+                verticalAxis = "Z";
+                break;
+            case GridSliceAxis::Y:
+                horizontalAxis = "X";
+                verticalAxis = "Z";
+                break;
+            case GridSliceAxis::Z:
+                break;
+        }
+    }
+    else if (substateSliceEnabled)
+    {
+        horizontalAxis = substateSliceAxis == GridSliceAxis::Y ? "X" : "Y";
+        verticalAxis = activeSubstateFor3D.c_str();
+    }
+
+    rulerAxisX->SetTitle(horizontalAxis);
+    rulerAxisY->SetTitle(verticalAxis);
+}
+
 void SceneWidget::connectKeyboardCallback()
 {
     vtkNew<vtkCallbackCommand> keypressCallback;
@@ -739,15 +973,16 @@ void SceneWidget::connectKeyboardCallback()
 
 void SceneWidget::connectCameraCallback()
 {
-    if (! interactor())
+    if (!interactor() || !interactor()->GetInteractorStyle())
         return;
 
-    // Use EndInteractionEvent instead of camera ModifiedEvent
-    // This is only called when user finishes rotating (releases mouse button)
+    // Interaction events are emitted by vtkInteractorStyle, not by the render
+    // window interactor itself. Listen both during dragging and on release.
     vtkNew<vtkCallbackCommand> cameraCallback;
     cameraCallback->SetCallback(SceneWidget::cameraCallbackFunction);
     cameraCallback->SetClientData(this);
-    interactor()->AddObserver(vtkCommand::EndInteractionEvent, cameraCallback);
+    interactor()->GetInteractorStyle()->AddObserver(vtkCommand::InteractionEvent, cameraCallback);
+    interactor()->GetInteractorStyle()->AddObserver(vtkCommand::EndInteractionEvent, cameraCallback);
 }
 
 void SceneWidget::keypressCallbackFunction(vtkObject* caller, long unsigned int eventId, void* clientData, void* callData)
@@ -815,31 +1050,24 @@ void SceneWidget::cameraCallbackFunction(vtkObject* caller, long unsigned int ev
     if (! self)
         return;
 
-    // Only emit signal in 3D mode (user finished rotating the camera)
+    // Synchronize only in 3D mode; 2D interaction has no rotation controls.
     if (self->currentViewMode == ViewMode::Mode3D && self->renderer)
     {
         vtkCamera* camera = self->renderer->GetActiveCamera();
         if (camera)
         {
-            // Get actual camera orientation from VTK
-            const double* position = camera->GetPosition();
-            const double* focalPoint = camera->GetFocalPoint();
+            const CameraEulerAngles angles = cameraEulerFromVtk(*camera);
+            double focalPoint[3];
+            camera->GetFocalPoint(focalPoint);
 
-            // Calculate azimuth and elevation from camera position
-            double dx = position[0] - focalPoint[0];
-            double dy = position[1] - focalPoint[1];
-            double dz = position[2] - focalPoint[2];
+            // Store the actual VTK orientation. The Qt side blocks slider signals
+            // while displaying these values, so this cannot feed back into VTK.
+            self->cameraRoll = angles.roll;
+            self->cameraPitch = angles.pitch;
+            self->cameraYaw = angles.yaw;
+            self->cameraPivot = { focalPoint[0], focalPoint[1], focalPoint[2] };
 
-            double azimuth = std::atan2(dy, dx) * 180.0 / vtkMath::Pi();
-            double elevation = std::atan2(dz, std::sqrt(dx * dx + dy * dy)) * 180.0 / vtkMath::Pi();
-
-            // Update internal state
-            self->cameraAzimuth = azimuth;
-            self->cameraElevation = elevation;
-            // Note: Roll, Pitch, and Yaw are not extracted from VTK camera here, they're maintained separately
-
-            // Emit signal with actual values
-            emit self->cameraOrientationChanged(azimuth, elevation, self->cameraRoll, self->cameraPitch, self->cameraYaw);
+            emit self->cameraOrientationChanged(angles.roll, angles.pitch, angles.yaw);
         }
     }
 }
@@ -914,10 +1142,21 @@ void SceneWidget::renderVtkScene()
                                                                      settingParameter->nNodeZ,
                                                                      settingParameter->outputFileName);
 
-    emit availableStepsReadFromConfigFile(sceneWidgetVisualizerProxy->availableSteps());
+    const auto availableSteps = sceneWidgetVisualizerProxy->availableSteps();
+    emit availableStepsReadFromConfigFile(availableSteps);
 
-    lines.resize(settingParameter->numberOfLines);
-    sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+    {
+        // Create a performance session for initial data loading
+        PerformanceSession perfSession("Initial Data Loading",
+                                       static_cast<uint32_t>(settingParameter->numberOfColumnX),
+                                       static_cast<uint32_t>(settingParameter->numberOfRowsY),
+                                       static_cast<uint32_t>(settingParameter->numberOfSlicesZ),
+                                       static_cast<uint32_t>(availableSteps.size()));
+        perfSession.setCategory(PerformanceMetrics::MetricsCategory::DataLoading);
+
+        lines.resize(settingParameter->numberOfLines);
+        sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+    } // Session destructor prints metrics here
 
     // Draw VTK visualization with optional 3D substate support
     drawVisualizationWithOptional3DSubstate();
@@ -1082,6 +1321,60 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
 {
     if (! renderer || ! renderWindow())
         return;
+
+    if (isCrossSectionView() && isWorldPositionInGrid(m_lastWorldPos.data()))
+    {
+        int planeRow = 0;
+        int planeColumn = 0;
+        if (convertWorldToGridCoordinates(m_lastWorldPos.data(), planeRow, planeColumn))
+        {
+            if (substateSliceEnabled)
+            {
+                const int x = substateSliceAxis == GridSliceAxis::Y
+                    ? planeColumn
+                    : substateSliceIndex;
+                const int y = substateSliceAxis == GridSliceAxis::Y
+                    ? substateSliceIndex
+                    : planeRow;
+                QString tooltipText =
+                    QString("Cell Coordinates: (X=%1, Y=%2)").arg(x).arg(y);
+                tooltipText += cellValueAtThisPositionAsText();
+                QToolTip::showText(mapToGlobal(lastMousePos),
+                                   tooltipText,
+                                   this,
+                                   QRect(lastMousePos, QSize(1, 1)),
+                                   0);
+                return;
+            }
+
+            int x = planeColumn;
+            int y = planeRow;
+            int z = sceneWidgetVisualizerProxy->native3DSliceIndex();
+            switch (sceneWidgetVisualizerProxy->native3DSliceAxis())
+            {
+                case GridSliceAxis::X:
+                    x = sceneWidgetVisualizerProxy->native3DSliceIndex();
+                    y = planeColumn;
+                    z = settingParameter->numberOfSlicesZ - 1 - planeRow;
+                    break;
+                case GridSliceAxis::Y:
+                    y = sceneWidgetVisualizerProxy->native3DSliceIndex();
+                    z = settingParameter->numberOfSlicesZ - 1 - planeRow;
+                    break;
+                case GridSliceAxis::Z:
+                    break;
+            }
+            QString tooltipText =
+                QString("Cell Coordinates: (X=%1, Y=%2, Z=%3)").arg(x).arg(y).arg(z);
+            tooltipText += cellValueAtThisPositionAsText();
+            QToolTip::showText(mapToGlobal(lastMousePos),
+                               tooltipText,
+                               this,
+                               QRect(lastMousePos, QSize(1, 1)),
+                               0);
+            return;
+        }
+    }
 
     // m_lastMousePos is already in Qt coordinates (origin: top-left)
     // m_lastWorldPos is set by the VTK callback (picker or DisplayToWorld fallback)
@@ -1254,6 +1547,8 @@ void SceneWidget::clearScene()
 
     // Clear stage data
     sceneWidgetVisualizerProxy->clearStage();
+    sceneWidgetVisualizerProxy->clearNative3DSlice();
+    substateSliceEnabled = false;
 
     // Reset setting parameters to avoid stale data
     settingParameter = std::make_unique<SettingParameter>();
@@ -1314,6 +1609,12 @@ void SceneWidget::refreshStepNumberTextColorFromSettings()
 
 void SceneWidget::setViewMode2D()
 {
+    if (isNative3DModel() && !isNative3DSliceView())
+    {
+        std::cerr << "2D view is unavailable for a native 3D model." << std::endl;
+        return;
+    }
+
     if (! interactor())
         return;
 
@@ -1323,7 +1624,8 @@ void SceneWidget::setViewMode2D()
     currentViewMode = ViewMode::Mode2D;
     
     // Disable 3D substate visualization when switching to 2D mode
-    activeSubstateFor3D.clear();
+    if (!substateSliceEnabled)
+        activeSubstateFor3D.clear();
     
     // In 2D mode, flat scene background is always visible (it's the 2D visualization itself)
     flatSceneBackgroundVisible = true;
@@ -1346,8 +1648,6 @@ void SceneWidget::setViewMode2D()
     setupInteractorStyleWithWaitCursor();
 
     // Reset camera angles
-    cameraAzimuth = {};
-    cameraElevation = {};
     cameraRoll = {};
     cameraPitch = {};
     cameraYaw = {};
@@ -1372,9 +1672,11 @@ void SceneWidget::setViewMode2D()
 
     // Setup 2D ruler axes (bounds will be updated when data is loaded)
     setup2DRulerAxes();
+    update2DRulerAxisTitles();
 
     // Rebuild grid lines (they were removed when switching to 3D substate)
-    if (settingParameter && sceneWidgetVisualizerProxy && !lines.empty())
+    if (settingParameter && sceneWidgetVisualizerProxy && !lines.empty() &&
+        !isNative3DModel() && !substateSliceEnabled)
     {
         sceneWidgetVisualizerProxy->getVisualizer().buildLoadBalanceLine(lines,
                                                                          settingParameter->numberOfRowsY + 1,
@@ -1427,7 +1729,7 @@ void SceneWidget::setViewMode3D()
     rulerAxisY->SetVisibility(false);
 
     // Clear any 2D background artifacts before rendering 3D scene
-    if (backgroundActor && renderer)
+    if (!isNative3DModel() && backgroundActor && renderer)
     {
         renderer->RemoveActor(backgroundActor);
         backgroundActor = vtkSmartPointer<vtkActor>::New();
@@ -1436,6 +1738,122 @@ void SceneWidget::setViewMode3D()
     std::cout << "Switched to 3D view mode" << std::endl;
     
     // Cursor restored automatically by WaitCursorGuard destructor
+}
+
+bool SceneWidget::isNative3DModel() const
+{
+    return settingParameter && settingParameter->numberOfSlicesZ > 1;
+}
+
+bool SceneWidget::isNative3DSliceView() const
+{
+    return isNative3DModel() &&
+           sceneWidgetVisualizerProxy &&
+           sceneWidgetVisualizerProxy->isNative3DSliceEnabled();
+}
+
+bool SceneWidget::is3DSubstateSurface() const
+{
+    if (!settingParameter || isNative3DModel() || activeSubstateFor3D.empty())
+        return false;
+
+    const auto info = settingParameter->substateInfo.find(activeSubstateFor3D);
+    return info != settingParameter->substateInfo.end() &&
+           !std::isnan(info->second.minValue) &&
+           !std::isnan(info->second.maxValue) &&
+           info->second.minValue < info->second.maxValue;
+}
+
+bool SceneWidget::hasSliceable3DView() const
+{
+    return isNative3DModel() || is3DSubstateSurface();
+}
+
+bool SceneWidget::isCrossSectionView() const
+{
+    return isNative3DSliceView() || substateSliceEnabled;
+}
+
+void SceneWidget::setNative3DSlice(GridSliceAxis axis, int fixedIndex)
+{
+    if (!isNative3DModel() || !sceneWidgetVisualizerProxy)
+        return;
+
+    const bool planeChanged =
+        !isNative3DSliceView() ||
+        sceneWidgetVisualizerProxy->native3DSliceAxis() != axis;
+
+    sceneWidgetVisualizerProxy->setNative3DSlice(axis, fixedIndex);
+
+    if (planeChanged || currentViewMode != ViewMode::Mode2D)
+    {
+        setViewMode2D();
+        return;
+    }
+
+    drawVisualizationWithOptional3DSubstate();
+    update2DRulerAxisTitles();
+    update2DRulerAxesBounds();
+    updateCameraPivotFromBounds();
+    triggerRenderUpdate();
+}
+
+void SceneWidget::setNative3DVolumeView()
+{
+    if (!isNative3DModel() || !sceneWidgetVisualizerProxy)
+        return;
+
+    sceneWidgetVisualizerProxy->clearNative3DSlice();
+    drawVisualizationWithOptional3DSubstate();
+    setViewMode3D();
+    updateCameraPivotFromBounds();
+    applyCameraAngles();
+}
+
+void SceneWidget::setSubstate3DSlice(GridSliceAxis axis, int fixedIndex)
+{
+    if (!is3DSubstateSurface() ||
+        (axis != GridSliceAxis::X && axis != GridSliceAxis::Y))
+    {
+        return;
+    }
+
+    const bool planeChanged = !substateSliceEnabled || substateSliceAxis != axis;
+    substateSliceEnabled = true;
+    substateSliceAxis = axis;
+    substateSliceIndex = axis == GridSliceAxis::Y
+        ? std::clamp(fixedIndex, 0, settingParameter->numberOfRowsY - 1)
+        : std::clamp(fixedIndex, 0, settingParameter->numberOfColumnX - 1);
+
+    if (planeChanged || currentViewMode != ViewMode::Mode2D)
+    {
+        setViewMode2D();
+        return;
+    }
+
+    drawVisualizationWithOptional3DSubstate();
+    update2DRulerAxisTitles();
+    update2DRulerAxesBounds();
+    updateCameraPivotFromBounds();
+    triggerRenderUpdate();
+}
+
+void SceneWidget::clearCrossSection()
+{
+    if (isNative3DSliceView())
+    {
+        setNative3DVolumeView();
+        return;
+    }
+
+    if (!substateSliceEnabled)
+        return;
+
+    substateSliceEnabled = false;
+    drawVisualizationWithOptional3DSubstate();
+    setViewMode3D();
+    updateCameraPivotFromBounds();
+    applyCameraAngles();
 }
 
 void SceneWidget::setAxesWidgetVisible(bool visible)
@@ -1477,6 +1895,8 @@ void SceneWidget::setUseCellRendering(bool useCellRenderingMode)
 
 void SceneWidget::setActiveSubstateFor3D(const std::string& fieldName)
 {
+    if (fieldName.empty())
+        substateSliceEnabled = false;
     activeSubstateFor3D = fieldName;
 }
 
@@ -1491,30 +1911,6 @@ void SceneWidget::refreshVisualization()
 {
     loadAndUpdateVisualizationForCurrentStep();
     triggerRenderUpdate();
-}
-
-void SceneWidget::setCameraAzimuth(double angle)
-{
-    // Store the new azimuth value
-    cameraAzimuth = angle;
-
-    // Apply camera angles using helper method
-    if (currentViewMode == ViewMode::Mode3D)
-        applyCameraAnglesPreservingZoom();
-    else
-        applyCameraAngles();
-}
-
-void SceneWidget::setCameraElevation(double angle)
-{
-    // Store the new elevation value
-    cameraElevation = angle;
-
-    // Apply camera angles using helper method
-    if (currentViewMode == ViewMode::Mode3D)
-        applyCameraAnglesPreservingZoom();
-    else
-        applyCameraAngles();
 }
 
 void SceneWidget::setCameraRoll(double angle)
@@ -1616,8 +2012,35 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
     if (sceneWidth <= 0 || sceneHeight <= 0)
         return false;
 
-    const double cellWidth = sceneWidth / settingParameter->numberOfColumnX;
-    const double cellHeight = sceneHeight / settingParameter->numberOfRowsY;
+    if (substateSliceEnabled)
+    {
+        const int sampleCount = substateSliceAxis == GridSliceAxis::Y
+            ? settingParameter->numberOfColumnX
+            : settingParameter->numberOfRowsY;
+        int sample = static_cast<int>(
+            ((worldPos[0] - bounds[0]) / sceneWidth) * sampleCount);
+        sample = std::clamp(sample, 0, sampleCount - 1);
+
+        if (substateSliceAxis == GridSliceAxis::Y)
+        {
+            outRow = substateSliceIndex;
+            outCol = sample;
+        }
+        else
+        {
+            outRow = sample;
+            outCol = substateSliceIndex;
+        }
+        return true;
+    }
+
+    const int columnCount = displayedColumnCount();
+    const int rowCount = displayedRowCount();
+    if (columnCount <= 0 || rowCount <= 0)
+        return false;
+
+    const double cellWidth = sceneWidth / columnCount;
+    const double cellHeight = sceneHeight / rowCount;
 
     // Convert world position to grid indices
     // Points are positioned with Y inverted: (nRows - 1 - row)
@@ -1626,15 +2049,39 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
     int row = static_cast<int>((worldPos[1] - bounds[2]) / cellHeight);
     
     // Invert row to match the inverted Y coordinates used in visualization
-    row = settingParameter->numberOfRowsY - 1 - row;
+    row = rowCount - 1 - row;
 
     // Clamp to valid range
-    col = std::max(0, std::min(col, settingParameter->numberOfColumnX - 1));
-    row = std::max(0, std::min(row, settingParameter->numberOfRowsY - 1));
+    col = std::max(0, std::min(col, columnCount - 1));
+    row = std::max(0, std::min(row, rowCount - 1));
 
     outRow = row;
     outCol = col;
     return true;
+}
+
+int SceneWidget::displayedRowCount() const
+{
+    if (!settingParameter)
+        return 0;
+    if (!isNative3DSliceView())
+        return settingParameter->numberOfRowsY;
+
+    return sceneWidgetVisualizerProxy->native3DSliceAxis() == GridSliceAxis::Z
+        ? settingParameter->numberOfRowsY
+        : settingParameter->numberOfSlicesZ;
+}
+
+int SceneWidget::displayedColumnCount() const
+{
+    if (!settingParameter)
+        return 0;
+    if (!isNative3DSliceView())
+        return settingParameter->numberOfColumnX;
+
+    return sceneWidgetVisualizerProxy->native3DSliceAxis() == GridSliceAxis::X
+        ? settingParameter->numberOfRowsY
+        : settingParameter->numberOfColumnX;
 }
 
 bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
@@ -1662,16 +2109,47 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
     // Features: Ray-plane zoom (zoom towards cursor), wait cursor, Shift+Drag panning
     // Cost: ~5% overhead due to ray-plane calculations
     vtkNew<CustomInteractorStyle> style;
+    style->Set3DInteractionEnabled(currentViewMode == ViewMode::Mode3D);
     interactor()->SetInteractorStyle(style);
+    connectCameraCallback();
 }
 
 void SceneWidget::applyGridLinesSettings()
 {
-    // Check if we're in 3D substate mode
-    bool isIn3DMode = !activeSubstateFor3D.empty() && settingParameter && 
-                     settingParameter->substateInfo.count(activeSubstateFor3D) > 0 &&
-                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].minValue) &&
-                     !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].maxValue);
+    const bool isNativeModel = settingParameter && settingParameter->numberOfSlicesZ > 1;
+    const bool isNative3D = isNativeModel && !isNative3DSliceView();
+
+    // The existing load-balancing line data describes XY partitions only.
+    // Do not display it on XZ/YZ slices (or stale over an XY slice) until a
+    // plane-specific node-boundary representation is built.
+    if (isNativeModel && isNative3DSliceView())
+    {
+        if (actorBuildLine)
+            actorBuildLine->SetVisibility(false);
+        if (gridLinesOnSurfaceActor)
+            gridLinesOnSurfaceActor->SetVisibility(false);
+        return;
+    }
+
+    if (substateSliceEnabled)
+    {
+        if (actorBuildLine)
+            actorBuildLine->SetVisibility(false);
+        if (gridLinesOnSurfaceActor)
+            gridLinesOnSurfaceActor->SetVisibility(false);
+        return;
+    }
+
+    // Native volumes never use the flat XY node overlay. The established
+    // 2D "substate as altitude" mode keeps its surface-line behavior.
+    const bool isSubstateSurface =
+        !isNative3D &&
+        settingParameter &&
+        !activeSubstateFor3D.empty() &&
+        settingParameter->substateInfo.count(activeSubstateFor3D) > 0 &&
+        !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].minValue) &&
+        !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].maxValue);
+    const bool isIn3DMode = isNative3D || isSubstateSurface;
     
     if (isIn3DMode)
     {
@@ -1703,9 +2181,19 @@ void SceneWidget::applyGridLinesSettings()
 
 void SceneWidget::initializeAndDraw3DSubstateVisualization()
 {
-    // Read the current step data from files
-    lines.resize(settingParameter->numberOfLines);
-    sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+    {
+        // Create a performance session for 3D substate loading
+        PerformanceSession perfSession("3D Substate Loading",
+                                       static_cast<uint32_t>(settingParameter->numberOfColumnX),
+                                       static_cast<uint32_t>(settingParameter->numberOfRowsY),
+                                       static_cast<uint32_t>(settingParameter->numberOfSlicesZ),
+                                       1);
+        perfSession.setCategory(PerformanceMetrics::MetricsCategory::Rendering);
+
+        // Read the current step data from files
+        lines.resize(settingParameter->numberOfLines);
+        sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
+    } // Session destructor prints metrics here
 
     // Draw the 3D substate visualization (initializes the scene with quad mesh)
     drawVisualizationWithOptional3DSubstate();

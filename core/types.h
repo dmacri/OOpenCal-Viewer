@@ -22,6 +22,15 @@ using NodeIndex = unsigned;
  * @note: The type should be (according to standard) `std::streampos`, but the type can not be used in streams */
 using FilePosition = long long;
 
+/** @enum GridSliceAxis
+ * @brief Axis held constant when exposing a 2D view of 3D data. */
+enum class GridSliceAxis
+{
+    X,
+    Y,
+    Z
+};
+
 /** @struct ColumnAndRow
  * @brief Represents a 2D coordinate system using column and row indices.
  *
@@ -54,5 +63,36 @@ struct ColumnAndRow
     auto y() const
     {
         return row;
+    }
+};
+
+/** @struct ColumnRowSlice
+ * @brief Represents dimensions or coordinates in a three-dimensional grid. */
+struct ColumnRowSlice
+{
+    using CoordinateType = int;
+
+    CoordinateType column;
+    CoordinateType row;
+    CoordinateType slice;
+
+    static ColumnRowSlice xyz(CoordinateType x, CoordinateType y, CoordinateType z)
+    {
+        return ColumnRowSlice{ .column = x, .row = y, .slice = z };
+    }
+
+    auto x() const
+    {
+        return column;
+    }
+
+    auto y() const
+    {
+        return row;
+    }
+
+    auto z() const
+    {
+        return slice;
     }
 };

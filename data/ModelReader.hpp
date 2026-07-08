@@ -25,6 +25,7 @@
 #include "visualiser/Line.h"
 #include "visualiser/SettingParameter.h"
 #include "plugins/CellConcept.hpp"
+#include "data/PerformanceMetrics.h"
 
 /** @class ModelReader
  * @brief Template class for reading and processing model data from files.
@@ -42,7 +43,7 @@ public:
     struct StepOffsetInfo
     {
         FilePosition position;
-        std::optional<ColumnAndRow> sceneSize;
+        std::optional<ColumnRowSlice> sceneSize;
     };
 
 private:
@@ -144,16 +145,17 @@ private:
     [[nodiscard]] std::ifstream readColumnAndRowForStepFromFileReturningStream(StepIndex step,
                                                                                const std::string& fileName,
                                                                                NodeIndex node,
-                                                                               ColumnAndRow& columnAndRow,
+                                                                               ColumnRowSlice& dimensions,
                                                                                bool isBinary = false);
 
-    [[nodiscard]] ColumnAndRow readColumnAndRowForStepFromFile(StepIndex step, const std::string& fileName, NodeIndex node, bool isBinary = false);
+    [[nodiscard]] ColumnRowSlice readDimensionsForStepFromFile(StepIndex step, const std::string& fileName, NodeIndex node, bool isBinary = false);
 
-    std::vector<ColumnAndRow> giveMeLocalColsAndRowsForAllSteps(StepIndex step,
-                                                                NodeIndex nNodeX,
-                                                                NodeIndex nNodeY,
-                                                                const std::string& fileName,
-                                                                bool isBinary = false);
+    std::vector<ColumnRowSlice> localDimensionsForAllNodes(StepIndex step,
+                                                           NodeIndex nNodeX,
+                                                           NodeIndex nNodeY,
+                                                           NodeIndex nNodeZ,
+                                                           const std::string& fileName,
+                                                           bool isBinary = false);
 };
 
 /////////////////////////////
@@ -173,22 +175,30 @@ namespace ReaderHelpers /// functions which are not templates
 ColumnAndRow getColumnAndRowFromLine(const std::string& line);
 
 ColumnAndRow calculateXYOffsetForNode(NodeIndex node, NodeIndex nNodeX, NodeIndex nNodeY, const std::vector<ColumnAndRow>& columnsAndRows);
+
+ColumnRowSlice getDimensionsFromLine(const std::string& line);
+
+ColumnRowSlice calculateXYZOffsetForNode(NodeIndex node,
+                                         NodeIndex nNodeX,
+                                         NodeIndex nNodeY,
+                                         NodeIndex nNodeZ,
+                                         const std::vector<ColumnRowSlice>& dimensions);
 } // namespace ReaderHelpers
 /////////////////////////////
 
 template<CellLike Cell>
-ColumnAndRow ModelReader<Cell>::readColumnAndRowForStepFromFile(StepIndex step, const std::string& fileName, NodeIndex node, bool isBinary)
+ColumnRowSlice ModelReader<Cell>::readDimensionsForStepFromFile(StepIndex step, const std::string& fileName, NodeIndex node, bool isBinary)
 {
-    ColumnAndRow columnAndRow;
-    std::ifstream file [[maybe_unused]] = readColumnAndRowForStepFromFileReturningStream(step, fileName, node, columnAndRow, isBinary);
-    return columnAndRow;
+    ColumnRowSlice dimensions;
+    std::ifstream file [[maybe_unused]] = readColumnAndRowForStepFromFileReturningStream(step, fileName, node, dimensions, isBinary);
+    return dimensions;
 }
 
 template<CellLike Cell>
 std::ifstream ModelReader<Cell>::readColumnAndRowForStepFromFileReturningStream(StepIndex step,
                                                                                 const std::string& fileName,
                                                                                 NodeIndex node,
-                                                                                ColumnAndRow& columnAndRow,
+                                                                                ColumnRowSlice& dimensions,
                                                                                 bool isBinary)
 {
     const auto fileNameTmp = ReaderHelpers::giveMeFileName(fileName, node, isBinary);
@@ -215,7 +225,7 @@ std::ifstream ModelReader<Cell>::readColumnAndRowForStepFromFileReturningStream(
         const auto& stepMap = nodeStepOffsets[node];
         if (auto it = stepMap.find(step); it != stepMap.end() && it->second.sceneSize.has_value())
         {
-            columnAndRow = it->second.sceneSize.value();
+            dimensions = it->second.sceneSize.value();
         }
         else
         {
@@ -231,7 +241,7 @@ std::ifstream ModelReader<Cell>::readColumnAndRowForStepFromFileReturningStream(
             throw std::runtime_error(std::format("Failed to read line from '{}' at position {}", fileNameTmp, fPos));
         }
 
-        columnAndRow = ReaderHelpers::getColumnAndRowFromLine(line);
+        dimensions = ReaderHelpers::getDimensionsFromLine(line);
     }
 
     return file;
@@ -241,46 +251,77 @@ template<CellLike Cell>
 template<class Matrix>
 void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParameter* sp, Line* lines)
 {
-    const auto totalNodes = sp->nNodeX * sp->nNodeY;
-    const bool isBinary = (sp->readMode == "binary");
-    const auto columnsAndRows = giveMeLocalColsAndRowsForAllSteps(sp->step, sp->nNodeX, sp->nNodeY, sp->outputFileName, isBinary);
+    PerformanceSession perfSession("readStageStateFromFilesForStep", 
+                                   static_cast<uint32_t>(sp->numberOfColumnX),
+                                   static_cast<uint32_t>(sp->numberOfRowsY),
+                                   static_cast<uint32_t>(sp->numberOfSlicesZ),
+                                   1);
+    perfSession.setStepNumber(sp->step);
+    perfSession.setCategory(PerformanceMetrics::MetricsCategory::DataLoading);
 
-    /// Lambda responsible for reading and processing a single node's file
+    const auto totalNodes = sp->nNodeX * sp->nNodeY * sp->nNodeZ;
+    const bool isBinary = (sp->readMode == "binary");
+    const auto localDimensions = localDimensionsForAllNodes(sp->step,
+                                                            sp->nNodeX,
+                                                            sp->nNodeY,
+                                                            sp->nNodeZ,
+                                                            sp->outputFileName,
+                                                            isBinary);
+
+    size_t totalCellsForThisCall = 0;
+    for (const auto& dimensions : localDimensions)
+    {
+        totalCellsForThisCall += static_cast<size_t>(dimensions.column) *
+                                 dimensions.row *
+                                 dimensions.slice;
+    }
+    perfSession.recordReadCall(totalCellsForThisCall);
+
     auto processNode = [&, this](NodeIndex node)
     {
-        const auto offsetXY = ReaderHelpers::calculateXYOffsetForNode(node, sp->nNodeX, sp->nNodeY, columnsAndRows);
+        const auto offset = ReaderHelpers::calculateXYZOffsetForNode(node,
+                                                                     sp->nNodeX,
+                                                                     sp->nNodeY,
+                                                                     sp->nNodeZ,
+                                                                     localDimensions);
 
-        ColumnAndRow columnAndRow;
-        std::ifstream fp = readColumnAndRowForStepFromFileReturningStream(sp->step, sp->outputFileName, node, columnAndRow, isBinary);
+        ColumnRowSlice dimensions;
+        std::ifstream fp = readColumnAndRowForStepFromFileReturningStream(sp->step,
+                                                                          sp->outputFileName,
+                                                                          node,
+                                                                          dimensions,
+                                                                          isBinary);
         if (! fp)
             throw std::runtime_error("Cannot open file for node " + std::to_string(node));
 
-        // Clamp coordinates to matrix bounds
         const int maxX = static_cast<int>(m[0].size()) - 1;
         const int maxY = static_cast<int>(m.size()) - 1;
-        
-        const int x1 = std::min(offsetXY.x(), maxX);
-        const int y1 = std::min(offsetXY.y(), maxY);
-        const int x2 = std::min(offsetXY.x() + columnAndRow.column, maxX + 1);
-        const int y2 = std::min(offsetXY.y() + columnAndRow.row, maxY + 1);
-        
-        // Define boundary lines for the node (bottom and left edges)
+
+        const int x1 = std::min(offset.x(), maxX);
+        const int y1 = std::min(offset.y(), maxY);
+        const int x2 = std::min(offset.x() + dimensions.column, maxX + 1);
+        const int y2 = std::min(offset.y() + dimensions.row, maxY + 1);
+
         lines[node * 2] = Line(x1, y1, x2, y1);
         lines[node * 2 + 1] = Line(x1, y1, x1, y2);
 
-        // Add top edge line for nodes in the last row (highest y)
-        const NodeIndex nodeRow = node / sp->nNodeX;
-        if (nodeRow == sp->nNodeY - 1) // Top row
+        const NodeIndex nodeRow = (node / sp->nNodeX) % sp->nNodeY;
+        const NodeIndex nodeSlice = node / (sp->nNodeX * sp->nNodeY);
+        if (nodeRow == sp->nNodeY - 1)
         {
-            const int topLineIndex = 2 * totalNodes + (node % sp->nNodeX);
+            const int topLineIndex = 2 * totalNodes +
+                                     nodeSlice * sp->nNodeX +
+                                     (node % sp->nNodeX);
             lines[topLineIndex] = Line(x1, y2, x2, y2);
         }
 
-        // Add right edge line for nodes in the last column (highest x)
         const NodeIndex nodeCol = node % sp->nNodeX;
-        if (nodeCol == sp->nNodeX - 1) // Rightmost column
+        if (nodeCol == sp->nNodeX - 1)
         {
-            const int rightLineIndex = 2 * totalNodes + sp->nNodeX + nodeRow;
+            const int rightLineIndex = 2 * totalNodes +
+                                       sp->nNodeX * sp->nNodeZ +
+                                       nodeSlice * sp->nNodeY +
+                                       nodeRow;
             lines[rightLineIndex] = Line(x2, y1, x2, y2);
         }
 
@@ -288,8 +329,9 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
 
         if (isBinary)
         {
-            // Binary mode: read raw cell data
-            const size_t cellCount = columnAndRow.column * columnAndRow.row;
+            const size_t cellCount = static_cast<size_t>(dimensions.column) *
+                                     dimensions.row *
+                                     dimensions.slice;
             const size_t cellSize = sizeof(Cell);
             const size_t totalBytes = cellCount * cellSize;
 
@@ -301,99 +343,106 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
                 throw std::runtime_error(std::format("Failed to read {} bytes from binary file for node {}", totalBytes, node));
             }
 
-            // Parse binary data and fill matrix
-            for (int row = 0; row < columnAndRow.row; ++row)
+            for (int slice = 0; slice < dimensions.slice; ++slice)
             {
-                const int matrixRow = row + offsetXY.y();
-                if (matrixRow >= static_cast<int>(m.size()))
-                    continue; // Skip rows that are out of bounds
-                    
-                for (int col = 0; col < columnAndRow.column; ++col)
+                const int matrixSlice = slice + offset.z();
+                if (matrixSlice >= static_cast<int>(m.layerCount()))
+                    continue;
+
+                for (int row = 0; row < dimensions.row; ++row)
                 {
-                    const int matrixCol = col + offsetXY.x();
-                    if (matrixCol >= static_cast<int>(m[matrixRow].size()))
-                        continue; // Skip columns that are out of bounds
+                    const int matrixRow = row + offset.y();
+                    if (matrixRow >= static_cast<int>(m.size()))
+                        continue;
 
-                    if (! localStartStepDone) [[unlikely]]
+                    for (int col = 0; col < dimensions.column; ++col)
                     {
-                        m[matrixRow][matrixCol].startStep(sp->step);
-                        localStartStepDone = true;
+                        const int matrixCol = col + offset.x();
+                        if (matrixCol >= static_cast<int>(m[matrixRow].size()))
+                            continue;
+
+                        if (! localStartStepDone) [[unlikely]]
+                        {
+                            m[matrixRow, matrixCol, matrixSlice].startStep(sp->step);
+                            localStartStepDone = true;
+                        }
+
+                        const size_t cellIndex =
+                            (static_cast<size_t>(slice) * dimensions.row + row) *
+                            dimensions.column +
+                            col;
+                        const char* cellData = buffer.data() + (cellIndex * cellSize);
+
+                        Cell tempCell;
+                        std::memcpy(&tempCell, cellData, cellSize); /// @note This erases the temporary object's vtable; assignment copies the cell state.
+                        m[matrixRow, matrixCol, matrixSlice] = tempCell;
                     }
-
-                    const size_t cellIndex = row * columnAndRow.column + col;
-                    const char* cellData = buffer.data() + (cellIndex * cellSize);
-
-                    // Create a temporary cell from binary data and copy to matrix
-                    Cell tempCell;
-                    std::memcpy(&tempCell, cellData, cellSize); /// @note This is erasing vtable, so don't use the object polimorphic way
-                    m[matrixRow][matrixCol] = tempCell;
                 }
             }
         }
         else
         {
-            // Text mode: read and parse text data (original behavior)
-            // Use a thread-local buffer for faster reading
             static thread_local char fileBuffer[1 << 16];
             fp.rdbuf()->pubsetbuf(fileBuffer, sizeof(fileBuffer));
 
-            // Reserve a large line buffer to minimize reallocations
             constexpr std::size_t numbersPerLine = 10'000;
             const std::size_t lineBufferSize = (std::log10(UINT_MAX) + 2) * numbersPerLine;
             std::string line;
             line.reserve(lineBufferSize);
 
-            // Process each line (row) from the node's file
-            for (int row = 0; row < columnAndRow.row; ++row)
+            // Each slice is serialized as `rows` consecutive text lines.
+            for (int slice = 0; slice < dimensions.slice; ++slice)
             {
-                const int matrixRow = row + offsetXY.y();
-                if (matrixRow >= static_cast<int>(m.size()))
+                const int matrixSlice = slice + offset.z();
+
+                for (int row = 0; row < dimensions.row; ++row)
                 {
-                    // Skip reading this line from file but don't process it
                     if (! std::getline(fp, line))
                     {
                         const auto fileNameTmp = ReaderHelpers::giveMeFileName(sp->outputFileName, node, isBinary);
                         throw std::runtime_error("Error reading entire line from " + fileNameTmp);
                     }
-                    continue; // Skip this row - it's out of bounds
-                }
-                    
-                if (! std::getline(fp, line))
-                {
-                    const auto fileNameTmp = ReaderHelpers::giveMeFileName(sp->outputFileName, node, isBinary);
-                    throw std::runtime_error("Error reading entire line from " + fileNameTmp);
-                }
 
-                // Replace spaces with '\0' to tokenize more efficiently
-                std::replace(line.begin(), line.end(), ' ', '\0');
-
-                // Tokenize and fill the corresponding part of the matrix
-                char* currentTokenPtr = line.data();
-                for (int col = 0; col < columnAndRow.column && *currentTokenPtr; ++col)
-                {
-                    const int matrixCol = col + offsetXY.x();
-                    if (matrixCol >= static_cast<int>(m[matrixRow].size()))
-                        continue; // Skip this column - it's out of bounds
-
-                    if (! localStartStepDone) [[unlikely]]
+                    const int matrixRow = row + offset.y();
+                    if (matrixSlice >= static_cast<int>(m.layerCount()) ||
+                        matrixRow >= static_cast<int>(m.size()))
                     {
-                        m[matrixRow][matrixCol].startStep(sp->step);
-                        localStartStepDone = true;
+                        continue;
                     }
 
-                    /// composeElement() may add extra '\0', so we need extra variable to jump to next position
-                    char* nextTokenPtr = std::find(currentTokenPtr, line.data() + line.size(), '\0');
-                    ++nextTokenPtr; // skip '\0'
+                    char* cursor = line.data();
+                    char* const end = line.data() + line.size();
 
-                    m[matrixRow][matrixCol].composeElement(currentTokenPtr);
+                    for (int col = 0; col < dimensions.column; ++col)
+                    {
+                        while (cursor < end && *cursor == ' ')
+                            ++cursor;
+                        if (cursor >= end)
+                            break;
 
-                    currentTokenPtr = nextTokenPtr;
+                        char* const token = cursor;
+                        while (cursor < end && *cursor != ' ')
+                            ++cursor;
+                        if (cursor < end)
+                            *cursor++ = '\0';
+
+                        const int matrixCol = col + offset.x();
+                        if (matrixCol >= static_cast<int>(m[matrixRow].size()))
+                            continue;
+
+                        if (! localStartStepDone) [[unlikely]]
+                        {
+                            m[matrixRow, matrixCol, matrixSlice].startStep(sp->step);
+                            localStartStepDone = true;
+                        }
+
+                        m[matrixRow, matrixCol, matrixSlice].composeElement(token);
+                    }
                 }
             }
         }
     };
 
-    /// Launch async tasks — one per node
     std::vector<std::future<void>> futures;
     futures.reserve(totalNodes);
 
@@ -406,7 +455,6 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
                                      }));
     }
 
-    // Wait for all async tasks to complete
     std::ranges::for_each(futures,
                           [](std::future<void>& f)
                           {
@@ -415,21 +463,21 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
 }
 
 template<CellLike Cell>
-std::vector<ColumnAndRow> ModelReader<Cell>::giveMeLocalColsAndRowsForAllSteps(StepIndex step,
-                                                                               NodeIndex nNodeX,
-                                                                               NodeIndex nNodeY,
-                                                                               const std::string& fileName,
-                                                                               bool isBinary)
+std::vector<ColumnRowSlice> ModelReader<Cell>::localDimensionsForAllNodes(StepIndex step,
+                                                                         NodeIndex nNodeX,
+                                                                         NodeIndex nNodeY,
+                                                                         NodeIndex nNodeZ,
+                                                                         const std::string& fileName,
+                                                                         bool isBinary)
 {
-    const auto nodesCount = nNodeX * nNodeY;
-    std::vector<ColumnAndRow> allColumnsAndRows(nodesCount);
-    allColumnsAndRows.resize(nodesCount);
+    const auto nodesCount = nNodeX * nNodeY * nNodeZ;
+    std::vector<ColumnRowSlice> allDimensions(nodesCount);
 
     for (NodeIndex node = 0; node < nodesCount; node++)
     {
-        allColumnsAndRows[node] = readColumnAndRowForStepFromFile(step, fileName, node, isBinary);
+        allDimensions[node] = readDimensionsForStepFromFile(step, fileName, node, isBinary);
     }
-    return allColumnsAndRows;
+    return allDimensions;
 }
 
 template<CellLike Cell>
@@ -462,17 +510,18 @@ void ModelReader<Cell>::readStepsOffsetsForAllNodesFromFiles(NodeIndex nNodeX, N
 
             StepOffsetInfo info{position, std::nullopt};
 
-            // Check if we have the optional "(columns-rows)" part
+            // Check if we have the optional "(columns-rows[-slices])" part
             std::string rangePart;
             if (iss >> rangePart)
             {
-                std::regex rangeRegex(R"(\((\d+)-(\d+)\))");
+                std::regex rangeRegex(R"(\((\d+)-(\d+)(?:-(\d+))?\))");
                 std::smatch match;
                 if (std::regex_match(rangePart, match, rangeRegex))
                 {
                     const int columnCount = std::stoi(match[1].str());
                     const int rowsCount = std::stoi(match[2].str());
-                    info.sceneSize = ColumnAndRow{.column = columnCount, .row = rowsCount};
+                    const int slicesCount = match[3].matched ? std::stoi(match[3].str()) : 1;
+                    info.sceneSize = ColumnRowSlice::xyz(columnCount, rowsCount, slicesCount);
                 }
                 else
                 {

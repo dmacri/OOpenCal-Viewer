@@ -1,0 +1,154 @@
+name: Doxygen Documentation
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-docs:
+    name: Build Doxygen documentation
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Doxygen and Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
+
+      - name: Generate Doxygen configuration
+        run: |
+          mkdir -p build/docs
+
+          cat > build/Doxyfile.pages <<EOF
+          PROJECT_NAME           = "OOpenCal-Viewer"
+          PROJECT_BRIEF          = "OOpenCal-Viewer API documentation"
+          OUTPUT_DIRECTORY       = build/docs
+
+          INPUT                  = README.md \
+                                   core \
+                                   data \
+                                   config \
+                                   plugins \
+                                   visualiser \
+                                   visualiserProxy \
+                                   widgets \
+                                   doc \
+                                   examples
+          RECURSIVE              = YES
+          FILE_PATTERNS          = *.cpp *.cxx *.cc *.c *.h *.hpp *.hh *.ui *.qrc *.md
+          EXTENSION_MAPPING      = ui=C++ qrc=C++
+
+          EXCLUDE                = build \
+                                   build-codex \
+                                   .git \
+                                   .github \
+                                   .cache \
+                                   .qtcreator
+          EXCLUDE_PATTERNS       = *_autogen* \
+                                   moc_* \
+                                   ui_* \
+                                   qt_* \
+                                   *CMakeFiles* \
+                                   *_automoc.* \
+                                   *_autogen/* \
+                                   */moc_* \
+                                   */ui_* \
+                                   */qt_*
+
+          GENERATE_HTML          = YES
+          HTML_OUTPUT            = html
+          HTML_FILE_EXTENSION    = .html
+          GENERATE_TREEVIEW      = YES
+          DISABLE_INDEX          = NO
+
+          GENERATE_LATEX         = NO
+          GENERATE_XML           = NO
+          GENERATE_RTF           = NO
+          GENERATE_MAN           = NO
+
+          MARKDOWN_SUPPORT       = YES
+          USE_MDFILE_AS_MAINPAGE = README.md
+
+          ENABLE_PREPROCESSING   = YES
+          MACRO_EXPANSION        = YES
+          EXPAND_ONLY_PREDEF     = NO
+          PREDEFINED             = Q_OBJECT \
+                                   signals=public \
+                                   slots=public \
+                                   Q_SLOTS=public \
+                                   Q_SIGNALS=public \
+                                   emit= \
+                                   override= \
+                                   Q_DECLARE_PRIVATE(x)= \
+                                   QT_VERSION
+
+          HAVE_DOT               = YES
+          DOT_IMAGE_FORMAT       = svg
+          DOT_NUM_THREADS        = 0
+          CLASS_DIAGRAMS         = YES
+          CALL_GRAPH             = YES
+          CALLER_GRAPH           = YES
+          DOT_GRAPH_MAX_NODES    = 200
+
+          EXTRACT_ALL            = YES
+          EXTRACT_PRIVATE        = NO
+          EXTRACT_STATIC         = NO
+          FULL_PATH_NAMES        = YES
+          STRIP_FROM_PATH        = ${GITHUB_WORKSPACE}
+          WARNINGS               = YES
+          WARN_IF_UNDOCUMENTED   = NO
+          WARN_AS_ERROR          = NO
+          QUIET                  = NO
+          EOF
+
+      - name: Build HTML documentation
+        run: doxygen build/Doxyfile.pages
+
+      - name: Upload Doxygen HTML artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: doxygen-html
+          path: build/docs/html
+          if-no-files-found: error
+
+      - name: Configure GitHub Pages
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        uses: actions/configure-pages@v5
+
+      - name: Prepare GitHub Pages artifact
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/docs/html
+
+  deploy-docs:
+    name: Deploy documentation to GitHub Pages
+    needs: build-docs
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-24.04
+
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

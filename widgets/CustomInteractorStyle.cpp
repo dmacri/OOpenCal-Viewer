@@ -233,6 +233,9 @@ void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)
 
 void CustomInteractorStyle::OnLeftButtonDown()
 {
+    if (!m_3dInteractionEnabled)
+        return;
+
     // If Shift is pressed: start custom panning
     if (this->Interactor->GetShiftKey())
     {
@@ -253,6 +256,9 @@ void CustomInteractorStyle::OnLeftButtonDown()
 
 void CustomInteractorStyle::OnLeftButtonUp()
 {
+    if (!m_3dInteractionEnabled)
+        return;
+
     if (m_isPanning)
     {
         m_isPanning = false;
@@ -266,8 +272,35 @@ void CustomInteractorStyle::OnLeftButtonUp()
     }
 }
 
+void CustomInteractorStyle::OnMiddleButtonDown()
+{
+    if (m_3dInteractionEnabled)
+        this->Superclass::OnMiddleButtonDown();
+}
+
+void CustomInteractorStyle::OnMiddleButtonUp()
+{
+    if (m_3dInteractionEnabled)
+        this->Superclass::OnMiddleButtonUp();
+}
+
+void CustomInteractorStyle::OnRightButtonDown()
+{
+    if (m_3dInteractionEnabled)
+        this->Superclass::OnRightButtonDown();
+}
+
+void CustomInteractorStyle::OnRightButtonUp()
+{
+    if (m_3dInteractionEnabled)
+        this->Superclass::OnRightButtonUp();
+}
+
 void CustomInteractorStyle::OnMouseMove()
 {
+    if (!m_3dInteractionEnabled)
+        return;
+
     if (m_isPanning)
     {
         // Custom panning when Shift+Left is held
