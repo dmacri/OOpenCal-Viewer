@@ -485,6 +485,23 @@ protected:
      * @return True if coordinates are within valid grid bounds, false otherwise */
     bool convertWorldToGridCoordinates(const double worldPos[3], int& outRow, int& outCol) const;
 
+    /** @brief Returns bounds of the rendered data grid actor, excluding ruler axes and helper props.
+     *  @param bounds Output VTK bounds array: xmin, xmax, ymin, ymax, zmin, zmax
+     *  @return True if bounds are available and finite. */
+    bool currentGridBounds(double bounds[6]) const;
+
+    /** @brief Converts VTK world coordinates to display/pixel coordinates shown to users.
+     *
+     *  X grows from left to right. Y grows from top to bottom, matching image/pixel
+     *  coordinates and the 2D ruler labels.
+     *
+     *  @param worldPos VTK world coordinates
+     *  @param outX User-facing X coordinate
+     *  @param outY User-facing Y coordinate
+     *  @param outZ User-facing Z coordinate
+     *  @return True if the position is inside the rendered data grid. */
+    bool convertWorldToDisplayCoordinates(const double worldPos[3], int& outX, int& outY, int& outZ) const;
+
     /// @brief Number of rows in the currently rendered 2D grid or slice.
     int displayedRowCount() const;
 
@@ -493,6 +510,9 @@ protected:
 
     /// @brief Update 2D ruler titles for the currently selected plane.
     void update2DRulerAxisTitles();
+
+    /// @brief Returns true when the vertical ruler represents screen/grid Y coordinates.
+    bool verticalRulerUsesTopOrigin() const;
 
     /** @brief Check if world coordinates are within the grid bounds.
      * 
@@ -585,6 +605,9 @@ protected:
 
     /** @brief Last recorded position in VTK world coordinates. */
     std::array<double, 3> m_lastWorldPos;
+
+    /** @brief Whether the last mouse move picked the rendered data grid actor. */
+    bool m_lastMousePickedGrid = false;
 
     /// @brief VTK renderer for the scene: This renderer is responsible for rendering the 3D scene.
     vtkNew<vtkRenderer> renderer;

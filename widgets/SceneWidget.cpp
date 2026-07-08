@@ -992,7 +992,7 @@ void SceneWidget::setup2DRulerAxes()
     rulerAxisX->GetPosition2Coordinate()->SetCoordinateSystemToWorld();
     rulerAxisX->SetTitle("X");
     rulerAxisX->SetNumberOfLabels(5);
-    rulerAxisX->SetLabelFormat("%.1f");
+    rulerAxisX->SetLabelFormat("%.0f");
     rulerAxisX->GetTitleTextProperty()->SetColor(1.0, 1.0, 1.0);
     rulerAxisX->GetLabelTextProperty()->SetColor(1.0, 1.0, 1.0);
     rulerAxisX->GetProperty()->SetColor(0.8, 0.8, 0.8);
@@ -1003,7 +1003,7 @@ void SceneWidget::setup2DRulerAxes()
     rulerAxisY->GetPosition2Coordinate()->SetCoordinateSystemToWorld();
     rulerAxisY->SetTitle("Y");
     rulerAxisY->SetNumberOfLabels(5);
-    rulerAxisY->SetLabelFormat("%.1f");
+    rulerAxisY->SetLabelFormat("%.0f");
     rulerAxisY->GetTitleTextProperty()->SetColor(1.0, 1.0, 1.0);
     rulerAxisY->GetLabelTextProperty()->SetColor(1.0, 1.0, 1.0);
     rulerAxisY->GetProperty()->SetColor(0.8, 0.8, 0.8);
@@ -1035,9 +1035,17 @@ void SceneWidget::update2DRulerAxesBounds()
         return; // Invalid bounds
     }
 
-    // Set range for axes (this determines the numeric labels)
-    rulerAxisX->SetRange(bounds[0], bounds[1]);
-    rulerAxisY->SetRange(bounds[2], bounds[3]);
+    const double dataWidth = bounds[1] - bounds[0];
+    const double dataHeight = bounds[3] - bounds[2];
+
+    // Set user-facing pixel ranges for axes. VTK world Y grows upward, but image
+    // coordinates grow downward, so the grid Y ruler is intentionally reversed:
+    // top label = 0, bottom label = data height. Do not apply this to vertical
+    // altitude/Z cross-section axes.
+    rulerAxisX->SetRange(0.0, dataWidth);
+    const bool verticalTopOrigin = verticalRulerUsesTopOrigin();
+    rulerAxisY->SetRange(verticalTopOrigin ? dataHeight : 0.0,
+                         verticalTopOrigin ? 0.0 : dataHeight);
 
     // Position X axis at the bottom of the data (horizontal line)
     rulerAxisX->GetPositionCoordinate()->SetValue(bounds[0], bounds[2], 0.0);
@@ -1047,8 +1055,10 @@ void SceneWidget::update2DRulerAxesBounds()
     rulerAxisY->GetPositionCoordinate()->SetValue(bounds[1], bounds[2], 0.0);
     rulerAxisY->GetPosition2Coordinate()->SetValue(bounds[1], bounds[3], 0.0);
 
-    std::cout << "Ruler axes updated: X=[" << bounds[0] << ", " << bounds[1]
-              << "], Y=[" << bounds[2] << ", " << bounds[3] << "]" << std::endl;
+    std::cout << "Ruler axes updated: X=[0, " << dataWidth
+              << "], vertical=[" << (verticalTopOrigin ? dataHeight : 0.0)
+              << ", " << (verticalTopOrigin ? 0.0 : dataHeight)
+              << "]" << std::endl;
 }
 
 void SceneWidget::update2DRulerAxisTitles()
@@ -1082,6 +1092,19 @@ void SceneWidget::update2DRulerAxisTitles()
 
     rulerAxisX->SetTitle(horizontalAxis);
     rulerAxisY->SetTitle(verticalAxis);
+}
+
+bool SceneWidget::verticalRulerUsesTopOrigin() const
+{
+    if (substateSliceEnabled)
+        return false;
+
+    if (isNative3DSliceView())
+    {
+        return sceneWidgetVisualizerProxy->native3DSliceAxis() == GridSliceAxis::Z;
+    }
+
+    return true;
 }
 
 void SceneWidget::connectKeyboardCallback()
@@ -1218,17 +1241,23 @@ void SceneWidget::mouseCallbackFunction(vtkObject* caller, long unsigned int eve
 
     const auto lastMousePos = QPoint(vtkX, qtY);
 
-    // 3) Use a picker to obtain an accurate world position (if something was "hit")
+    self->m_lastMousePickedGrid = false;
+
+    // 3) Use a picker restricted to the data grid actor. Picking any visible prop
+    // would also hit ruler axes or load-balancing helper lines, which can make a
+    // tooltip appear when the cursor is visually outside the simulation grid.
     vtkNew<vtkPropPicker> picker;
     bool picked = false;
-    if (self->renderer)
+    if (self->renderer && self->gridActor)
     {
-        // Pick returns 1 if something was hit (depending on the picker). Pass the renderer.
+        picker->PickFromListOn();
+        picker->AddPickList(self->gridActor);
         if (picker->Pick(vtkX, vtkY, 0.0, self->renderer))
         {
             double pickPos[3];
             picker->GetPickPosition(pickPos);
             self->m_lastWorldPos = { pickPos[0], pickPos[1], pickPos[2] };
+            self->m_lastMousePickedGrid = true;
             picked = true;
         }
     }
@@ -1340,7 +1369,7 @@ std::array<double, 3> SceneWidget::screenToWorldCoordinates(const QPoint& pos) c
 
 QString SceneWidget::getNodeAtWorldPosition(const std::array<double, 3>& worldPos) const
 {
-    if (! settingParameter || ! sceneWidgetVisualizerProxy || ! renderer)
+    if (! settingParameter || ! sceneWidgetVisualizerProxy)
     {
         return {};
     }
@@ -1351,9 +1380,8 @@ QString SceneWidget::getNodeAtWorldPosition(const std::array<double, 3>& worldPo
         return {}; // Outside scene bounds
     }
 
-    // Get the bounds of the entire scene
-    const double* bounds = renderer->ComputeVisiblePropBounds();
-    if (! bounds)
+    double bounds[6];
+    if (! currentGridBounds(bounds))
     {
         return {};
     }
@@ -1367,7 +1395,8 @@ QString SceneWidget::getNodeAtWorldPosition(const std::array<double, 3>& worldPo
 
     // Calculate which node the position is in (0-based indices)
     const int nodeX = static_cast<int>((worldPos[0] - bounds[0]) / nodeWidth);
-    const int nodeY = static_cast<int>((worldPos[1] - bounds[2]) / nodeHeight);
+    const int nodeYFromBottom = static_cast<int>((worldPos[1] - bounds[2]) / nodeHeight);
+    const int nodeY = static_cast<int>(settingParameter->nNodeY) - 1 - nodeYFromBottom;
 
     // Check if the calculated node is within bounds
     if (nodeX >= 0 && nodeX < static_cast<int>(settingParameter->nNodeX) &&
@@ -1443,7 +1472,7 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
     if (! renderer || ! renderWindow())
         return;
 
-    if (isCrossSectionView() && isWorldPositionInGrid(m_lastWorldPos.data()))
+    if (m_lastMousePickedGrid && isCrossSectionView() && isWorldPositionInGrid(m_lastWorldPos.data()))
     {
         int planeRow = 0;
         int planeColumn = 0;
@@ -1512,23 +1541,34 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
     {
         tooltipText += QString("Line %1/%2:").arg(lineIndex).arg(lines.size());
         tooltipText += QString("\n  From: (x1=%1, y1=%2)")
-                           .arg(nearestLine->x1, 0, 'f', 2)
-                           .arg(nearestLine->y1, 0, 'f', 2);
+                           .arg(static_cast<int>(std::lround(nearestLine->x1)))
+                           .arg(static_cast<int>(std::lround(nearestLine->y1)));
         tooltipText += QString("\n  To:   (x2=%1, y2=%2)")
-                           .arg(nearestLine->x2, 0, 'f', 2)
-                           .arg(nearestLine->y2, 0, 'f', 2);
+                           .arg(static_cast<int>(std::lround(nearestLine->x2)))
+                           .arg(static_cast<int>(std::lround(nearestLine->y2)));
         tooltipText += cellValueAtThisPositionAsText();
     }
-    else if (QString nodeInfo = getNodeAtWorldPosition(m_lastWorldPos); ! nodeInfo.isEmpty())
+    else if (m_lastMousePickedGrid)
     {
-        tooltipText = QString("World Position: (x: %1, y: %2, z: %3)")
-                          .arg(m_lastWorldPos[0], 0, 'f', 2)
-                          .arg(m_lastWorldPos[1], 0, 'f', 2)
-                          .arg(m_lastWorldPos[2], 0, 'f', 2);
+        int displayX = 0;
+        int displayY = 0;
+        int displayZ = 0;
+        const QString nodeInfo = getNodeAtWorldPosition(m_lastWorldPos);
+        if (nodeInfo.isEmpty() || !convertWorldToDisplayCoordinates(m_lastWorldPos.data(), displayX, displayY, displayZ))
+        {
+            tooltipText = "(Outside the grid)";
+        }
+        else
+        {
+            tooltipText = QString("Pixel Position: (x: %1, y: %2, z: %3)")
+                              .arg(displayX)
+                              .arg(displayY)
+                              .arg(displayZ);
 
-        tooltipText += QString("\n%1").arg(nodeInfo);
+            tooltipText += QString("\n%1").arg(nodeInfo);
 
-        tooltipText += cellValueAtThisPositionAsText();
+            tooltipText += cellValueAtThisPositionAsText();
+        }
     }
     else
         tooltipText = "(Outside the grid)";
@@ -1540,6 +1580,9 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
 QString SceneWidget::cellValueAtThisPositionAsText() const
 {
     if (!sceneWidgetVisualizerProxy || !settingParameter)
+        return {};
+
+    if (!m_lastMousePickedGrid)
         return {};
 
     int row = 0, col = 0;
@@ -2110,7 +2153,7 @@ void SceneWidget::mousePressEvent(QMouseEvent* event)
     if (m_substatesDockWidget && sceneWidgetVisualizerProxy && event->button() == Qt::LeftButton && !(event->modifiers() & Qt::ShiftModifier))
     {
         // Check if click was inside the grid
-        if (isWorldPositionInGrid(m_lastWorldPos.data()))
+        if (m_lastMousePickedGrid && isWorldPositionInGrid(m_lastWorldPos.data()))
         {
             int row = 0, col = 0;
             if (convertWorldToGridCoordinates(m_lastWorldPos.data(), row, col))
@@ -2131,12 +2174,11 @@ void SceneWidget::mousePressEvent(QMouseEvent* event)
 
 bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& outRow, int& outCol) const
 {
-    if (!renderer || !settingParameter)
+    if (!settingParameter)
         return false;
 
-    // Get the bounds of the entire scene
-    const double* bounds = renderer->ComputeVisiblePropBounds();
-    if (! bounds)
+    double bounds[6];
+    if (! currentGridBounds(bounds) || ! isWorldPositionInGrid(worldPos))
         return false;
 
     // Calculate grid dimensions
@@ -2194,6 +2236,31 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
     return true;
 }
 
+bool SceneWidget::currentGridBounds(double bounds[6]) const
+{
+    if (!gridActor)
+        return false;
+
+    gridActor->GetBounds(bounds);
+
+    return std::isfinite(bounds[0]) && std::isfinite(bounds[1]) &&
+           std::isfinite(bounds[2]) && std::isfinite(bounds[3]) &&
+           bounds[0] < bounds[1] && bounds[2] < bounds[3];
+}
+
+bool SceneWidget::convertWorldToDisplayCoordinates(const double worldPos[3], int& outX, int& outY, int& outZ) const
+{
+    double bounds[6];
+    if (! currentGridBounds(bounds) || ! isWorldPositionInGrid(worldPos))
+        return false;
+
+    outX = static_cast<int>(std::lround(worldPos[0] - bounds[0]));
+    outY = static_cast<int>(std::lround(bounds[3] - worldPos[1]));
+    outZ = static_cast<int>(std::lround(worldPos[2]));
+
+    return true;
+}
+
 int SceneWidget::displayedRowCount() const
 {
     if (!settingParameter)
@@ -2220,12 +2287,11 @@ int SceneWidget::displayedColumnCount() const
 
 bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
 {
-    if (!renderer || !settingParameter)
+    if (!settingParameter)
         return false;
 
-    // Get the bounds of the entire scene
-    const double* bounds = renderer->ComputeVisiblePropBounds();
-    if (! bounds)
+    double bounds[6];
+    if (! currentGridBounds(bounds))
         return false;
 
     // Check if position is within grid bounds
