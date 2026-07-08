@@ -87,6 +87,7 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
             widget->setMinColor(it->second.minColor);
             widget->setMaxColor(it->second.maxColor);
             widget->setNoValue(it->second.noValue);
+            widget->setAltitudeScale(it->second.altitudeScale);
             // Restore noValue enabled state from saved configuration
             widget->setNoValueEnabled(it->second.noValueEnabled);
         }
@@ -100,6 +101,7 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
         connect(widget, &SubstateDisplayWidget::calculateMaximumRequested, this, &SubstatesDockWidget::onCalculateMaximumRequested);
         connect(widget, &SubstateDisplayWidget::colorsChanged, this, &SubstatesDockWidget::onColorsChanged);
         connect(widget, QOverload<const std::string&, double, bool>::of(&SubstateDisplayWidget::noValueChanged), this, &SubstatesDockWidget::onNoValueChanged);
+        connect(widget, &SubstateDisplayWidget::altitudeScaleChanged, this, &SubstatesDockWidget::onAltitudeScaleChanged);
         connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested, this, &SubstatesDockWidget::visualizationRefreshRequested);
 
         m_containerLayout->addWidget(widget);
@@ -187,6 +189,7 @@ void SubstatesDockWidget::saveParametersToSettings(SettingParameter* settingPara
             it->second.minValue = widget->getMinValue();
             it->second.maxValue = widget->getMaxValue();
             it->second.format = widget->getFormat();
+            it->second.altitudeScale = widget->getAltitudeScale();
         }
     }
 }
@@ -465,6 +468,18 @@ void SubstatesDockWidget::onNoValueChanged(const std::string& fieldName, double 
             it->second.noValue = noValue;
             it->second.noValueEnabled = isEnabled;
         }
+    }
+}
+
+void SubstatesDockWidget::onAltitudeScaleChanged(const std::string& fieldName, double scale)
+{
+    if (!m_currentSettingParameter)
+        return;
+
+    auto it = m_currentSettingParameter->substateInfo.find(fieldName);
+    if (it != m_currentSettingParameter->substateInfo.end())
+    {
+        it->second.altitudeScale = scale;
     }
 }
 

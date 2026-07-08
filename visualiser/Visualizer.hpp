@@ -989,7 +989,39 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateStackSurfaceQuadMesh(
     const double heightScale = std::max(nRows, nCols) / 3.0;
     const double eps = 1e-9;
 
-    auto readLayerContribution = [&](int row, int col, const SubstateInfo* info) -> std::optional<double> {
+    auto layerBaseline = [&](std::size_t layerIndex) -> double {
+        const auto* info = layers[layerIndex];
+
+        // The bottom layer is usually a terrain/elevation field. Draw it
+        // relative to its displayed minimum so the scene is not lifted by
+        // an arbitrary absolute datum such as z=490.
+        if (layerIndex == 0)
+            return info->minValue;
+
+        // Upper layers are usually thickness/depth fields. If a noValue/zero
+        // datum is configured below the display minimum, use it as the additive
+        // baseline so e.g. h=8 contributes 8 units, not 7 or a full normalized
+        // layer.
+        if (info->noValueEnabled && std::isfinite(info->noValue) && info->noValue < info->minValue)
+            return info->noValue;
+
+        return info->minValue;
+    };
+
+    auto layerAltitudeScale = [&](std::size_t layerIndex) -> double {
+        const auto scale = layers[layerIndex]->altitudeScale;
+        return std::isfinite(scale) && scale > 0.0 ? scale : 1.0;
+    };
+
+    double rawStackRange = 0.0;
+    for (std::size_t layerIndex = 0; layerIndex < layers.size(); ++layerIndex)
+    {
+        rawStackRange += std::max(1e-12, layers[layerIndex]->maxValue - layerBaseline(layerIndex));
+    }
+    const double heightPerUnit = heightScale / std::max(1e-12, rawStackRange);
+
+    auto readLayerContribution = [&](int row, int col, std::size_t layerIndex) -> std::optional<double> {
+        const auto* info = layers[layerIndex];
         if (!info || row < 0 || row >= nRows || col < 0 || col >= nCols)
             return std::nullopt;
 
@@ -1001,14 +1033,14 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateStackSurfaceQuadMesh(
                 return std::nullopt;
             if (info->noValueEnabled && !std::isnan(info->noValue) && value == info->noValue)
                 return std::nullopt;
-            if ((value - info->minValue) <= eps)
+            if (value + eps < info->minValue)
                 return std::nullopt;
 
-            const double valueRange = std::max(1e-12, info->maxValue - info->minValue);
-            const double normalized = std::clamp((std::clamp(value, info->minValue, info->maxValue) - info->minValue) / valueRange,
-                                                 0.0,
-                                                 1.0);
-            return normalized * heightScale;
+            const double contribution =
+                (std::clamp(value, info->minValue, info->maxValue) - layerBaseline(layerIndex)) *
+                heightPerUnit *
+                layerAltitudeScale(layerIndex);
+            return std::max(0.0, contribution);
         }
         catch (...)
         {
@@ -1020,14 +1052,14 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateStackSurfaceQuadMesh(
         double height = 0.0;
         for (std::size_t layerIndex = 0; layerIndex <= topLayerIndex && layerIndex < layers.size(); ++layerIndex)
         {
-            if (const auto contribution = readLayerContribution(row, col, layers[layerIndex]))
+            if (const auto contribution = readLayerContribution(row, col, layerIndex))
                 height += *contribution;
         }
         return height;
     };
 
     auto currentLayerHasValue = [&](int row, int col, std::size_t layerIndex) -> bool {
-        return readLayerContribution(row, col, layers[layerIndex]).has_value();
+        return readLayerContribution(row, col, layerIndex).has_value();
     };
 
     auto gridToVtk = [&](int row, int col) -> std::pair<double, double> {
@@ -1294,7 +1326,31 @@ vtkSmartPointer<vtkPolyData> Visualizer::buildGridLinesOnSubstateStackPolyData(
     const double heightScale = std::max(nRows, nCols) / 3.0;
     const double eps = 1e-9;
 
-    auto readLayerContribution = [&](int row, int col, const SubstateInfo* info) -> double {
+    auto layerBaseline = [&](std::size_t layerIndex) -> double {
+        const auto* info = layers[layerIndex];
+        if (layerIndex == 0)
+            return info->minValue;
+
+        if (info->noValueEnabled && std::isfinite(info->noValue) && info->noValue < info->minValue)
+            return info->noValue;
+
+        return info->minValue;
+    };
+
+    auto layerAltitudeScale = [&](std::size_t layerIndex) -> double {
+        const auto scale = layers[layerIndex]->altitudeScale;
+        return std::isfinite(scale) && scale > 0.0 ? scale : 1.0;
+    };
+
+    double rawStackRange = 0.0;
+    for (std::size_t layerIndex = 0; layerIndex < layers.size(); ++layerIndex)
+    {
+        rawStackRange += std::max(1e-12, layers[layerIndex]->maxValue - layerBaseline(layerIndex));
+    }
+    const double heightPerUnit = heightScale / std::max(1e-12, rawStackRange);
+
+    auto readLayerContribution = [&](int row, int col, std::size_t layerIndex) -> double {
+        const auto* info = layers[layerIndex];
         if (!info || row < 0 || row >= nRows || col < 0 || col >= nCols)
             return 0.0;
 
@@ -1305,14 +1361,14 @@ vtkSmartPointer<vtkPolyData> Visualizer::buildGridLinesOnSubstateStackPolyData(
                 return 0.0;
             if (info->noValueEnabled && !std::isnan(info->noValue) && value == info->noValue)
                 return 0.0;
-            if ((value - info->minValue) <= eps)
+            if (value + eps < info->minValue)
                 return 0.0;
 
-            const double valueRange = std::max(1e-12, info->maxValue - info->minValue);
-            const double normalized = std::clamp((std::clamp(value, info->minValue, info->maxValue) - info->minValue) / valueRange,
-                                                 0.0,
-                                                 1.0);
-            return normalized * heightScale;
+            const double contribution =
+                (std::clamp(value, info->minValue, info->maxValue) - layerBaseline(layerIndex)) *
+                heightPerUnit *
+                layerAltitudeScale(layerIndex);
+            return std::max(0.0, contribution);
         }
         catch (...)
         {
@@ -1322,8 +1378,8 @@ vtkSmartPointer<vtkPolyData> Visualizer::buildGridLinesOnSubstateStackPolyData(
 
     auto cellHeight = [&](int row, int col) -> double {
         double height = 0.0;
-        for (const auto* layer : layers)
-            height += readLayerContribution(row, col, layer);
+        for (std::size_t layerIndex = 0; layerIndex < layers.size(); ++layerIndex)
+            height += readLayerContribution(row, col, layerIndex);
         return height;
     };
 
@@ -1650,7 +1706,31 @@ void Visualizer::drawWithVTK3DSubstatesSlice(
     const double heightScale = std::max(nRows, nCols) / 3.0;
     const double eps = 1e-9;
 
-    auto readLayerContribution = [&](int row, int col, const SubstateInfo* info) -> std::optional<double> {
+    auto layerBaseline = [&](std::size_t layerIndex) -> double {
+        const auto* info = layers[layerIndex];
+        if (layerIndex == 0)
+            return info->minValue;
+
+        if (info->noValueEnabled && std::isfinite(info->noValue) && info->noValue < info->minValue)
+            return info->noValue;
+
+        return info->minValue;
+    };
+
+    auto layerAltitudeScale = [&](std::size_t layerIndex) -> double {
+        const auto scale = layers[layerIndex]->altitudeScale;
+        return std::isfinite(scale) && scale > 0.0 ? scale : 1.0;
+    };
+
+    double rawStackRange = 0.0;
+    for (std::size_t layerIndex = 0; layerIndex < layers.size(); ++layerIndex)
+    {
+        rawStackRange += std::max(1e-12, layers[layerIndex]->maxValue - layerBaseline(layerIndex));
+    }
+    const double heightPerUnit = heightScale / std::max(1e-12, rawStackRange);
+
+    auto readLayerContribution = [&](int row, int col, std::size_t layerIndex) -> std::optional<double> {
+        const auto* info = layers[layerIndex];
         if (!info || row < 0 || row >= nRows || col < 0 || col >= nCols)
             return std::nullopt;
 
@@ -1661,14 +1741,14 @@ void Visualizer::drawWithVTK3DSubstatesSlice(
                 return std::nullopt;
             if (info->noValueEnabled && !std::isnan(info->noValue) && value == info->noValue)
                 return std::nullopt;
-            if ((value - info->minValue) <= eps)
+            if (value + eps < info->minValue)
                 return std::nullopt;
 
-            const double valueRange = std::max(1e-12, info->maxValue - info->minValue);
-            const double normalized = std::clamp((std::clamp(value, info->minValue, info->maxValue) - info->minValue) / valueRange,
-                                                 0.0,
-                                                 1.0);
-            return normalized * heightScale;
+            const double contribution =
+                (std::clamp(value, info->minValue, info->maxValue) - layerBaseline(layerIndex)) *
+                heightPerUnit *
+                layerAltitudeScale(layerIndex);
+            return std::max(0.0, contribution);
         }
         catch (...)
         {
@@ -1694,9 +1774,10 @@ void Visualizer::drawWithVTK3DSubstatesSlice(
         const int col = fixedAxis == GridSliceAxis::Y ? sample : clampedFixedIndex;
 
         double baseHeight = 0.0;
-        for (const auto* layerInfo : layers)
+        for (std::size_t layerIndex = 0; layerIndex < layers.size(); ++layerIndex)
         {
-            const auto contribution = readLayerContribution(row, col, layerInfo);
+            const auto* layerInfo = layers[layerIndex];
+            const auto contribution = readLayerContribution(row, col, layerIndex);
             if (!contribution)
                 continue;
 

@@ -3,6 +3,7 @@
 
 #include <cmath> //std::isnan
 #include <limits>
+#include <optional>
 #include <cctype>
 #include <QMenu>
 #include <QAction>
@@ -12,7 +13,10 @@
 #include <QPushButton>
 #include <QColorDialog>
 #include <QCheckBox>
+#include <QDoubleValidator>
 #include <QDrag>
+#include <QLineEdit>
+#include <QLocale>
 #include <QMimeData>
 #include "SubstateDisplayWidget.h"
 #include "ui_SubstateDisplayWidget.h"
@@ -29,6 +33,25 @@ void setUpSpinBoxWithNoValue(QDoubleSpinBox* spinBox)
     spinBox->setSpecialValueText(" "); // space for empty display
     spinBox->setValue(emptyValue);
 }
+
+std::optional<double> parsePositiveDouble(const QString& text)
+{
+    const auto trimmed = text.trimmed();
+    if (trimmed.isEmpty())
+        return std::nullopt;
+
+    bool ok = false;
+    double value = QLocale().toDouble(trimmed, &ok);
+    if (!ok)
+        value = QLocale::c().toDouble(trimmed, &ok);
+    if (!ok)
+        value = QLocale::c().toDouble(QString(trimmed).replace(',', '.'), &ok);
+
+    if (!ok || !std::isfinite(value) || value <= 0.0)
+        return std::nullopt;
+
+    return value;
+}
 } // namespace
 
 
@@ -44,6 +67,10 @@ SubstateDisplayWidget::SubstateDisplayWidget(const std::string& fieldName, QWidg
     
     setUpSpinBoxWithNoValue(ui->minSpinBox);
     setUpSpinBoxWithNoValue(ui->maxSpinBox);
+
+    auto altitudeScaleValidator = new QDoubleValidator(0.0, 1e9, 6, ui->altitudeScaleLineEdit);
+    altitudeScaleValidator->setNotation(QDoubleValidator::StandardNotation);
+    ui->altitudeScaleLineEdit->setValidator(altitudeScaleValidator);
 
     // Enable context menu for the widget
     setContextMenuPolicy(Qt::CustomContextMenu);
@@ -106,6 +133,8 @@ void SubstateDisplayWidget::connectSignals()
     #endif
     connect(ui->noValueDoubleSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
             this, &SubstateDisplayWidget::onNoValueSpinBoxChanged);
+    connect(ui->altitudeScaleLineEdit, &QLineEdit::editingFinished,
+            this, &SubstateDisplayWidget::onAltitudeScaleEditingFinished);
 
     // Install event filters on spinboxes to detect focus out
     ui->minSpinBox->installEventFilter(this);
@@ -270,6 +299,7 @@ void SubstateDisplayWidget::installEventFiltersOnChildren()
     ui->maxSpinBox->installEventFilter(this);
     ui->formatLineEdit->installEventFilter(this);
     ui->use3dCheckBox->installEventFilter(this);
+    ui->altitudeScaleLineEdit->installEventFilter(this);
     ui->nameLabel->installEventFilter(this);
     ui->valueLabel->installEventFilter(this);
 }
@@ -547,6 +577,36 @@ void SubstateDisplayWidget::onNoValueCheckBoxChanged()
     ui->noValueDoubleSpinBox->setEnabled(ui->noValueCheckBox->isChecked());
     
     emit noValueChanged(fieldName(), getNoValue(), ui->noValueCheckBox->isChecked());
+    emit visualizationRefreshRequested();
+}
+
+double SubstateDisplayWidget::getAltitudeScale() const
+{
+    const auto parsedValue = parsePositiveDouble(ui->altitudeScaleLineEdit->text());
+    if (!parsedValue)
+        return std::numeric_limits<double>::quiet_NaN();
+    return *parsedValue;
+}
+
+void SubstateDisplayWidget::setAltitudeScale(double scale)
+{
+    ui->altitudeScaleLineEdit->blockSignals(true);
+    if (std::isfinite(scale) && scale > 0.0)
+    {
+        ui->altitudeScaleLineEdit->setText(QLocale().toString(scale, 'g', 6));
+    }
+    else
+    {
+        ui->altitudeScaleLineEdit->clear();
+    }
+    ui->altitudeScaleLineEdit->blockSignals(false);
+}
+
+void SubstateDisplayWidget::onAltitudeScaleEditingFinished()
+{
+    const double scale = getAltitudeScale();
+    setAltitudeScale(scale);
+    emit altitudeScaleChanged(fieldName(), scale);
     emit visualizationRefreshRequested();
 }
 

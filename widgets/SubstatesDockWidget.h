@@ -157,6 +157,12 @@ private slots:
      * @param isEnabled True if noValue checkbox is checked */
     void onNoValueChanged(const std::string& fieldName, double noValue, bool isEnabled);
 
+    /** @brief Handle optional 3D altitude scale changes from SubstateDisplayWidget.
+     *
+     * @param fieldName The name of the field
+     * @param scale Positive multiplier, or NaN if empty/default */
+    void onAltitudeScaleChanged(const std::string& fieldName, double scale);
+
     /** @brief Handle use2D checkbox changes - ensures only one checkbox is checked at a time.
      * 
      * When a checkbox is checked, unchecks all other checkboxes.
