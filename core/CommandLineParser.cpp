@@ -13,13 +13,13 @@ bool CommandLineParser::parse(int argc, char* argv[])
         argparse::ArgumentParser program(appName);
         program.add_description(appName + " for simulation data with VTK and Qt");
         program.add_epilog("Examples:\n" +
-                           std::format("  {} config.txt\n", appName) +
-                           std::format("  {} config.txt {}=MyModel\n", appName, ARG_STARTING_MODEL) +
+                           std::format("  {} /path/to/model/directory\n", appName) +
+                           std::format("  {} /path/to/model/directory {}=MyModel\n", appName, ARG_STARTING_MODEL) +
                            std::format("  {} {}=/tmp/movie {}", appName, ARG_GENERATE_MOVIE, ARG_EXIT_AFTER_LAST));
 
-        // Positional argument: configuration file
+        // Positional argument: simulation directory
         program.add_argument(ARG_CONFIG)
-            .help("Path to configuration file")
+            .help("Path to simulation directory containing Header.txt")
             .nargs(argparse::nargs_pattern::optional);
 
         // Optional arguments
@@ -61,7 +61,7 @@ bool CommandLineParser::parse(int argc, char* argv[])
             .metavar("MODE");
 
         program.add_argument(ARG_AUTO_PLAY)
-            .help("Automatically start playback when configuration loads (useful for performance testing)")
+            .help("Automatically start playback when simulation data loads (useful for performance testing)")
             .flag();
 
         try
@@ -75,7 +75,7 @@ bool CommandLineParser::parse(int argc, char* argv[])
             return false;
         }
 
-        // Parse positional argument - can be either config file or model directory
+        // Parse positional argument - model directory only
         if (auto cfg = program.present<std::vector<std::string>>(ARG_CONFIG))
         {
             if (! cfg->empty())
@@ -83,7 +83,7 @@ bool CommandLineParser::parse(int argc, char* argv[])
                 const std::string path = cfg->at(0);
                 configFile = path;
                 
-                // Check if it's a directory (model directory) or file (config file)
+                // Only directories are valid model inputs. Files are rejected by main().
                 namespace fs = std::filesystem;
                 if (fs::exists(path) && fs::is_directory(path))
                 {
@@ -155,11 +155,9 @@ void CommandLineParser::printHelp() const
 {
     constexpr int WIDTH = 24; // variable min width
     const auto appName = QApplication::applicationName().toStdString();
-    std::cout << std::format("Usage: {} [CONFIG_FILE|MODEL_DIR] [OPTIONS]\n\n", appName)
+    std::cout << std::format("Usage: {} [MODEL_DIR] [OPTIONS]\n\n", appName)
               << "Positional Arguments:\n"
-              << std::format("  {: <{}} Path to configuration file or model directory (optional)\n", "CONFIG_FILE|MODEL_DIR", WIDTH)
-              << std::format("  {: <{}} If directory: loads model from dir (Header.txt, .h file, data files)\n", "", WIDTH)
-              << std::format("  {: <{}} If file: loads configuration from file\n\n", "", WIDTH)
+              << std::format("  {: <{}} Path to model directory (Header.txt, .h file, data files)\n\n", "MODEL_DIR", WIDTH)
               << "Optional Arguments:\n"
               << std::format("  {: <{}} Load custom model plugin (can be repeated)\n", ARG_LOAD_MODEL, WIDTH)
               << std::format("  {: <{}} Start with specific model\n", ARG_STARTING_MODEL, WIDTH)
@@ -172,8 +170,7 @@ void CommandLineParser::printHelp() const
               << std::format("  {: <{}} Disable performance metrics reporting\n", ARG_DISABLE_METRICS, WIDTH)
               << std::format("  {: <{}} Show this help message\n\n", "-h, --help", WIDTH)
               << "Examples:\n"
-              << std::format("  {} config.txt\n", appName)
               << std::format("  {} /path/to/model/directory\n", appName)
-              << std::format("  {} config.txt {}=MyModel\n", appName, ARG_STARTING_MODEL)
+              << std::format("  {} /path/to/model/directory {}=MyModel\n", appName, ARG_STARTING_MODEL)
               << std::format("  {} {}=/tmp/movie {}\n", appName, ARG_GENERATE_MOVIE, ARG_EXIT_AFTER_LAST);
 }
