@@ -87,8 +87,23 @@ public:
     /// @brief Draw the visualization using VTK with 3D substate as quad mesh surface.
     virtual void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) = 0;
 
+    /// @brief Draw stacked 3D substate altitude layers as one quad mesh surface collection.
+    virtual void drawWithVTK3DSubstates(int nRows,
+                                        int nCols,
+                                        vtkSmartPointer<vtkRenderer> renderer,
+                                        vtkSmartPointer<vtkActor> gridActor,
+                                        const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+                                        const std::vector<const SubstateInfo*>& colorSubstateInfos) = 0;
+
     /// @brief Refresh the VTK windows with 3D substate quad mesh surface.
     virtual void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) = 0;
+
+    /// @brief Refresh stacked 3D substate altitude layers.
+    virtual void refreshWindowsVTK3DSubstates(int nRows,
+                                              int nCols,
+                                              vtkSmartPointer<vtkActor> gridActor,
+                                              const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+                                              const std::vector<const SubstateInfo*>& colorSubstateInfos) = 0;
 
     /// @brief Draw a vertical profile through a 2D model visualized as a height field.
     virtual void drawWithVTK3DSubstateSlice(int nRows,
@@ -102,6 +117,16 @@ public:
                                             GridSliceAxis fixedAxis,
                                             int fixedIndex) = 0;
 
+    /// @brief Draw a vertical profile through stacked 2D substate altitude layers.
+    virtual void drawWithVTK3DSubstatesSlice(int nRows,
+                                             int nCols,
+                                             vtkSmartPointer<vtkRenderer> renderer,
+                                             vtkSmartPointer<vtkActor> gridActor,
+                                             const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+                                             const std::vector<const SubstateInfo*>& colorSubstateInfos,
+                                             GridSliceAxis fixedAxis,
+                                             int fixedIndex) = 0;
+
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
     virtual void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor) = 0;
 
@@ -111,8 +136,23 @@ public:
     /// @brief Draw grid lines projected onto the 3D substate surface.
     virtual void drawGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue) = 0;
 
+    /// @brief Draw grid lines projected onto a stacked 3D substate surface.
+    virtual void drawGridLinesOn3DSubstateStack(int nRows,
+                                                int nCols,
+                                                const std::vector<Line>& lines,
+                                                vtkSmartPointer<vtkRenderer> renderer,
+                                                vtkSmartPointer<vtkActor> gridLinesActor,
+                                                const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop) = 0;
+
     /// @brief Refresh grid lines projected onto the 3D substate surface.
     virtual void refreshGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue) = 0;
+
+    /// @brief Refresh grid lines projected onto a stacked 3D substate surface.
+    virtual void refreshGridLinesOn3DSubstateStack(int nRows,
+                                                   int nCols,
+                                                   const std::vector<Line>& lines,
+                                                   vtkSmartPointer<vtkActor> gridLinesActor,
+                                                   const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop) = 0;
 
     /// @brief Get the visualizer instance.
     virtual Visualizer& getVisualizer() = 0;

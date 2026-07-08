@@ -215,9 +215,39 @@ public:
         visualiser.drawWithVTK3DSubstate(p, nRows, nCols, renderer, gridActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
     }
 
+    void drawWithVTK3DSubstates(int nRows,
+                                int nCols,
+                                vtkSmartPointer<vtkRenderer> renderer,
+                                vtkSmartPointer<vtkActor> gridActor,
+                                const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+                                const std::vector<const SubstateInfo*>& colorSubstateInfos) override
+    {
+        visualiser.drawWithVTK3DSubstates(p,
+                                          nRows,
+                                          nCols,
+                                          renderer,
+                                          gridActor,
+                                          heightSubstateInfosBottomToTop,
+                                          colorSubstateInfos);
+    }
+
     void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
         visualiser.refreshWindowsVTK3DSubstate(p, nRows, nCols, gridActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
+    }
+
+    void refreshWindowsVTK3DSubstates(int nRows,
+                                      int nCols,
+                                      vtkSmartPointer<vtkActor> gridActor,
+                                      const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+                                      const std::vector<const SubstateInfo*>& colorSubstateInfos) override
+    {
+        visualiser.refreshWindowsVTK3DSubstates(p,
+                                                nRows,
+                                                nCols,
+                                                gridActor,
+                                                heightSubstateInfosBottomToTop,
+                                                colorSubstateInfos);
     }
 
     void drawWithVTK3DSubstateSlice(int nRows,
@@ -242,6 +272,26 @@ public:
                                               colorSubstateInfos,
                                               fixedAxis,
                                               fixedIndex);
+    }
+
+    void drawWithVTK3DSubstatesSlice(int nRows,
+                                     int nCols,
+                                     vtkSmartPointer<vtkRenderer> renderer,
+                                     vtkSmartPointer<vtkActor> gridActor,
+                                     const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+                                     const std::vector<const SubstateInfo*>& colorSubstateInfos,
+                                     GridSliceAxis fixedAxis,
+                                     int fixedIndex) override
+    {
+        visualiser.drawWithVTK3DSubstatesSlice(p,
+                                               nRows,
+                                               nCols,
+                                               renderer,
+                                               gridActor,
+                                               heightSubstateInfosBottomToTop,
+                                               colorSubstateInfos,
+                                               fixedAxis,
+                                               fixedIndex);
     }
 
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor) override
@@ -271,6 +321,33 @@ public:
         visualiser.drawGridLinesOn3DSurface(p, nRows, nCols, lines, renderer, gridLinesActor, substateFieldName, minValue, maxValue);
     }
 
+    void drawGridLinesOn3DSubstateStack(int nRows,
+                                        int nCols,
+                                        const std::vector<Line>& lines,
+                                        vtkSmartPointer<vtkRenderer> renderer,
+                                        vtkSmartPointer<vtkActor> gridLinesActor,
+                                        const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop) override
+    {
+        if (p.layerCount() > 1)
+        {
+            visualiser.drawGridLinesFor3DVolume(nRows,
+                                                nCols,
+                                                static_cast<int>(p.layerCount()),
+                                                static_cast<int>(nodeCountZ),
+                                                lines,
+                                                renderer,
+                                                gridLinesActor);
+            return;
+        }
+        visualiser.drawGridLinesOn3DSubstateStack(p,
+                                                  nRows,
+                                                  nCols,
+                                                  lines,
+                                                  renderer,
+                                                  gridLinesActor,
+                                                  heightSubstateInfosBottomToTop);
+    }
+
     void refreshGridLinesOn3DSurface(int nRows, int nCols, const std::vector<Line>& lines, vtkSmartPointer<vtkActor> gridLinesActor, const std::string& substateFieldName, double minValue, double maxValue) override
     {
         if (p.layerCount() > 1)
@@ -284,6 +361,30 @@ public:
             return;
         }
         visualiser.refreshGridLinesOn3DSurface(p, nRows, nCols, lines, gridLinesActor, substateFieldName, minValue, maxValue);
+    }
+
+    void refreshGridLinesOn3DSubstateStack(int nRows,
+                                           int nCols,
+                                           const std::vector<Line>& lines,
+                                           vtkSmartPointer<vtkActor> gridLinesActor,
+                                           const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop) override
+    {
+        if (p.layerCount() > 1)
+        {
+            visualiser.refreshGridLinesFor3DVolume(nRows,
+                                                   nCols,
+                                                   static_cast<int>(p.layerCount()),
+                                                   static_cast<int>(nodeCountZ),
+                                                   lines,
+                                                   gridLinesActor);
+            return;
+        }
+        visualiser.refreshGridLinesOn3DSubstateStack(p,
+                                                     nRows,
+                                                     nCols,
+                                                     lines,
+                                                     gridLinesActor,
+                                                     heightSubstateInfosBottomToTop);
     }
 
     Visualizer& getVisualizer() override

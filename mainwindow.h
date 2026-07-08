@@ -45,7 +45,13 @@ public:
     /// @return Field name (e.g., "h", "z") or empty string if no 3D substate is active
     std::string getActiveSubstateFor3D() const
     {
-        return activeSubstateFor3D;
+        return activeSubstatesFor3D.empty() ? std::string{} : activeSubstatesFor3D.front();
+    }
+
+    /// @brief Get active 3D altitude substates in SubstatesDockWidget display order.
+    const std::vector<std::string>& getActiveSubstatesFor3D() const
+    {
+        return activeSubstatesFor3D;
     }
 
 private slots: // menu actions
@@ -92,6 +98,7 @@ private slots: // menu actions
     void onSliceChanged(int fixedIndex);
 
     void onUse3dStateChanged(const std::string& fieldName, bool checked);
+    void onUse3dSubstateOrderChanged();
     void onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
     void onDeactivateRequested();
 
@@ -157,6 +164,7 @@ private:
 
     /// @brief Clear all active substates (2D and 3D)
     void clearActiveSubstates();
+    void apply3DSubstateSelection(const std::vector<std::string>& fieldNamesTopToBottom);
 
     // Recent directories management
     void addToRecentDirectories(const QString &directoryPath);
@@ -198,8 +206,8 @@ private:
     StepIndex currentStep;
     std::vector<StepIndex> availableSteps;
 
-    /// @brief Name of the substate field currently used for 3D visualization (empty if none)
-    std::string activeSubstateFor3D;
+    /// @brief Names of substates used as stacked 3D altitude layers in dock display order.
+    std::vector<std::string> activeSubstatesFor3D;
 
     // Playback state for timer-based playback
     PlayingDirection playbackDirection = PlayingDirection::Forward;

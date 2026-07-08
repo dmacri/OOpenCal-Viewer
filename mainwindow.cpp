@@ -1158,8 +1158,8 @@ void MainWindow::clearActiveSubstates()
 {
     // Clear active substates for both 2D and 3D visualization
     ui->sceneWidget->setActiveSubstatesForColorring({});
-    ui->sceneWidget->setActiveSubstateFor3D("");
-    activeSubstateFor3D = "";
+    ui->sceneWidget->setActiveSubstatesFor3D({});
+    activeSubstatesFor3D.clear();
 }
 
 void MainWindow::updateSubstateDockeWidget()
@@ -1172,10 +1172,11 @@ void MainWindow::updateSubstateDockeWidget()
 
         // TODO: GB: Do we really need to send this to MainWindow? Maybe SubstatesDockWidget can directly control SceneWidget?
         // Connect signal for 3D visualization state changes
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3dStateChanged, this, &MainWindow::onUse3dStateChanged);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::useSubstatesColorringRequested, this, &MainWindow::onUseSubstatesColorringRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::deactivateRequested, this, &MainWindow::onDeactivateRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::visualizationRefreshRequested, ui->sceneWidget, &SceneWidget::refreshVisualization);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3dStateChanged, this, &MainWindow::onUse3dStateChanged, Qt::UniqueConnection);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3dSubstateOrderChanged, this, &MainWindow::onUse3dSubstateOrderChanged, Qt::UniqueConnection);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::useSubstatesColorringRequested, this, &MainWindow::onUseSubstatesColorringRequested, Qt::UniqueConnection);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::deactivateRequested, this, &MainWindow::onDeactivateRequested, Qt::UniqueConnection);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::visualizationRefreshRequested, ui->sceneWidget, &SceneWidget::refreshVisualization, Qt::UniqueConnection);
     }
 }
 
@@ -2460,10 +2461,9 @@ void MainWindow::onRecentDirectoryTriggered()
     loadModelFromDirectory(directoryPath);
 }
 
-void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
+void MainWindow::apply3DSubstateSelection(const std::vector<std::string>& fieldNamesTopToBottom)
 {
-    // If checkbox is being unchecked, disable 3D mode
-    if (! checked)
+    if (fieldNamesTopToBottom.empty())
     {
         // Show wait cursor during view mode change
         WaitCursorGuard waitCursor("Switching to 2D visualization...");
@@ -2476,10 +2476,11 @@ void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
         }
         
         // Disable 3D substate visualization
-        ui->sceneWidget->setActiveSubstateFor3D("");
+        ui->sceneWidget->setActiveSubstatesFor3D({});
         
         // Clear active substate in MainWindow
-        activeSubstateFor3D = "";
+        activeSubstatesFor3D.clear();
+        ui->substatesDockWidget->setActiveSubstates({});
         
         // Switch back to 2D mode
         on2DModeRequested();
@@ -2490,18 +2491,18 @@ void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
         return;
     }
     
-    // Checkbox is being checked - enable 3D mode for this substate
+    // At least one checkbox is checked - enable 3D mode for this stack.
     // Show wait cursor during view mode change
     WaitCursorGuard waitCursor("Switching to 3D substate visualization...");
 
-    // Store the active substate for 3D visualization in MainWindow
-    activeSubstateFor3D = fieldName;
+    // Store the active substates for 3D visualization in MainWindow
+    activeSubstatesFor3D = fieldNamesTopToBottom;
 
-    // Also set it in SceneWidget so it knows which substate to use for 3D
-    ui->sceneWidget->setActiveSubstateFor3D(fieldName);
+    // Also set them in SceneWidget so it knows which substates to stack in 3D
+    ui->sceneWidget->setActiveSubstatesFor3D(fieldNamesTopToBottom);
 
-    // Highlight the active substate in the dock widget
-    ui->substatesDockWidget->setActiveSubstate(fieldName);
+    // Highlight the active substates in the dock widget
+    ui->substatesDockWidget->setActiveSubstates(fieldNamesTopToBottom);
 
     // Switch to 3D mode
     on3DModeRequested();
@@ -2518,6 +2519,16 @@ void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
     updateSliceControls(true);
     
     // Cursor restored automatically by WaitCursorGuard destructor
+}
+
+void MainWindow::onUse3dStateChanged(const std::string&, bool)
+{
+    apply3DSubstateSelection(ui->substatesDockWidget->checked3DSubstatesInDisplayOrder());
+}
+
+void MainWindow::onUse3dSubstateOrderChanged()
+{
+    apply3DSubstateSelection(ui->substatesDockWidget->checked3DSubstatesInDisplayOrder());
 }
 
 void MainWindow::onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames)

@@ -249,7 +249,7 @@ void SubstateDisplayWidget::updateButtonState()
     ui->use3dCheckBox->setEnabled(isEnabled);
     if (isEnabled)
     {
-        ui->use3dCheckBox->setToolTip("Use this field as 3rd dimension in 3D visualization (only one substate can be 3D at a time)");
+        ui->use3dCheckBox->setToolTip("Use this field as a 3D altitude layer. Multiple checked fields are stacked in dock order.");
     }
     else
     {

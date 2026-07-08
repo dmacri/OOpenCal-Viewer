@@ -228,6 +228,11 @@ public:
     /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to disable
     void setActiveSubstateFor3D(const std::string& fieldName);
 
+    /// @brief Set active substate fields for stacked 3D altitude visualization.
+    ///
+    /// @param fieldNames Field names in SubstatesDockWidget display order (top-to-bottom).
+    void setActiveSubstatesFor3D(const std::vector<std::string>& fieldNames);
+
     /// @brief Set the active substate field for colorring.
     ///
     /// When a substate is set as active for 2D, the visualization will use that field's values
@@ -255,7 +260,7 @@ public:
     /// This method should be called when activating 3D substate visualization to initialize
     /// the scene with the quad mesh surface. Subsequent step updates will use refresh instead.
     ///
-    /// @note Call this after setActiveSubstateFor3D() to actually render the visualization
+    /// @note Call this after setActiveSubstatesFor3D() to actually render the visualization
     void initializeAndDraw3DSubstateVisualization();
 
     /** @brief Callback function for VTK keypress events.
@@ -326,7 +331,7 @@ public slots:
 
     /** @brief Refresh VTK visualization with optional 3D substate support (step updates).
      * 
-     * This slot handles both 2D and 3D visualization based on activeSubstateFor3D.
+     * This slot handles both 2D and 3D visualization based on active substate altitude layers.
      * It's used when updating visualization for current step or when colors/settings change. */
     void refreshVisualizationWithOptional3DSubstate();
 
@@ -505,7 +510,7 @@ protected:
 
     /** @brief Draw VTK visualization with optional 3D substate support (initial rendering).
      * 
-     * This helper method handles both 2D and 3D visualization based on activeSubstateFor3D.
+     * This helper method handles both 2D and 3D visualization based on active substate altitude layers.
      * It's used during initial scene setup in renderVtkScene(). */
     void drawVisualizationWithOptional3DSubstate();
 
@@ -519,6 +524,15 @@ protected:
 
     /// @brief Returns color substate infos
     std::vector<const SubstateInfo*> getColorSubstateInfos();
+
+    /// @brief Get active 3D altitude substate infos in dock display order (top-to-bottom).
+    std::vector<const SubstateInfo*> get3DSubstateInfosTopToBottom() const;
+
+    /// @brief Get active 3D altitude substate infos in stack order (bottom-to-top).
+    std::vector<const SubstateInfo*> get3DSubstateInfosBottomToTop() const;
+
+    /// @brief Human-readable label for the current 3D altitude stack.
+    std::string active3DSubstateStackLabel() const;
 
     /** @brief Proxy for the scene widget visualizer
      *  This proxy provides access to the visualizer implementation
@@ -546,8 +560,11 @@ protected:
     /// @brief Cell rendering mode (true = high quality cell-based, false = fast point-based)
     bool useCellRendering = false;
 
-    /// @brief Name of the substate field currently used for 3D visualization (empty if none)
+    /// @brief Name of the topmost substate field currently used for 3D visualization (empty if none)
     std::string activeSubstateFor3D;
+
+    /// @brief Substate fields used as stacked 3D altitude layers in dock display order (top-to-bottom)
+    std::vector<std::string> activeSubstatesFor3D;
 
     /// @brief Names of the substate fields currently used for 2D visualization (empty if using default)
     std::vector<std::string> activeSubstatesForColorring;

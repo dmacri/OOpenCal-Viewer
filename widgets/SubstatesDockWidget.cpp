@@ -1,6 +1,7 @@
 /** @file SubstatesDockWidget.cpp
  * @brief Implementation of SubstatesDockWidget. */
 
+#include <algorithm>
 #include <cmath> // std::isnan
 #include <QVBoxLayout>
 #include <QLabel>
@@ -393,21 +394,51 @@ void SubstatesDockWidget::onColorsChanged(const std::string& fieldName, const st
 
 void SubstatesDockWidget::setActiveSubstate(const std::string& fieldName)
 {
+    if (fieldName.empty())
+    {
+        setActiveSubstates({});
+    }
+    else
+    {
+        setActiveSubstates({fieldName});
+    }
+}
+
+void SubstatesDockWidget::setActiveSubstates(const std::vector<std::string>& fieldNames)
+{
     // Deactivate all widgets first
     for (auto& [name, widget] : m_substateWidgets)
     {
-        widget->setActive(false);
+        const bool active = std::find(fieldNames.begin(), fieldNames.end(), name) != fieldNames.end();
+        widget->setActive(active);
     }
-    
-    // Activate the specified widget if it exists
-    if (!fieldName.empty())
+}
+
+std::vector<std::string> SubstatesDockWidget::checked3DSubstatesInDisplayOrder() const
+{
+    std::vector<std::string> checkedFields;
+
+    if (!m_containerLayout)
+        return checkedFields;
+
+    for (int i = 0; i < m_containerLayout->count(); ++i)
     {
-        auto it = m_substateWidgets.find(fieldName);
-        if (it != m_substateWidgets.end())
+        QLayoutItem* item = m_containerLayout->itemAt(i);
+        QWidget* widget = item ? item->widget() : nullptr;
+        if (!widget)
+            continue;
+
+        for (const auto& [name, substateWidget] : m_substateWidgets)
         {
-            it->second->setActive(true);
+            if (substateWidget == widget && substateWidget->isUse3DChecked())
+            {
+                checkedFields.push_back(name);
+                break;
+            }
         }
     }
+
+    return checkedFields;
 }
 
 class SubstateDisplayWidget* SubstatesDockWidget::getActiveSubstateWidget() const
@@ -558,6 +589,7 @@ void SubstatesDockWidget::reorderWidgets(const std::string& draggedField, const 
     
     // Save the new order to SettingParameter
     saveFieldOrder();
+    emit use3dSubstateOrderChanged();
 }
 
 void SubstatesDockWidget::saveFieldOrder()
@@ -599,22 +631,6 @@ void SubstatesDockWidget::saveFieldOrder()
 
 void SubstatesDockWidget::onUse3DStateChanged(const std::string& fieldName, bool checked)
 {
-    // If a checkbox is being checked, uncheck all other 3D checkboxes (mutual exclusion)
-    if (checked)
-    {
-        for (auto& [name, widget] : m_substateWidgets)
-        {
-            // Skip the widget that was just checked
-            if (name != fieldName)
-            {
-                // Temporarily block signals to avoid recursive calls
-                widget->blockSignals(true);
-                widget->setUse3DChecked(false);
-                widget->blockSignals(false);
-            }
-        }
-    }
-    
     // Forward the signal to parent (e.g., MainWindow)
     emit use3dStateChanged(fieldName, checked);
 }

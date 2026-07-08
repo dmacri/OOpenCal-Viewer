@@ -97,9 +97,15 @@ public:
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
     void drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos);
+    /// @brief Draw stacked 3D substate altitude layers as one quad mesh surface collection.
+    template<class Matrix>
+    void drawWithVTK3DSubstates(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop, const std::vector<const SubstateInfo*>& colorSubstateInfos);
     /// @brief Refresh 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
     void refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos);
+    /// @brief Refresh stacked 3D substate altitude layers.
+    template<class Matrix>
+    void refreshWindowsVTK3DSubstates(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
     /// @brief Draw a vertical XZ or YZ profile through a 2D height-field substate.
     template<class Matrix>
@@ -115,6 +121,18 @@ public:
                                     GridSliceAxis fixedAxis,
                                     int fixedIndex);
 
+    /// @brief Draw a vertical XZ or YZ profile through stacked 2D height-field substates.
+    template<class Matrix>
+    void drawWithVTK3DSubstatesSlice(const Matrix& p,
+                                     int nRows,
+                                     int nCols,
+                                     vtkSmartPointer<vtkRenderer> renderer,
+                                     vtkSmartPointer<vtkActor> gridActor,
+                                     const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+                                     const std::vector<const SubstateInfo*>& colorSubstateInfos,
+                                     GridSliceAxis fixedAxis,
+                                     int fixedIndex);
+
     /// @brief Draw node grid lines projected onto the 3D substate surface.
     template<class Matrix>
     void drawGridLinesOn3DSurface(const Matrix& p,
@@ -127,6 +145,16 @@ public:
                                   double minValue,
                                   double maxValue);
 
+    /// @brief Draw node grid lines projected onto stacked 3D substate altitude layers.
+    template<class Matrix>
+    void drawGridLinesOn3DSubstateStack(const Matrix& p,
+                                        int nRows,
+                                        int nCols,
+                                        const std::vector<Line>& lines,
+                                        vtkSmartPointer<vtkRenderer> renderer,
+                                        vtkSmartPointer<vtkActor> gridLinesActor,
+                                        const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop);
+
     /// @brief Refresh node grid lines projected onto the 3D substate surface.
     template<class Matrix>
     void refreshGridLinesOn3DSurface(const Matrix& p,
@@ -137,6 +165,15 @@ public:
                                      const std::string& substateFieldName,
                                      double minValue,
                                      double maxValue);
+
+    /// @brief Refresh node grid lines projected onto stacked 3D substate altitude layers.
+    template<class Matrix>
+    void refreshGridLinesOn3DSubstateStack(const Matrix& p,
+                                           int nRows,
+                                           int nCols,
+                                           const std::vector<Line>& lines,
+                                           vtkSmartPointer<vtkActor> gridLinesActor,
+                                           const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop);
 
     /// @brief Draw flat background plane at Z=0 for 3D visualization.
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor);
@@ -211,6 +248,13 @@ private:
                                                                 const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
     template<class Matrix>
+    vtkSmartPointer<vtkPolyData> build3DSubstateStackSurfaceQuadMesh(const Matrix& p,
+                                                                     int nRows,
+                                                                     int nCols,
+                                                                     const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+                                                                     const std::vector<const SubstateInfo*>& colorSubstateInfos);
+
+    template<class Matrix>
     vtkSmartPointer<vtkPolyData> buildGridLinesOnSurfacePolyData(const Matrix& p,
                                                                  int nRows,
                                                                  int nCols,
@@ -218,6 +262,13 @@ private:
                                                                  const std::string& substateFieldName,
                                                                  double minValue,
                                                                  double maxValue);
+
+    template<class Matrix>
+    vtkSmartPointer<vtkPolyData> buildGridLinesOnSubstateStackPolyData(const Matrix& p,
+                                                                       int nRows,
+                                                                       int nCols,
+                                                                       const std::vector<Line>& lines,
+                                                                       const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop);
 
     /** @brief Creates a vtkPolyData representing a set of 2D lines.
       * @param lines Vector of Line objects (each defines a line segment)
@@ -584,6 +635,54 @@ void Visualizer::refreshGridLinesOn3DSurface(const Matrix& p,
 }
 
 template<class Matrix>
+void Visualizer::drawGridLinesOn3DSubstateStack(const Matrix& p,
+                                                int nRows,
+                                                int nCols,
+                                                const std::vector<Line>& lines,
+                                                vtkSmartPointer<vtkRenderer> renderer,
+                                                vtkSmartPointer<vtkActor> gridLinesActor,
+                                                const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop)
+{
+    if (!renderer || !gridLinesActor)
+        return;
+
+    vtkSmartPointer<vtkPolyData> polyData =
+        buildGridLinesOnSubstateStackPolyData(p, nRows, nCols, lines, heightSubstateInfosBottomToTop);
+
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputData(polyData);
+    gridLinesActor->SetMapper(mapper);
+    gridLinesActor->GetProperty()->SetLineWidth(1.0);
+
+    applyGridColorTo3DGridLinesActor(gridLinesActor);
+    renderer->AddActor(gridLinesActor);
+}
+
+template<class Matrix>
+void Visualizer::refreshGridLinesOn3DSubstateStack(const Matrix& p,
+                                                   int nRows,
+                                                   int nCols,
+                                                   const std::vector<Line>& lines,
+                                                   vtkSmartPointer<vtkActor> gridLinesActor,
+                                                   const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop)
+{
+    if (!gridLinesActor)
+        return;
+
+    auto* mapper = vtkPolyDataMapper::SafeDownCast(gridLinesActor->GetMapper());
+    if (!mapper)
+        return;
+
+    vtkSmartPointer<vtkPolyData> polyData =
+        buildGridLinesOnSubstateStackPolyData(p, nRows, nCols, lines, heightSubstateInfosBottomToTop);
+
+    mapper->SetInputData(polyData);
+    mapper->Update();
+
+    applyGridColorTo3DGridLinesActor(gridLinesActor);
+}
+
+template<class Matrix>
 Color Visualizer::calculateCellColor(int row, int column, const Matrix &p, const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
     if (colorSubstateInfos.empty())
@@ -865,6 +964,190 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Ma
 }
 
 template<class Matrix>
+vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateStackSurfaceQuadMesh(
+    const Matrix& p,
+    int nRows,
+    int nCols,
+    const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+    const std::vector<const SubstateInfo*>& colorSubstateInfos)
+{
+    std::vector<const SubstateInfo*> layers;
+    for (const auto* info : heightSubstateInfosBottomToTop)
+    {
+        if (info &&
+            !std::isnan(info->minValue) &&
+            !std::isnan(info->maxValue) &&
+            info->minValue < info->maxValue)
+        {
+            layers.push_back(info);
+        }
+    }
+
+    if (layers.empty())
+        return vtkSmartPointer<vtkPolyData>::New();
+
+    const double heightScale = std::max(nRows, nCols) / 3.0;
+    const double eps = 1e-9;
+
+    auto readLayerContribution = [&](int row, int col, const SubstateInfo* info) -> std::optional<double> {
+        if (!info || row < 0 || row >= nRows || col < 0 || col >= nCols)
+            return std::nullopt;
+
+        try
+        {
+            const double value = std::stod(p[row][col].stringEncoding(info->name.c_str()));
+
+            if (!std::isfinite(value))
+                return std::nullopt;
+            if (info->noValueEnabled && !std::isnan(info->noValue) && value == info->noValue)
+                return std::nullopt;
+            if ((value - info->minValue) <= eps)
+                return std::nullopt;
+
+            const double valueRange = std::max(1e-12, info->maxValue - info->minValue);
+            const double normalized = std::clamp((std::clamp(value, info->minValue, info->maxValue) - info->minValue) / valueRange,
+                                                 0.0,
+                                                 1.0);
+            return normalized * heightScale;
+        }
+        catch (...)
+        {
+            return std::nullopt;
+        }
+    };
+
+    auto cumulativeHeight = [&](int row, int col, std::size_t topLayerIndex) -> double {
+        double height = 0.0;
+        for (std::size_t layerIndex = 0; layerIndex <= topLayerIndex && layerIndex < layers.size(); ++layerIndex)
+        {
+            if (const auto contribution = readLayerContribution(row, col, layers[layerIndex]))
+                height += *contribution;
+        }
+        return height;
+    };
+
+    auto currentLayerHasValue = [&](int row, int col, std::size_t layerIndex) -> bool {
+        return readLayerContribution(row, col, layers[layerIndex]).has_value();
+    };
+
+    auto gridToVtk = [&](int row, int col) -> std::pair<double, double> {
+        return {static_cast<double>(col), static_cast<double>(nRows - 1 - row)};
+    };
+
+    auto getLayerColor = [&](int row, int col, const SubstateInfo* layerInfo) -> Color {
+        if (row < 0 || row >= nRows || col < 0 || col >= nCols)
+            return Color(0, 0, 0);
+
+        if (!colorSubstateInfos.empty())
+            return calculateCellColor(row, col, p, colorSubstateInfos);
+
+        return calculateCellColor(row, col, p, std::vector<const SubstateInfo*>{layerInfo});
+    };
+
+    vtkNew<vtkPoints> points;
+    vtkNew<vtkCellArray> cells;
+    vtkNew<vtkUnsignedCharArray> cellColors;
+    cellColors->SetNumberOfComponents(3);
+
+    std::vector<std::vector<vtkIdType>> basePointIds(layers.size(),
+                                                     std::vector<vtkIdType>(static_cast<std::size_t>(nRows * nCols), -1));
+
+    for (std::size_t layerIndex = 0; layerIndex < layers.size(); ++layerIndex)
+    {
+        for (int row = 0; row < nRows; ++row)
+        {
+            for (int col = 0; col < nCols; ++col)
+            {
+                const double height = cumulativeHeight(row, col, layerIndex);
+                auto [x, y] = gridToVtk(row, col);
+                const vtkIdType pid = points->InsertNextPoint(x, y, height);
+                basePointIds[layerIndex][static_cast<std::size_t>(row * nCols + col)] = pid;
+            }
+        }
+    }
+
+    auto addVirtualPoint = [&](int row, int col, double height) -> vtkIdType {
+        auto [x, y] = gridToVtk(row, col);
+        return points->InsertNextPoint(x, y, height);
+    };
+
+    for (std::size_t layerIndex = 0; layerIndex < layers.size(); ++layerIndex)
+    {
+        const auto* layerInfo = layers[layerIndex];
+
+        for (int row = 0; row + 1 < nRows; ++row)
+        {
+            for (int col = 0; col + 1 < nCols; ++col)
+            {
+                const double z0 = cumulativeHeight(row, col, layerIndex);
+                const double z1 = cumulativeHeight(row, col + 1, layerIndex);
+                const double z2 = cumulativeHeight(row + 1, col + 1, layerIndex);
+                const double z3 = cumulativeHeight(row + 1, col, layerIndex);
+
+                const bool v0 = currentLayerHasValue(row, col, layerIndex);
+                const bool v1 = currentLayerHasValue(row, col + 1, layerIndex);
+                const bool v2 = currentLayerHasValue(row + 1, col + 1, layerIndex);
+                const bool v3 = currentLayerHasValue(row + 1, col, layerIndex);
+
+                const int validCount = (int)v0 + (int)v1 + (int)v2 + (int)v3;
+                if (validCount < 2)
+                    continue;
+
+                double sum = 0.0;
+                if (v0) sum += z0;
+                if (v1) sum += z1;
+                if (v2) sum += z2;
+                if (v3) sum += z3;
+                const double avgHeight = sum / std::max(1, validCount);
+
+                vtkIdType ids[4];
+                ids[0] = v0 ? basePointIds[layerIndex][static_cast<std::size_t>(row * nCols + col)] : addVirtualPoint(row, col, avgHeight);
+                ids[1] = v1 ? basePointIds[layerIndex][static_cast<std::size_t>(row * nCols + (col + 1))] : addVirtualPoint(row, col + 1, avgHeight);
+                ids[2] = v2 ? basePointIds[layerIndex][static_cast<std::size_t>((row + 1) * nCols + (col + 1))] : addVirtualPoint(row + 1, col + 1, avgHeight);
+                ids[3] = v3 ? basePointIds[layerIndex][static_cast<std::size_t>((row + 1) * nCols + col)] : addVirtualPoint(row + 1, col, avgHeight);
+
+                cells->InsertNextCell(4);
+                cells->InsertCellPoint(ids[0]);
+                cells->InsertCellPoint(ids[1]);
+                cells->InsertCellPoint(ids[2]);
+                cells->InsertCellPoint(ids[3]);
+
+                const Color c0 = getLayerColor(row, col, layerInfo);
+                const Color c1 = getLayerColor(row, col + 1, layerInfo);
+                const Color c2 = getLayerColor(row + 1, col + 1, layerInfo);
+                const Color c3 = getLayerColor(row + 1, col, layerInfo);
+
+                int rSum = 0, gSum = 0, bSum = 0;
+                if (v0) { rSum += c0.getRed(); gSum += c0.getGreen(); bSum += c0.getBlue(); }
+                if (v1) { rSum += c1.getRed(); gSum += c1.getGreen(); bSum += c1.getBlue(); }
+                if (v2) { rSum += c2.getRed(); gSum += c2.getGreen(); bSum += c2.getBlue(); }
+                if (v3) { rSum += c3.getRed(); gSum += c3.getGreen(); bSum += c3.getBlue(); }
+
+                cellColors->InsertNextTuple3(static_cast<unsigned char>(rSum / validCount),
+                                             static_cast<unsigned char>(gSum / validCount),
+                                             static_cast<unsigned char>(bSum / validCount));
+            }
+        }
+    }
+
+    vtkSmartPointer<vtkPolyData> polyData = vtkSmartPointer<vtkPolyData>::New();
+    polyData->SetPoints(points);
+    polyData->SetPolys(cells);
+    polyData->GetCellData()->SetScalars(cellColors);
+
+    vtkNew<vtkPolyDataNormals> normals;
+    normals->SetInputData(polyData);
+    normals->AutoOrientNormalsOn();
+    normals->ComputePointNormalsOn();
+    normals->ComputeCellNormalsOff();
+    normals->ConsistencyOn();
+    normals->SplittingOff();
+    normals->Update();
+
+    return normals->GetOutput();
+}
+
+template<class Matrix>
 vtkSmartPointer<vtkPolyData> Visualizer::buildGridLinesOnSurfacePolyData(const Matrix& p,
                                                                          int nRows,
                                                                          int nCols,
@@ -978,6 +1261,135 @@ vtkSmartPointer<vtkPolyData> Visualizer::buildGridLinesOnSurfacePolyData(const M
 }
 
 template<class Matrix>
+vtkSmartPointer<vtkPolyData> Visualizer::buildGridLinesOnSubstateStackPolyData(
+    const Matrix& p,
+    int nRows,
+    int nCols,
+    const std::vector<Line>& lines,
+    const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop)
+{
+    vtkNew<vtkPoints> points;
+    vtkNew<vtkCellArray> polyLines;
+    vtkSmartPointer<vtkPolyData> polyData = vtkSmartPointer<vtkPolyData>::New();
+
+    std::vector<const SubstateInfo*> layers;
+    for (const auto* info : heightSubstateInfosBottomToTop)
+    {
+        if (info &&
+            !std::isnan(info->minValue) &&
+            !std::isnan(info->maxValue) &&
+            info->minValue < info->maxValue)
+        {
+            layers.push_back(info);
+        }
+    }
+
+    if (nRows <= 0 || nCols <= 0 || lines.empty() || layers.empty())
+    {
+        polyData->SetPoints(points);
+        polyData->SetLines(polyLines);
+        return polyData;
+    }
+
+    const double heightScale = std::max(nRows, nCols) / 3.0;
+    const double eps = 1e-9;
+
+    auto readLayerContribution = [&](int row, int col, const SubstateInfo* info) -> double {
+        if (!info || row < 0 || row >= nRows || col < 0 || col >= nCols)
+            return 0.0;
+
+        try
+        {
+            const double value = std::stod(p[row][col].stringEncoding(info->name.c_str()));
+            if (!std::isfinite(value))
+                return 0.0;
+            if (info->noValueEnabled && !std::isnan(info->noValue) && value == info->noValue)
+                return 0.0;
+            if ((value - info->minValue) <= eps)
+                return 0.0;
+
+            const double valueRange = std::max(1e-12, info->maxValue - info->minValue);
+            const double normalized = std::clamp((std::clamp(value, info->minValue, info->maxValue) - info->minValue) / valueRange,
+                                                 0.0,
+                                                 1.0);
+            return normalized * heightScale;
+        }
+        catch (...)
+        {
+            return 0.0;
+        }
+    };
+
+    auto cellHeight = [&](int row, int col) -> double {
+        double height = 0.0;
+        for (const auto* layer : layers)
+            height += readLayerContribution(row, col, layer);
+        return height;
+    };
+
+    auto sampleHeight = [&](double gridX, double gridY) -> double {
+        const double clampedX = std::clamp(gridX, 0.0, static_cast<double>(nCols - 1));
+        const double clampedY = std::clamp(gridY, 0.0, static_cast<double>(nRows - 1));
+
+        const double baseX = std::floor(clampedX);
+        const double baseY = std::floor(clampedY);
+
+        const int col0 = static_cast<int>(baseX);
+        const int row0 = static_cast<int>(baseY);
+        const int col1 = std::min(col0 + 1, nCols - 1);
+        const int row1 = std::min(row0 + 1, nRows - 1);
+
+        const double fracX = clampedX - baseX;
+        const double fracY = clampedY - baseY;
+
+        const double h00 = cellHeight(row0, col0);
+        const double h10 = cellHeight(row0, col1);
+        const double h01 = cellHeight(row1, col0);
+        const double h11 = cellHeight(row1, col1);
+
+        const double h0 = h00 + (h10 - h00) * fracX;
+        const double h1 = h01 + (h11 - h01) * fracX;
+        constexpr double HEIGHT_EPSILON = 1e-2;
+        return h0 + (h1 - h0) * fracY + HEIGHT_EPSILON;
+    };
+
+    for (const auto& line : lines)
+    {
+        const double dx = line.x2 - line.x1;
+        const double dy = line.y2 - line.y1;
+        const int steps = std::max(1, static_cast<int>(std::max(std::fabs(dx), std::fabs(dy))));
+
+        std::vector<vtkIdType> linePointIds;
+        linePointIds.reserve(static_cast<std::size_t>(steps) + 1);
+
+        for (int step = 0; step <= steps; ++step)
+        {
+            const double t = static_cast<double>(step) / static_cast<double>(steps);
+            const double gridX = line.x1 + dx * t;
+            const double gridY = line.y1 + dy * t;
+
+            const double vtkX = gridX;
+            const double vtkY = (nRows - 1) - gridY;
+            const double vtkZ = sampleHeight(gridX, gridY);
+
+            const vtkIdType pid = points->InsertNextPoint(vtkX, vtkY, vtkZ);
+            linePointIds.push_back(pid);
+        }
+
+        if (linePointIds.size() >= 2)
+        {
+            polyLines->InsertNextCell(static_cast<vtkIdType>(linePointIds.size()));
+            for (vtkIdType pid : linePointIds)
+                polyLines->InsertCellPoint(pid);
+        }
+    }
+
+    polyData->SetPoints(points);
+    polyData->SetLines(polyLines);
+    return polyData;
+}
+
+template<class Matrix>
 void Visualizer::drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols,
                                        vtkSmartPointer<vtkRenderer> renderer,
                                        vtkSmartPointer<vtkActor> gridActor,
@@ -1023,6 +1435,44 @@ void Visualizer::drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols,
 }
 
 template<class Matrix>
+void Visualizer::drawWithVTK3DSubstates(
+    const Matrix& p,
+    int nRows,
+    int nCols,
+    vtkSmartPointer<vtkRenderer> renderer,
+    vtkSmartPointer<vtkActor> gridActor,
+    const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+    const std::vector<const SubstateInfo*>& colorSubstateInfos)
+{
+    if (!gridActor || !renderer || heightSubstateInfosBottomToTop.empty())
+    {
+        drawWithVTK(p, nRows, nCols, renderer, gridActor);
+        return;
+    }
+
+    renderer->RemoveActor(gridActor);
+
+    vtkSmartPointer<vtkPolyData> surfacePolyData =
+        build3DSubstateStackSurfaceQuadMesh(p, nRows, nCols, heightSubstateInfosBottomToTop, colorSubstateInfos);
+
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputData(surfacePolyData);
+    mapper->SetScalarModeToUseCellData();
+    mapper->ScalarVisibilityOn();
+
+    gridActor->SetMapper(mapper);
+    gridActor->GetProperty()->SetInterpolationToPhong();
+    gridActor->GetProperty()->SetAmbient(0.3);
+    gridActor->GetProperty()->SetDiffuse(0.7);
+    gridActor->GetProperty()->SetSpecular(0.1);
+    gridActor->GetProperty()->SetSpecularPower(10.0);
+    gridActor->GetProperty()->EdgeVisibilityOff();
+
+    renderer->AddActor(gridActor);
+    renderer->ResetCamera();
+}
+
+template<class Matrix>
 void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCols,
                                              vtkSmartPointer<vtkActor> gridActor,
                                              const std::string& substateFieldName,
@@ -1047,6 +1497,29 @@ void Visualizer::refreshWindowsVTK3DSubstate(const Matrix& p, int nRows, int nCo
                                                                                   minValue,
                                                                                   maxValue,
                                                                                   colorSubstateInfos);
+
+    mapper->SetInputData(surfacePolyData);
+    mapper->Update();
+}
+
+template<class Matrix>
+void Visualizer::refreshWindowsVTK3DSubstates(
+    const Matrix& p,
+    int nRows,
+    int nCols,
+    vtkSmartPointer<vtkActor> gridActor,
+    const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+    const std::vector<const SubstateInfo*>& colorSubstateInfos)
+{
+    if (!gridActor)
+        return;
+
+    auto* mapper = vtkPolyDataMapper::SafeDownCast(gridActor->GetMapper());
+    if (!mapper)
+        return;
+
+    vtkSmartPointer<vtkPolyData> surfacePolyData =
+        build3DSubstateStackSurfaceQuadMesh(p, nRows, nCols, heightSubstateInfosBottomToTop, colorSubstateInfos);
 
     mapper->SetInputData(surfacePolyData);
     mapper->Update();
@@ -1117,6 +1590,134 @@ void Visualizer::drawWithVTK3DSubstateSlice(
 
         const Color color = calculateCellColor(row, col, p, colorSubstateInfos);
         cellColors->InsertNextTuple3(color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    vtkNew<vtkPolyData> profile;
+    profile->SetPoints(points);
+    profile->SetPolys(cells);
+    profile->GetCellData()->SetScalars(cellColors);
+
+    vtkNew<vtkPolyDataMapper> mapper;
+    mapper->SetInputData(profile);
+    mapper->SetScalarModeToUseCellData();
+    mapper->ScalarVisibilityOn();
+
+    renderer->RemoveActor(gridActor);
+    gridActor->SetMapper(mapper);
+    gridActor->GetProperty()->SetInterpolationToFlat();
+    gridActor->GetProperty()->SetAmbient(1.0);
+    gridActor->GetProperty()->SetDiffuse(0.0);
+    gridActor->GetProperty()->SetSpecular(0.0);
+    gridActor->GetProperty()->EdgeVisibilityOff();
+    renderer->AddActor(gridActor);
+}
+
+template<class Matrix>
+void Visualizer::drawWithVTK3DSubstatesSlice(
+    const Matrix& p,
+    int nRows,
+    int nCols,
+    vtkSmartPointer<vtkRenderer> renderer,
+    vtkSmartPointer<vtkActor> gridActor,
+    const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
+    const std::vector<const SubstateInfo*>& colorSubstateInfos,
+    GridSliceAxis fixedAxis,
+    int fixedIndex)
+{
+    std::vector<const SubstateInfo*> layers;
+    for (const auto* info : heightSubstateInfosBottomToTop)
+    {
+        if (info &&
+            !std::isnan(info->minValue) &&
+            !std::isnan(info->maxValue) &&
+            info->minValue < info->maxValue)
+        {
+            layers.push_back(info);
+        }
+    }
+
+    if (!renderer || !gridActor ||
+        (fixedAxis != GridSliceAxis::X && fixedAxis != GridSliceAxis::Y) ||
+        layers.empty())
+    {
+        return;
+    }
+
+    const int sampleCount = fixedAxis == GridSliceAxis::Y ? nCols : nRows;
+    const int clampedFixedIndex = fixedAxis == GridSliceAxis::Y
+        ? std::clamp(fixedIndex, 0, nRows - 1)
+        : std::clamp(fixedIndex, 0, nCols - 1);
+    const double heightScale = std::max(nRows, nCols) / 3.0;
+    const double eps = 1e-9;
+
+    auto readLayerContribution = [&](int row, int col, const SubstateInfo* info) -> std::optional<double> {
+        if (!info || row < 0 || row >= nRows || col < 0 || col >= nCols)
+            return std::nullopt;
+
+        try
+        {
+            const double value = std::stod(p[row][col].stringEncoding(info->name.c_str()));
+            if (!std::isfinite(value))
+                return std::nullopt;
+            if (info->noValueEnabled && !std::isnan(info->noValue) && value == info->noValue)
+                return std::nullopt;
+            if ((value - info->minValue) <= eps)
+                return std::nullopt;
+
+            const double valueRange = std::max(1e-12, info->maxValue - info->minValue);
+            const double normalized = std::clamp((std::clamp(value, info->minValue, info->maxValue) - info->minValue) / valueRange,
+                                                 0.0,
+                                                 1.0);
+            return normalized * heightScale;
+        }
+        catch (...)
+        {
+            return std::nullopt;
+        }
+    };
+
+    auto getLayerColor = [&](int row, int col, const SubstateInfo* layerInfo) -> Color {
+        if (!colorSubstateInfos.empty())
+            return calculateCellColor(row, col, p, colorSubstateInfos);
+
+        return calculateCellColor(row, col, p, std::vector<const SubstateInfo*>{layerInfo});
+    };
+
+    vtkNew<vtkPoints> points;
+    vtkNew<vtkCellArray> cells;
+    vtkNew<vtkUnsignedCharArray> cellColors;
+    cellColors->SetNumberOfComponents(3);
+
+    for (int sample = 0; sample < sampleCount; ++sample)
+    {
+        const int row = fixedAxis == GridSliceAxis::Y ? clampedFixedIndex : sample;
+        const int col = fixedAxis == GridSliceAxis::Y ? sample : clampedFixedIndex;
+
+        double baseHeight = 0.0;
+        for (const auto* layerInfo : layers)
+        {
+            const auto contribution = readLayerContribution(row, col, layerInfo);
+            if (!contribution)
+                continue;
+
+            const double topHeight = baseHeight + *contribution;
+            const double x0 = static_cast<double>(sample);
+            const double x1 = static_cast<double>(sample + 1);
+            const vtkIdType ids[4] = {
+                points->InsertNextPoint(x0, baseHeight, 1.0),
+                points->InsertNextPoint(x1, baseHeight, 1.0),
+                points->InsertNextPoint(x1, topHeight, 1.0),
+                points->InsertNextPoint(x0, topHeight, 1.0)
+            };
+
+            cells->InsertNextCell(4);
+            for (const vtkIdType id : ids)
+                cells->InsertCellPoint(id);
+
+            const Color color = getLayerColor(row, col, layerInfo);
+            cellColors->InsertNextTuple3(color.getRed(), color.getGreen(), color.getBlue());
+            baseHeight = topHeight;
+        }
     }
 
     vtkNew<vtkPolyData> profile;
