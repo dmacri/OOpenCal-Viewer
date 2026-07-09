@@ -117,6 +117,16 @@ public:
     /// @param visible If true, shows grid lines; if false, hides them
     void setGridLinesVisible(bool visible);
 
+    /// @brief Enable or disable line detection in tooltips
+    /// @param enabled If true, enables line detection; if false, disables it
+    void setLineDetectionEnabled(bool enabled);
+
+    /// @brief Get the current line detection enabled state
+    bool getLineDetectionEnabled() const
+    {
+        return lineDetectionEnabled;
+    }
+
     /// @brief Show or hide flat scene background in 3D mode
     /// @param visible If true, shows flat background; if false, hides it
     void setFlatSceneBackgroundVisible(bool visible);
@@ -485,6 +495,23 @@ protected:
      * @return True if coordinates are within valid grid bounds, false otherwise */
     bool convertWorldToGridCoordinates(const double worldPos[3], int& outRow, int& outCol) const;
 
+    /** @brief Returns bounds of the rendered data grid actor, excluding ruler axes and helper props.
+     *  @param bounds Output VTK bounds array: xmin, xmax, ymin, ymax, zmin, zmax
+     *  @return True if bounds are available and finite. */
+    bool currentGridBounds(double bounds[6]) const;
+
+    /** @brief Converts VTK world coordinates to display/pixel coordinates shown to users.
+     *
+     *  X grows from left to right. Y grows from top to bottom, matching image/pixel
+     *  coordinates and the 2D ruler labels.
+     *
+     *  @param worldPos VTK world coordinates
+     *  @param outX User-facing X coordinate
+     *  @param outY User-facing Y coordinate
+     *  @param outZ User-facing Z coordinate
+     *  @return True if the position is inside the rendered data grid. */
+    bool convertWorldToDisplayCoordinates(const double worldPos[3], int& outX, int& outY, int& outZ) const;
+
     /// @brief Number of rows in the currently rendered 2D grid or slice.
     int displayedRowCount() const;
 
@@ -493,6 +520,9 @@ protected:
 
     /// @brief Update 2D ruler titles for the currently selected plane.
     void update2DRulerAxisTitles();
+
+    /// @brief Returns true when the vertical ruler represents screen/grid Y coordinates.
+    bool verticalRulerUsesTopOrigin() const;
 
     /** @brief Check if world coordinates are within the grid bounds.
      * 
@@ -554,6 +584,9 @@ protected:
     /// @brief Current grid lines visibility state
     bool gridLinesVisible = true;
 
+    /// @brief Line detection in tooltip visibility state
+    bool lineDetectionEnabled = true;
+
     /// @brief Flat scene background visibility state (shown in 3D mode)
     bool flatSceneBackgroundVisible = true;
 
@@ -585,6 +618,9 @@ protected:
 
     /** @brief Last recorded position in VTK world coordinates. */
     std::array<double, 3> m_lastWorldPos;
+
+    /** @brief Whether the last mouse move picked the rendered data grid actor. */
+    bool m_lastMousePickedGrid = false;
 
     /// @brief VTK renderer for the scene: This renderer is responsible for rendering the 3D scene.
     vtkNew<vtkRenderer> renderer;

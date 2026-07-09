@@ -680,6 +680,7 @@ void MainWindow::connectMenuActions()
     connect(ui->action3DMode, &QAction::triggered, this, &MainWindow::on3DModeRequested);
     connect(ui->actionCrossSectionControls, &QAction::toggled, this, &MainWindow::onCrossSectionControlsToggled);
     connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
+    connect(ui->actionLineDetection, &QAction::triggered, this, &MainWindow::onLineDetectionToggled);
     connect(ui->actionFlatSceneBackground, &QAction::triggered, this, &MainWindow::onFlatSceneBackgroundToggled);
 
     /// Model selection actions are connected dynamically in createModelMenuActions()
@@ -742,7 +743,20 @@ void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> avail
     // Store the list of available steps for intelligent step navigation
     this->availableSteps = availableSteps;
 
+    // Load the first available step instead of always starting at 0
+    // This handles cases where step 0 might not be available (e.g., steps [2, 4, 6, ...])
+    if (!availableSteps.empty())
+    {
+        const StepIndex firstAvailableStep = availableSteps.front();
+        if (currentStep != firstAvailableStep)
+        {
+            currentStep = firstAvailableStep;
+            setPositionOnWidgets(currentStep);
+        }
+    }
+
     // Update button states based on available steps
+    // This must be called AFTER setting currentStep to ensure correct button states
     changeWhichButtonsAreEnabled();
     
     const auto lastStepAvailableInAvailableSteps = std::ranges::contains(availableSteps, totalSteps());
@@ -1446,6 +1460,9 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Synchronize grid lines checkbox with current visibility state
         syncGridLinesCheckbox();
 
+        // Synchronize line detection checkbox with current enabled state
+        syncLineDetectionCheckbox();
+
         // Synchronize flat scene background checkbox with current visibility state
         syncFlatSceneBackgroundCheckbox();
 
@@ -1455,8 +1472,9 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Update UI with the simulation directory that owns this Header.txt
         showInputDirectoryOnBarLabel(configFileName);
 
-        // Reset to first step
-        currentStep = 0;
+        // Reset to first available step (not always 0)
+        // This handles cases where step 0 might not be available (e.g., steps [2, 4, 6, ...])
+        currentStep = availableSteps.empty() ? FIRST_STEP_NUMBER : availableSteps.front();
         setPositionOnWidgets(currentStep);
 
         // Enable all widgets now that we have simulation data
@@ -1906,6 +1924,18 @@ void MainWindow::syncGridLinesCheckbox()
     // Synchronize the checkbox state with the actual grid lines visibility
     QSignalBlocker blocker(ui->actionGridLines);
     ui->actionGridLines->setChecked(ui->sceneWidget->getGridLinesVisible());
+}
+
+void MainWindow::onLineDetectionToggled(bool checked)
+{
+    ui->sceneWidget->setLineDetectionEnabled(checked);
+}
+
+void MainWindow::syncLineDetectionCheckbox()
+{
+    // Synchronize the checkbox state with the actual line detection enabled state
+    QSignalBlocker blocker(ui->actionLineDetection);
+    ui->actionLineDetection->setChecked(ui->sceneWidget->getLineDetectionEnabled());
 }
 
 void MainWindow::onFlatSceneBackgroundToggled(bool checked)

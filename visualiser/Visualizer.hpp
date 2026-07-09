@@ -448,14 +448,14 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
                 double value = 0.0;
                 try
                 {
-                    value = std::stod(p[row, col, slice].stringEncoding(fieldName));
+                    value = std::stod(p.get(row, col, slice).stringEncoding(fieldName));
                 }
                 catch (...)
                 {
                     value = 0.0;
                 }
 
-                const Color color = p[row, col, slice].outputValue(fieldName, gvm);
+                const Color color = p.get(row, col, slice).outputValue(fieldName, gvm);
                 if (value < minValue)
                 {
                     minValue = value;

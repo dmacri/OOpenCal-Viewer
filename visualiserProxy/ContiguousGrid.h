@@ -44,6 +44,7 @@ public:
             return (rowData_[column * layerCount_]);
         }
 
+#if __cpp_multidimensional_subscript >= 202110L
         /** @brief Returns the element at the given column and layer. */
         [[nodiscard]] decltype(auto) operator[](size_type column, size_type layer) const noexcept
         {
@@ -51,6 +52,9 @@ public:
             assert(layer < layerCount_);
             return (rowData_[column * layerCount_ + layer]);
         }
+#else
+    #warning "You have old compiler, which does not support multidimensional subscript operator"
+#endif
 
     private:
         friend class ContiguousGrid;
@@ -142,6 +146,7 @@ public:
         return RowProxy<const value_type>(storage_.data() + row * columnCount_ * layerCount_, columnCount_, layerCount_);
     }
 
+#if __cpp_multidimensional_subscript >= 202110L
     /** @brief Returns a mutable element from the first layer using C++23 multidimensional subscript syntax. */
     [[nodiscard]] value_type& operator[](size_type row, size_type column) noexcept
     {
@@ -165,8 +170,8 @@ public:
     {
         return storage_[flatIndex(row, column, layer)];
     }
+#endif
 
-private:
     /** @brief Computes the storage offset for a row, column and layer triplet. */
     [[nodiscard]] size_type flatIndex(size_type row, size_type column, size_type layer) const noexcept
     {
@@ -175,6 +180,44 @@ private:
         assert(layer < layerCount_);
         return (row * columnCount_ + column) * layerCount_ + layer;
     }
+
+    /** @brief Returns a mutable element at the given row, column and layer using flat index. */
+    [[nodiscard]] value_type& at(size_type row, size_type column, size_type layer) noexcept
+    {
+        return storage_[flatIndex(row, column, layer)];
+    }
+
+    /** @brief Returns a const element at the given row, column and layer using flat index. */
+    [[nodiscard]] const value_type& at(size_type row, size_type column, size_type layer) const noexcept
+    {
+        return storage_[flatIndex(row, column, layer)];
+    }
+
+    /** @brief Returns a mutable element at the given row and column (first layer). */
+    [[nodiscard]] value_type& get(size_type row, size_type column) noexcept
+    {
+        return storage_[flatIndex(row, column, 0)];
+    }
+
+    /** @brief Returns a const element at the given row and column (first layer). */
+    [[nodiscard]] const value_type& get(size_type row, size_type column) const noexcept
+    {
+        return storage_[flatIndex(row, column, 0)];
+    }
+
+    /** @brief Returns a mutable element at the given row, column and layer. */
+    [[nodiscard]] value_type& get(size_type row, size_type column, size_type layer) noexcept
+    {
+        return storage_[flatIndex(row, column, layer)];
+    }
+
+    /** @brief Returns a const element at the given row, column and layer. */
+    [[nodiscard]] const value_type& get(size_type row, size_type column, size_type layer) const noexcept
+    {
+        return storage_[flatIndex(row, column, layer)];
+    }
+
+private:
 
     std::vector<value_type> storage_;
     size_type rowCount_ = 0;
@@ -261,6 +304,7 @@ private:
         assert(row < rowCount());
         assert(column < columnCount());
 
+#if __cpp_multidimensional_subscript >= 202110L
         switch (axis_)
         {
             case GridSliceAxis::X:
@@ -273,6 +317,21 @@ private:
 
         assert(false);
         return grid_[0, 0, 0];
+#else
+        // Fallback for compilers without C++23 multidimensional subscript support
+        switch (axis_)
+        {
+            case GridSliceAxis::X:
+                return grid_.at(column, fixedIndex_, grid_.layerCount() - 1 - row);
+            case GridSliceAxis::Y:
+                return grid_.at(fixedIndex_, column, grid_.layerCount() - 1 - row);
+            case GridSliceAxis::Z:
+                return grid_.at(row, column, fixedIndex_);
+        }
+
+        assert(false);
+        return grid_.at(0, 0, 0);
+#endif
     }
 
     const ContiguousGrid<T>& grid_;
