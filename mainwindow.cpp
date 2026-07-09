@@ -743,9 +743,6 @@ void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> avail
     // Store the list of available steps for intelligent step navigation
     this->availableSteps = availableSteps;
 
-    // Update button states based on available steps
-    changeWhichButtonsAreEnabled();
-    
     // Load the first available step instead of always starting at 0
     // This handles cases where step 0 might not be available (e.g., steps [2, 4, 6, ...])
     if (!availableSteps.empty())
@@ -757,6 +754,10 @@ void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> avail
             setPositionOnWidgets(currentStep);
         }
     }
+
+    // Update button states based on available steps
+    // This must be called AFTER setting currentStep to ensure correct button states
+    changeWhichButtonsAreEnabled();
     
     const auto lastStepAvailableInAvailableSteps = std::ranges::contains(availableSteps, totalSteps());
     if (! lastStepAvailableInAvailableSteps)
@@ -1471,8 +1472,9 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Update UI with the simulation directory that owns this Header.txt
         showInputDirectoryOnBarLabel(configFileName);
 
-        // Reset to first step
-        currentStep = 0;
+        // Reset to first available step (not always 0)
+        // This handles cases where step 0 might not be available (e.g., steps [2, 4, 6, ...])
+        currentStep = availableSteps.empty() ? FIRST_STEP_NUMBER : availableSteps.front();
         setPositionOnWidgets(currentStep);
 
         // Enable all widgets now that we have simulation data
