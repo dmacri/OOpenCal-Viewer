@@ -746,6 +746,18 @@ void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> avail
     // Update button states based on available steps
     changeWhichButtonsAreEnabled();
     
+    // Load the first available step instead of always starting at 0
+    // This handles cases where step 0 might not be available (e.g., steps [2, 4, 6, ...])
+    if (!availableSteps.empty())
+    {
+        const StepIndex firstAvailableStep = availableSteps.front();
+        if (currentStep != firstAvailableStep)
+        {
+            currentStep = firstAvailableStep;
+            setPositionOnWidgets(currentStep);
+        }
+    }
+    
     const auto lastStepAvailableInAvailableSteps = std::ranges::contains(availableSteps, totalSteps());
     if (! lastStepAvailableInAvailableSteps)
     {
