@@ -1529,10 +1529,14 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
     // m_lastMousePos is already in Qt coordinates (origin: top-left)
     // m_lastWorldPos is set by the VTK callback (picker or DisplayToWorld fallback)
 
-    // Check if we're over a line
+    // Check if we're over a line (only if line detection is enabled)
     size_t lineIndex = 0;
     double distanceSq = 0.0;
-    const Line* nearestLine = findNearestLine(m_lastWorldPos, lineIndex, distanceSq);
+    const Line* nearestLine = nullptr;
+    if (lineDetectionEnabled)
+    {
+        nearestLine = findNearestLine(m_lastWorldPos, lineIndex, distanceSq);
+    }
 
     // Prepare tooltip text
     QString tooltipText;
@@ -2031,10 +2035,15 @@ void SceneWidget::setAxesWidgetVisible(bool visible)
 void SceneWidget::setGridLinesVisible(bool visible)
 {
     gridLinesVisible = visible;
-    
+
     applyGridLinesSettings();
-    
+
     triggerRenderUpdate();
+}
+
+void SceneWidget::setLineDetectionEnabled(bool enabled)
+{
+    lineDetectionEnabled = enabled;
 }
 
 void SceneWidget::setFlatSceneBackgroundVisible(bool visible)

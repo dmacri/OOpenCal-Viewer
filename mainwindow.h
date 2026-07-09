@@ -67,6 +67,8 @@ private slots: // menu actions
     void on3DModeRequested();
     void onGridLinesToggled(bool checked);
     void syncGridLinesCheckbox();
+    void onLineDetectionToggled(bool checked);
+    void syncLineDetectionCheckbox();
     void onFlatSceneBackgroundToggled(bool checked);
     void syncFlatSceneBackgroundCheckbox();
 

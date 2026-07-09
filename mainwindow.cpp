@@ -680,6 +680,7 @@ void MainWindow::connectMenuActions()
     connect(ui->action3DMode, &QAction::triggered, this, &MainWindow::on3DModeRequested);
     connect(ui->actionCrossSectionControls, &QAction::toggled, this, &MainWindow::onCrossSectionControlsToggled);
     connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
+    connect(ui->actionLineDetection, &QAction::triggered, this, &MainWindow::onLineDetectionToggled);
     connect(ui->actionFlatSceneBackground, &QAction::triggered, this, &MainWindow::onFlatSceneBackgroundToggled);
 
     /// Model selection actions are connected dynamically in createModelMenuActions()
@@ -1446,6 +1447,9 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Synchronize grid lines checkbox with current visibility state
         syncGridLinesCheckbox();
 
+        // Synchronize line detection checkbox with current enabled state
+        syncLineDetectionCheckbox();
+
         // Synchronize flat scene background checkbox with current visibility state
         syncFlatSceneBackgroundCheckbox();
 
@@ -1906,6 +1910,18 @@ void MainWindow::syncGridLinesCheckbox()
     // Synchronize the checkbox state with the actual grid lines visibility
     QSignalBlocker blocker(ui->actionGridLines);
     ui->actionGridLines->setChecked(ui->sceneWidget->getGridLinesVisible());
+}
+
+void MainWindow::onLineDetectionToggled(bool checked)
+{
+    ui->sceneWidget->setLineDetectionEnabled(checked);
+}
+
+void MainWindow::syncLineDetectionCheckbox()
+{
+    // Synchronize the checkbox state with the actual line detection enabled state
+    QSignalBlocker blocker(ui->actionLineDetection);
+    ui->actionLineDetection->setChecked(ui->sceneWidget->getLineDetectionEnabled());
 }
 
 void MainWindow::onFlatSceneBackgroundToggled(bool checked)
