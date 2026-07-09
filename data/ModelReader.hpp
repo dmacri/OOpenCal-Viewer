@@ -363,7 +363,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
 
                         if (! localStartStepDone) [[unlikely]]
                         {
-                            m[matrixRow, matrixCol, matrixSlice].startStep(sp->step);
+                            m.get(matrixRow, matrixCol, matrixSlice).startStep(sp->step);
                             localStartStepDone = true;
                         }
 
@@ -375,7 +375,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
 
                         Cell tempCell;
                         std::memcpy(&tempCell, cellData, cellSize); /// @note This erases the temporary object's vtable; assignment copies the cell state.
-                        m[matrixRow, matrixCol, matrixSlice] = tempCell;
+                        m.get(matrixRow, matrixCol, matrixSlice) = tempCell;
                     }
                 }
             }
@@ -432,11 +432,11 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
 
                         if (! localStartStepDone) [[unlikely]]
                         {
-                            m[matrixRow, matrixCol, matrixSlice].startStep(sp->step);
+                            m.get(matrixRow, matrixCol, matrixSlice).startStep(sp->step);
                             localStartStepDone = true;
                         }
 
-                        m[matrixRow, matrixCol, matrixSlice].composeElement(token);
+                        m.get(matrixRow, matrixCol, matrixSlice).composeElement(token);
                     }
                 }
             }
