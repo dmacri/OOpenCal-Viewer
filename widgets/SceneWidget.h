@@ -117,6 +117,16 @@ public:
     /// @param visible If true, shows grid lines; if false, hides them
     void setGridLinesVisible(bool visible);
 
+    /// @brief Enable or disable line detection in tooltips
+    /// @param enabled If true, enables line detection; if false, disables it
+    void setLineDetectionEnabled(bool enabled);
+
+    /// @brief Get the current line detection enabled state
+    bool getLineDetectionEnabled() const
+    {
+        return lineDetectionEnabled;
+    }
+
     /// @brief Show or hide flat scene background in 3D mode
     /// @param visible If true, shows flat background; if false, hides it
     void setFlatSceneBackgroundVisible(bool visible);
@@ -573,6 +583,9 @@ protected:
 
     /// @brief Current grid lines visibility state
     bool gridLinesVisible = true;
+
+    /// @brief Line detection in tooltip visibility state
+    bool lineDetectionEnabled = true;
 
     /// @brief Flat scene background visibility state (shown in 3D mode)
     bool flatSceneBackgroundVisible = true;
