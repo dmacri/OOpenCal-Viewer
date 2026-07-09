@@ -117,6 +117,16 @@ public:
     /// @param visible If true, shows grid lines; if false, hides them
     void setGridLinesVisible(bool visible);
 
+    /// @brief Enable or disable line detection in tooltips
+    /// @param enabled If true, enables line detection; if false, disables it
+    void setLineDetectionEnabled(bool enabled);
+
+    /// @brief Get the current line detection enabled state
+    bool getLineDetectionEnabled() const
+    {
+        return lineDetectionEnabled;
+    }
+
     /// @brief Show or hide flat scene background in 3D mode
     /// @param visible If true, shows flat background; if false, hides it
     void setFlatSceneBackgroundVisible(bool visible);
@@ -228,6 +238,11 @@ public:
     /// @param fieldName The name of the substate field (e.g., "h", "z"), or empty string to disable
     void setActiveSubstateFor3D(const std::string& fieldName);
 
+    /// @brief Set active substate fields for stacked 3D altitude visualization.
+    ///
+    /// @param fieldNames Field names in SubstatesDockWidget display order (top-to-bottom).
+    void setActiveSubstatesFor3D(const std::vector<std::string>& fieldNames);
+
     /// @brief Set the active substate field for colorring.
     ///
     /// When a substate is set as active for 2D, the visualization will use that field's values
@@ -255,7 +270,7 @@ public:
     /// This method should be called when activating 3D substate visualization to initialize
     /// the scene with the quad mesh surface. Subsequent step updates will use refresh instead.
     ///
-    /// @note Call this after setActiveSubstateFor3D() to actually render the visualization
+    /// @note Call this after setActiveSubstatesFor3D() to actually render the visualization
     void initializeAndDraw3DSubstateVisualization();
 
     /** @brief Callback function for VTK keypress events.
@@ -326,7 +341,7 @@ public slots:
 
     /** @brief Refresh VTK visualization with optional 3D substate support (step updates).
      * 
-     * This slot handles both 2D and 3D visualization based on activeSubstateFor3D.
+     * This slot handles both 2D and 3D visualization based on active substate altitude layers.
      * It's used when updating visualization for current step or when colors/settings change. */
     void refreshVisualizationWithOptional3DSubstate();
 
@@ -480,6 +495,23 @@ protected:
      * @return True if coordinates are within valid grid bounds, false otherwise */
     bool convertWorldToGridCoordinates(const double worldPos[3], int& outRow, int& outCol) const;
 
+    /** @brief Returns bounds of the rendered data grid actor, excluding ruler axes and helper props.
+     *  @param bounds Output VTK bounds array: xmin, xmax, ymin, ymax, zmin, zmax
+     *  @return True if bounds are available and finite. */
+    bool currentGridBounds(double bounds[6]) const;
+
+    /** @brief Converts VTK world coordinates to display/pixel coordinates shown to users.
+     *
+     *  X grows from left to right. Y grows from top to bottom, matching image/pixel
+     *  coordinates and the 2D ruler labels.
+     *
+     *  @param worldPos VTK world coordinates
+     *  @param outX User-facing X coordinate
+     *  @param outY User-facing Y coordinate
+     *  @param outZ User-facing Z coordinate
+     *  @return True if the position is inside the rendered data grid. */
+    bool convertWorldToDisplayCoordinates(const double worldPos[3], int& outX, int& outY, int& outZ) const;
+
     /// @brief Number of rows in the currently rendered 2D grid or slice.
     int displayedRowCount() const;
 
@@ -488,6 +520,9 @@ protected:
 
     /// @brief Update 2D ruler titles for the currently selected plane.
     void update2DRulerAxisTitles();
+
+    /// @brief Returns true when the vertical ruler represents screen/grid Y coordinates.
+    bool verticalRulerUsesTopOrigin() const;
 
     /** @brief Check if world coordinates are within the grid bounds.
      * 
@@ -505,7 +540,7 @@ protected:
 
     /** @brief Draw VTK visualization with optional 3D substate support (initial rendering).
      * 
-     * This helper method handles both 2D and 3D visualization based on activeSubstateFor3D.
+     * This helper method handles both 2D and 3D visualization based on active substate altitude layers.
      * It's used during initial scene setup in renderVtkScene(). */
     void drawVisualizationWithOptional3DSubstate();
 
@@ -519,6 +554,15 @@ protected:
 
     /// @brief Returns color substate infos
     std::vector<const SubstateInfo*> getColorSubstateInfos();
+
+    /// @brief Get active 3D altitude substate infos in dock display order (top-to-bottom).
+    std::vector<const SubstateInfo*> get3DSubstateInfosTopToBottom() const;
+
+    /// @brief Get active 3D altitude substate infos in stack order (bottom-to-top).
+    std::vector<const SubstateInfo*> get3DSubstateInfosBottomToTop() const;
+
+    /// @brief Human-readable label for the current 3D altitude stack.
+    std::string active3DSubstateStackLabel() const;
 
     /** @brief Proxy for the scene widget visualizer
      *  This proxy provides access to the visualizer implementation
@@ -540,14 +584,20 @@ protected:
     /// @brief Current grid lines visibility state
     bool gridLinesVisible = true;
 
+    /// @brief Line detection in tooltip visibility state
+    bool lineDetectionEnabled = true;
+
     /// @brief Flat scene background visibility state (shown in 3D mode)
     bool flatSceneBackgroundVisible = true;
 
     /// @brief Cell rendering mode (true = high quality cell-based, false = fast point-based)
     bool useCellRendering = false;
 
-    /// @brief Name of the substate field currently used for 3D visualization (empty if none)
+    /// @brief Name of the topmost substate field currently used for 3D visualization (empty if none)
     std::string activeSubstateFor3D;
+
+    /// @brief Substate fields used as stacked 3D altitude layers in dock display order (top-to-bottom)
+    std::vector<std::string> activeSubstatesFor3D;
 
     /// @brief Names of the substate fields currently used for 2D visualization (empty if using default)
     std::vector<std::string> activeSubstatesForColorring;
@@ -568,6 +618,9 @@ protected:
 
     /** @brief Last recorded position in VTK world coordinates. */
     std::array<double, 3> m_lastWorldPos;
+
+    /** @brief Whether the last mouse move picked the rendered data grid actor. */
+    bool m_lastMousePickedGrid = false;
 
     /// @brief VTK renderer for the scene: This renderer is responsible for rendering the 3D scene.
     vtkNew<vtkRenderer> renderer;

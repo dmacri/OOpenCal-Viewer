@@ -8,6 +8,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 #include <QDockWidget>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -67,10 +68,25 @@ public:
      * @param fieldName The name of the field to highlight, or empty to clear all */
     void setActiveSubstate(const std::string& fieldName);
 
+    /** @brief Set highlighted substate widgets.
+     *
+     * Used by stacked 3D altitude visualization where more than one substate
+     * can contribute to the height field.
+     *
+     * @param fieldNames Field names to highlight */
+    void setActiveSubstates(const std::vector<std::string>& fieldNames);
+
     /** @brief Get the currently active substate widget.
      * 
      * @return Pointer to active SubstateDisplayWidget, or nullptr if none is active */
     class SubstateDisplayWidget* getActiveSubstateWidget() const;
+
+    /** @brief Return all checked 3D altitude substates in current dock order.
+     *
+     * The order is top-to-bottom as displayed in the dock widget.
+     *
+     * @return Checked substate field names in display order */
+    std::vector<std::string> checked3DSubstatesInDisplayOrder() const;
 
 signals:
     /** @brief Signal emitted when a field's 3D state changes.
@@ -78,6 +94,9 @@ signals:
      * @param fieldName The name of the field
      * @param checked True if 3D is now enabled, false if disabled */
     void use3dStateChanged(const std::string& fieldName, bool checked);
+
+    /** @brief Signal emitted when checked 3D substates keep their state but change order. */
+    void use3dSubstateOrderChanged();
 
     /// @brief Signal emitted when a field is requested to be used in colorring. It is returning names of all selected substates
     void useSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
@@ -138,6 +157,12 @@ private slots:
      * @param isEnabled True if noValue checkbox is checked */
     void onNoValueChanged(const std::string& fieldName, double noValue, bool isEnabled);
 
+    /** @brief Handle optional 3D altitude scale changes from SubstateDisplayWidget.
+     *
+     * @param fieldName The name of the field
+     * @param scale Positive multiplier, or NaN if empty/default */
+    void onAltitudeScaleChanged(const std::string& fieldName, double scale);
+
     /** @brief Handle use2D checkbox changes - ensures only one checkbox is checked at a time.
      * 
      * When a checkbox is checked, unchecks all other checkboxes.
@@ -145,9 +170,10 @@ private slots:
      * @param fieldName The name of the field whose checkbox changed */
     void onUse2DCheckboxChanged(const std::string& fieldName);
 
-    /** @brief Handle 3D checkbox state changes - ensures only one substate can be 3D at a time.
-     * 
-     * When a checkbox is checked, unchecks all other 3D checkboxes (mutual exclusion).
+    /** @brief Handle 3D checkbox state changes.
+     *
+     * Multiple substates can be checked at the same time and are stacked in
+     * current dock order.
      * 
      * @param fieldName The name of the field whose 3D checkbox changed
      * @param checked True if checkbox is now checked, false if unchecked */

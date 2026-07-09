@@ -22,15 +22,15 @@
  * - step=<number>: Go to specific step directly
  * - generateImagePath=<path>: Generate image for current step and save to file
  * - silent: Suppress error dialogs (default and deprecated)
- * - configFile: Path to configuration file (positional argument)
- * - --autoPlay: Automatically start playback when configuration loads
+ * - configFile: Path to simulation directory (positional argument)
+ * - --autoPlay: Automatically start playback when simulation data loads
  * - --metrics: Enable performance metrics (default enabled)
  * - --disableMetrics: Disable performance metrics reporting */
 class CommandLineParser
 {
 public:
     // Argument names as constants
-    static constexpr const char ARG_CONFIG[] = "config";
+    static constexpr const char ARG_CONFIG[] = "modelDir";
     static constexpr const char ARG_LOAD_MODEL[] = "--loadModel";
     static constexpr const char ARG_STARTING_MODEL[] = "--startingModel";
     static constexpr const char ARG_GENERATE_MOVIE[] = "--generateMoviePath";
@@ -75,8 +75,8 @@ public:
         return configFile;
     }
     
-    /// @brief Check if the positional argument is a directory (for model loading) or config file.
-    /// @return true if it's a directory, false if it's a config file
+    /// @brief Check if the positional argument is a directory suitable for model loading.
+    /// @return true if it's a directory, false otherwise
     bool isModelDirectory() const
     {
         return isDirectory;

@@ -4,6 +4,7 @@
 #include <source_location>
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <QCommonStyle>
 #include <QSettings>
 #include <QDebug>
@@ -17,6 +18,8 @@
 #include <QFileInfo>
 #include <QDateTime>
 #include <QDir>
+#include <QCollator>
+#include <QSizePolicy>
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
@@ -115,6 +118,475 @@ QString getOOpenCalStartPath()
     return dir.absolutePath();
 }
 
+struct FileGroup
+{
+    QFileInfoList files;
+    qint64 totalBytes = 0;
+};
+
+struct NodeOutputFiles
+{
+    int nodeNumber = -1;
+    QFileInfo indexFile;
+    QFileInfo dataFile;
+};
+
+struct SimulationDirectorySummary
+{
+    QString directoryPath;
+    QString headerPath;
+    qint64 headerBytes = 0;
+    QString outputPrefix;
+    QString gridDescription;
+    QString nodeDescription;
+    QString readMode;
+    QString substates;
+    FileGroup dataFiles;
+    FileGroup indexFiles;
+    FileGroup reductionFiles;
+    FileGroup sourceHeaders;
+    FileGroup compiledModules;
+};
+
+QString formatByteSize(qint64 bytes)
+{
+    static constexpr double KIB = 1024.0;
+    static constexpr double MIB = KIB * 1024.0;
+    static constexpr double GIB = MIB * 1024.0;
+
+    if (bytes < 1024)
+    {
+        return QString("%1 B").arg(bytes);
+    }
+    if (bytes < static_cast<qint64>(MIB))
+    {
+        return QString("%1 KiB").arg(QString::number(bytes / KIB, 'f', 1));
+    }
+    if (bytes < static_cast<qint64>(GIB))
+    {
+        return QString("%1 MiB").arg(QString::number(bytes / MIB, 'f', 1));
+    }
+    return QString("%1 GiB").arg(QString::number(bytes / GIB, 'f', 2));
+}
+
+void addFileToGroup(FileGroup& group, const QFileInfo& fileInfo)
+{
+    group.files.append(fileInfo);
+    group.totalBytes += fileInfo.size();
+}
+
+void sortFileGroupNaturally(FileGroup& group)
+{
+    QCollator collator;
+    collator.setNumericMode(true);
+    collator.setCaseSensitivity(Qt::CaseInsensitive);
+
+    std::sort(group.files.begin(), group.files.end(), [&](const QFileInfo& lhs, const QFileInfo& rhs)
+    {
+        const int result = collator.compare(lhs.fileName(), rhs.fileName());
+        if (result != 0)
+            return result < 0;
+        return lhs.absoluteFilePath() < rhs.absoluteFilePath();
+    });
+}
+
+QString describeGroupCount(const FileGroup& group)
+{
+    if (group.files.isEmpty())
+    {
+        return QStringLiteral("none");
+    }
+
+    return QString("%1, %2")
+        .arg(QObject::tr("%n file(s)", nullptr, group.files.size()))
+        .arg(formatByteSize(group.totalBytes));
+}
+
+QString formatModifiedDate(const QFileInfo& fileInfo)
+{
+    if (!fileInfo.exists())
+        return {};
+    return fileInfo.lastModified().toString("yyyy-MM-dd HH:mm:ss");
+}
+
+QString fileNameOrDashHtml(const QFileInfo& fileInfo)
+{
+    if (!fileInfo.exists())
+        return QStringLiteral("<span style='color:#777777;'>—</span>");
+
+    return QString("<span style='font-family:monospace;'>%1</span>")
+        .arg(fileInfo.fileName().toHtmlEscaped());
+}
+
+QString fileSizeOrDashHtml(const QFileInfo& fileInfo)
+{
+    if (!fileInfo.exists())
+        return QStringLiteral("<span style='color:#777777;'>—</span>");
+
+    return formatByteSize(fileInfo.size()).toHtmlEscaped();
+}
+
+QDateTime newestModificationDate(const QFileInfo& lhs, const QFileInfo& rhs)
+{
+    const QDateTime lhsDate = lhs.exists() ? lhs.lastModified() : QDateTime{};
+    const QDateTime rhsDate = rhs.exists() ? rhs.lastModified() : QDateTime{};
+    return lhsDate > rhsDate ? lhsDate : rhsDate;
+}
+
+QString formatModifiedDate(const QDateTime& dateTime)
+{
+    return dateTime.isValid() ? dateTime.toString("yyyy-MM-dd HH:mm:ss") : QString{};
+}
+
+bool extractOutputNodeNumber(const QFileInfo& fileInfo, const QString& outputPrefix, bool indexFile, int& nodeNumber)
+{
+    if (outputPrefix.isEmpty())
+        return false;
+
+    QString fileName = fileInfo.fileName();
+    if (!fileName.startsWith(outputPrefix))
+        return false;
+
+    QString suffix = fileName.mid(outputPrefix.size());
+    if (indexFile)
+    {
+        const QString indexSuffix = QStringLiteral("_index.txt");
+        if (!suffix.endsWith(indexSuffix, Qt::CaseInsensitive))
+            return false;
+        suffix.chop(indexSuffix.size());
+    }
+    else
+    {
+        const int dotIndex = suffix.lastIndexOf('.');
+        if (dotIndex <= 0)
+            return false;
+        suffix = suffix.left(dotIndex);
+    }
+
+    bool ok = false;
+    const int parsedNodeNumber = suffix.toInt(&ok);
+    if (!ok || parsedNodeNumber < 0)
+        return false;
+
+    nodeNumber = parsedNodeNumber;
+    return true;
+}
+
+std::vector<NodeOutputFiles> buildNodeOutputFiles(const SimulationDirectorySummary& summary)
+{
+    std::map<int, NodeOutputFiles> filesByNode;
+
+    for (const QFileInfo& fileInfo : summary.indexFiles.files)
+    {
+        int nodeNumber = -1;
+        if (extractOutputNodeNumber(fileInfo, summary.outputPrefix, /*indexFile=*/true, nodeNumber))
+        {
+            auto& entry = filesByNode[nodeNumber];
+            entry.nodeNumber = nodeNumber;
+            entry.indexFile = fileInfo;
+        }
+    }
+
+    for (const QFileInfo& fileInfo : summary.dataFiles.files)
+    {
+        int nodeNumber = -1;
+        if (extractOutputNodeNumber(fileInfo, summary.outputPrefix, /*indexFile=*/false, nodeNumber))
+        {
+            auto& entry = filesByNode[nodeNumber];
+            entry.nodeNumber = nodeNumber;
+            entry.dataFile = fileInfo;
+        }
+    }
+
+    std::vector<NodeOutputFiles> nodeFiles;
+    nodeFiles.reserve(filesByNode.size());
+    for (auto& [nodeNumber, entry] : filesByNode)
+    {
+        nodeFiles.push_back(entry);
+    }
+    return nodeFiles;
+}
+
+QString fileTableHtml(const QString& title, const FileGroup& group, int maxItems = 80)
+{
+    QString html =
+        QString("<p style='margin-top:10px; margin-bottom:3px;'>"
+                "<span style='font-size:10pt; font-weight:600; color:#24527a;'>%1</span><br/>"
+                "<span style='color:#666666;'>%2</span>"
+                "</p>")
+            .arg(title.toHtmlEscaped())
+            .arg(describeGroupCount(group).toHtmlEscaped());
+
+    if (group.files.isEmpty())
+    {
+        return html + QObject::tr("<span style='color:#777777;'>&nbsp;&nbsp;none</span><br/>");
+    }
+
+    html += "<table cellspacing='0' cellpadding='3' border='0'>"
+            "<tr bgcolor='#eeeeee'>"
+            "<td><b>Name</b></td>"
+            "<td align='right'><b>Size</b></td>"
+            "<td><b>Modified</b></td>"
+            "</tr>";
+
+    int shown = 0;
+    for (const QFileInfo& fileInfo : group.files)
+    {
+        if (shown >= maxItems)
+        {
+            html += QString("<tr><td colspan='3' style='color:#777777;'>… %1</td></tr>")
+                        .arg(QObject::tr("%n more file(s)", nullptr, group.files.size() - shown).toHtmlEscaped());
+            break;
+        }
+
+        html += QString("<tr>"
+                        "<td><span style='font-family:monospace;'>%1</span></td>"
+                        "<td align='right'>%2</td>"
+                        "<td>%3</td>"
+                        "</tr>")
+                    .arg(fileInfo.fileName().toHtmlEscaped())
+                    .arg(formatByteSize(fileInfo.size()).toHtmlEscaped())
+                    .arg(formatModifiedDate(fileInfo).toHtmlEscaped());
+        ++shown;
+    }
+
+    html += "</table>";
+    return html;
+}
+
+QString nodeOutputFilesTableHtml(const SimulationDirectorySummary& summary, int maxItems = 10)
+{
+    const auto nodeFiles = buildNodeOutputFiles(summary);
+    const int totalNodes = static_cast<int>(nodeFiles.size());
+    const qint64 totalIndexBytes = summary.indexFiles.totalBytes;
+    const qint64 totalDataBytes = summary.dataFiles.totalBytes;
+
+    QString html =
+        QString("<p style='margin-top:10px; margin-bottom:3px;'>"
+                "<span style='font-size:10pt; font-weight:600; color:#24527a;'>%1</span><br/>"
+                "<span style='color:#666666;'>%2; %3; %4</span>"
+                "</p>")
+            .arg(QObject::tr("Simulation node files").toHtmlEscaped())
+            .arg(QObject::tr("%n node(s)", nullptr, totalNodes).toHtmlEscaped())
+            .arg(describeGroupCount(summary.indexFiles).toHtmlEscaped())
+            .arg(describeGroupCount(summary.dataFiles).toHtmlEscaped());
+
+    if (nodeFiles.empty())
+    {
+        return html + QObject::tr("<span style='color:#777777;'>&nbsp;&nbsp;none</span><br/>");
+    }
+
+    html += "<table cellspacing='0' cellpadding='3' border='0'>"
+            "<tr bgcolor='#eeeeee'>"
+            "<td align='right'><b>Node</b></td>"
+            "<td><b>Index file</b></td>"
+            "<td><b>Simulation data</b></td>"
+            "<td align='right'><b>Index size</b></td>"
+            "<td align='right'><b>Data size</b></td>"
+            "<td><b>Newest modified</b></td>"
+            "</tr>";
+
+    int shown = 0;
+    for (const NodeOutputFiles& nodeFile : nodeFiles)
+    {
+        if (shown >= maxItems)
+        {
+            html += QString("<tr><td colspan='6' style='color:#777777;'>… %1</td></tr>")
+                        .arg(QObject::tr("%n more node(s)", nullptr, totalNodes - shown).toHtmlEscaped());
+            break;
+        }
+
+        html += QString("<tr>"
+                        "<td align='right'>%1</td>"
+                        "<td>%2</td>"
+                        "<td>%3</td>"
+                        "<td align='right'>%4</td>"
+                        "<td align='right'>%5</td>"
+                        "<td>%6</td>"
+                        "</tr>")
+                    .arg(nodeFile.nodeNumber)
+                    .arg(fileNameOrDashHtml(nodeFile.indexFile))
+                    .arg(fileNameOrDashHtml(nodeFile.dataFile))
+                    .arg(fileSizeOrDashHtml(nodeFile.indexFile))
+                    .arg(fileSizeOrDashHtml(nodeFile.dataFile))
+                    .arg(formatModifiedDate(newestModificationDate(nodeFile.indexFile, nodeFile.dataFile)).toHtmlEscaped());
+        ++shown;
+    }
+
+    html += QString("<tr bgcolor='#f6f6f6'>"
+                    "<td colspan='3'><b>%1</b></td>"
+                    "<td align='right'><b>%2</b></td>"
+                    "<td align='right'><b>%3</b></td>"
+                    "<td></td>"
+                    "</tr>")
+                .arg(QObject::tr("Total for all node files").toHtmlEscaped())
+                .arg(formatByteSize(totalIndexBytes).toHtmlEscaped())
+                .arg(formatByteSize(totalDataBytes).toHtmlEscaped());
+
+    html += "</table>";
+    return html;
+}
+
+SimulationDirectorySummary inspectSimulationDirectory(const QString& configFilePath)
+{
+    SimulationDirectorySummary summary;
+
+    const QFileInfo headerInfo(configFilePath);
+    summary.headerPath = headerInfo.absoluteFilePath();
+    summary.directoryPath = headerInfo.dir().absolutePath();
+    summary.headerBytes = headerInfo.exists() ? headerInfo.size() : 0;
+
+    try
+    {
+        Config config(summary.headerPath.toStdString(), /*printWarnings=*/false);
+        if (ConfigCategory* general = config.getConfigCategory(ConfigConstants::CATEGORY_GENERAL, /*ignoreCase=*/true))
+        {
+            if (const ConfigParameter* output = general->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME))
+            {
+                summary.outputPrefix = QString::fromStdString(output->getValue<std::string>());
+            }
+
+            const auto readInt = [&](const std::string& parameterName, int fallback = 1)
+            {
+                if (const ConfigParameter* parameter = general->getConfigParameter(parameterName))
+                {
+                    return parameter->getValue<int>();
+                }
+                return fallback;
+            };
+
+            const int columns = readInt(ConfigConstants::PARAM_NUMBER_OF_COLUMNS);
+            const int rows = readInt(ConfigConstants::PARAM_NUMBER_OF_ROWS);
+            const int slices = readInt(ConfigConstants::PARAM_NUMBER_OF_SLICES);
+            summary.gridDescription = QString("%1×%2×%3").arg(columns).arg(rows).arg(slices);
+        }
+
+        if (ConfigCategory* distributed = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED, /*ignoreCase=*/true))
+        {
+            const auto readInt = [&](const std::string& parameterName, int fallback = 1)
+            {
+                if (const ConfigParameter* parameter = distributed->getConfigParameter(parameterName))
+                {
+                    return parameter->getValue<int>();
+                }
+                return fallback;
+            };
+
+            const int nodeX = readInt(ConfigConstants::PARAM_NUMBER_NODE_X);
+            const int nodeY = readInt(ConfigConstants::PARAM_NUMBER_NODE_Y);
+            const int nodeZ = readInt(ConfigConstants::PARAM_NUMBER_NODE_Z);
+            summary.nodeDescription = QString("%1×%2×%3").arg(nodeX).arg(nodeY).arg(nodeZ);
+        }
+
+        if (ConfigCategory* visualization = config.getConfigCategory(ConfigConstants::CATEGORY_VISUALIZATION, /*ignoreCase=*/true))
+        {
+            if (const ConfigParameter* mode = visualization->getConfigParameter(ConfigConstants::PARAM_MODE))
+            {
+                summary.readMode = QString::fromStdString(mode->getValue<std::string>());
+            }
+            if (const ConfigParameter* substates = visualization->getConfigParameter(ConfigConstants::PARAM_SUBSTATES))
+            {
+                summary.substates = QString::fromStdString(substates->getDefaultValue());
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Could not inspect simulation Header.txt: " << e.what() << std::endl;
+    }
+
+    QDir directory(summary.directoryPath);
+    const QFileInfoList files = directory.entryInfoList(QDir::Files | QDir::NoSymLinks, QDir::Name | QDir::IgnoreCase);
+
+    for (const QFileInfo& fileInfo : files)
+    {
+        const QString fileName = fileInfo.fileName();
+        const QString lowerName = fileName.toLower();
+        const bool startsWithOutputPrefix = !summary.outputPrefix.isEmpty() && fileName.startsWith(summary.outputPrefix);
+
+        if (lowerName == QString::fromLatin1(DirectoryConstants::HEADER_FILE_NAME).toLower())
+        {
+            continue;
+        }
+        if (lowerName.endsWith(".h") || lowerName.endsWith(".hpp"))
+        {
+            addFileToGroup(summary.sourceHeaders, fileInfo);
+        }
+        else if (lowerName.endsWith(".so") || lowerName.endsWith(".dll") || lowerName.endsWith(".dylib"))
+        {
+            addFileToGroup(summary.compiledModules, fileInfo);
+        }
+        else if (startsWithOutputPrefix && lowerName.endsWith("_index.txt"))
+        {
+            addFileToGroup(summary.indexFiles, fileInfo);
+        }
+        else if (startsWithOutputPrefix && lowerName.endsWith("-red.txt"))
+        {
+            addFileToGroup(summary.reductionFiles, fileInfo);
+        }
+        else if (startsWithOutputPrefix && (lowerName.endsWith(".bin") || lowerName.endsWith(".txt")))
+        {
+            addFileToGroup(summary.dataFiles, fileInfo);
+        }
+    }
+
+    sortFileGroupNaturally(summary.dataFiles);
+    sortFileGroupNaturally(summary.indexFiles);
+    sortFileGroupNaturally(summary.reductionFiles);
+    sortFileGroupNaturally(summary.sourceHeaders);
+    sortFileGroupNaturally(summary.compiledModules);
+
+    return summary;
+}
+
+QString buildSimulationDirectoryTooltipHtml(const SimulationDirectorySummary& summary)
+{
+    const QFileInfo headerInfo(summary.headerPath);
+    QString html =
+        QString("<qt>"
+                "<div style='font-family:Sans Serif; font-size:9pt;'>"
+                "<p style='margin:0 0 6px 0;'>"
+                "<span style='font-size:12pt; font-weight:700; color:#1d3557;'>%1</span><br/>"
+                "<span style='font-family:monospace;'>%2</span>"
+                "</p>")
+            .arg(QObject::tr("Simulation directory").toHtmlEscaped())
+            .arg(summary.directoryPath.toHtmlEscaped());
+
+    html += "<table cellspacing='0' cellpadding='3' border='0'>";
+    auto addSummaryRow = [&](const QString& label, const QString& value)
+    {
+        html += QString("<tr>"
+                        "<td style='color:#666666;'>%1</td>"
+                        "<td><b>%2</b></td>"
+                        "</tr>")
+                    .arg(label.toHtmlEscaped())
+                    .arg(value.toHtmlEscaped());
+    };
+
+    addSummaryRow(QObject::tr("Header"),
+                  QString("%1, %2, %3")
+                      .arg(headerInfo.fileName())
+                      .arg(formatByteSize(summary.headerBytes))
+                      .arg(formatModifiedDate(headerInfo)));
+    addSummaryRow(QObject::tr("Output prefix"), summary.outputPrefix.isEmpty() ? QObject::tr("unknown") : summary.outputPrefix);
+    addSummaryRow(QObject::tr("Grid"), summary.gridDescription.isEmpty() ? QObject::tr("unknown") : summary.gridDescription);
+    addSummaryRow(QObject::tr("Nodes"), summary.nodeDescription.isEmpty() ? QObject::tr("unknown") : summary.nodeDescription);
+    addSummaryRow(QObject::tr("Read mode"), summary.readMode.isEmpty() ? QObject::tr("default") : summary.readMode);
+    addSummaryRow(QObject::tr("Substates"), summary.substates.isEmpty() ? QObject::tr("not specified") : summary.substates);
+    addSummaryRow(QObject::tr("Data files"), describeGroupCount(summary.dataFiles));
+    addSummaryRow(QObject::tr("Index files"), describeGroupCount(summary.indexFiles));
+    addSummaryRow(QObject::tr("Reduction files"), describeGroupCount(summary.reductionFiles));
+    html += "</table>";
+
+    html += fileTableHtml(QObject::tr("C++ model header files"), summary.sourceHeaders);
+    html += fileTableHtml(QObject::tr("Compiled model modules (.so, .dll, .dylib)"), summary.compiledModules);
+    html += nodeOutputFilesTableHtml(summary, 10);
+    html += fileTableHtml(QObject::tr("Reduction files"), summary.reductionFiles, 20);
+
+    html += "</div></qt>";
+    return html;
+}
+
 void updateMenu2ShowTheSelectedModeAsActive(const QString& modelName, QActionGroup *modelActionGroup)
 {
     if (modelActionGroup)
@@ -143,17 +615,21 @@ MainWindow::MainWindow(QWidget* parent)
 {
     ui->setupUi(this);
     setWindowTitle(QApplication::applicationName());
+    ui->inputFilePathLabel->setMinimumWidth(160);
+    ui->inputFilePathLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    ui->reductionWidget->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+    ui->horizontalLayout->setStretchFactor(ui->inputFilePathLabel, 1);
+    ui->horizontalLayout->setStretchFactor(ui->reductionWidget, 0);
 
     // Initialize substate dock widget from UI
     ui->substatesDockWidget->initializeFromUI();
-    ui->substatesDockWidget->hide();  // Hidden by default until configuration is loaded
+    ui->substatesDockWidget->hide();  // Hidden by default until simulation data is loaded
 
     setupConnections();
     configureButtons();
     loadStrings();
     recreateModelMenuActions();
     createViewModeActionGroup();
-    updateRecentFilesMenu();
     updateRecentDirectoriesMenu();
 
     enterNoConfigurationFileMode();
@@ -162,7 +638,7 @@ MainWindow::MainWindow(QWidget* parent)
 void MainWindow::configureUIElements(const QString& configFileName)
 {
     initializeSceneWidget(configFileName);
-    showInputFilePathOnBarLabel(configFileName);
+    showInputDirectoryOnBarLabel(configFileName);
 
     setWidgetsEnabledState(true);
     changeWhichButtonsAreEnabled();
@@ -190,7 +666,6 @@ void MainWindow::connectMenuActions()
     connect(ui->actionAbout, &QAction::triggered, this, &MainWindow::showAboutThisApplicationDialog);
     connect(ui->actionShow_config_details, &QAction::triggered, this, &MainWindow::showConfigDetailsDialog);
     connect(ui->actionExport_Video, &QAction::triggered, this, &MainWindow::exportVideoDialog);
-    connect(ui->actionOpenConfiguration, &QAction::triggered, this, &MainWindow::onOpenConfigurationRequested);
     connect(ui->actionReloadData, &QAction::triggered, this, &MainWindow::onReloadDataRequested);
     connect(ui->actionLoadPlugin, &QAction::triggered, this, &MainWindow::onLoadPluginRequested);
     connect(ui->actionLoadModelFromDirectory, &QAction::triggered, this, &MainWindow::onLoadModelFromDirectoryRequested);
@@ -205,6 +680,7 @@ void MainWindow::connectMenuActions()
     connect(ui->action3DMode, &QAction::triggered, this, &MainWindow::on3DModeRequested);
     connect(ui->actionCrossSectionControls, &QAction::toggled, this, &MainWindow::onCrossSectionControlsToggled);
     connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
+    connect(ui->actionLineDetection, &QAction::triggered, this, &MainWindow::onLineDetectionToggled);
     connect(ui->actionFlatSceneBackground, &QAction::triggered, this, &MainWindow::onFlatSceneBackgroundToggled);
 
     /// Model selection actions are connected dynamically in createModelMenuActions()
@@ -230,9 +706,19 @@ void MainWindow::configureButton(QPushButton* button, QStyle::StandardPixmap ico
 }
 
 
-void MainWindow::showInputFilePathOnBarLabel(const QString& inputFilePath)
+void MainWindow::showInputDirectoryOnBarLabel(const QString& configFilePath)
 {
-    ui->inputFilePathLabel->setFileName(inputFilePath);
+    ui->inputFilePathLabel->setFileName(configFilePath);
+    ui->inputFilePathLabel->setToolTip(QString());
+
+    if (configFilePath.isEmpty())
+    {
+        return;
+    }
+
+    const auto summary = inspectSimulationDirectory(configFilePath);
+    ui->inputFilePathLabel->setDisplayDirectoryPath(summary.directoryPath);
+    ui->inputFilePathLabel->setToolTip(buildSimulationDirectoryTooltipHtml(summary));
 }
 
 void MainWindow::initializeSceneWidget(const QString& configFileName)
@@ -257,13 +743,26 @@ void MainWindow::availableStepsLoadedFromConfigFile(std::vector<StepIndex> avail
     // Store the list of available steps for intelligent step navigation
     this->availableSteps = availableSteps;
 
+    // Load the first available step instead of always starting at 0
+    // This handles cases where step 0 might not be available (e.g., steps [2, 4, 6, ...])
+    if (!availableSteps.empty())
+    {
+        const StepIndex firstAvailableStep = availableSteps.front();
+        if (currentStep != firstAvailableStep)
+        {
+            currentStep = firstAvailableStep;
+            setPositionOnWidgets(currentStep);
+        }
+    }
+
     // Update button states based on available steps
+    // This must be called AFTER setting currentStep to ensure correct button states
     changeWhichButtonsAreEnabled();
     
     const auto lastStepAvailableInAvailableSteps = std::ranges::contains(availableSteps, totalSteps());
     if (! lastStepAvailableInAvailableSteps)
     {
-        std::cerr << tr("[Warning] Number of steps mismatch: total number of steps from config file is %1, but last step number from index file is %2")
+        std::cerr << tr("[Warning] Number of steps mismatch: total number of steps from Header.txt is %1, but last step number from index file is %2")
                          .arg(totalSteps())
                          .arg(availableSteps.back()).toStdString() << std::endl;
     }
@@ -363,12 +862,13 @@ void MainWindow::showConfigDetailsDialog()
     const auto configFileName = ui->inputFilePathLabel->getFileName();
     if (configFileName.isEmpty())
     {
-        QMessageBox::warning(this, tr("No Configuration"),
-                           tr("No configuration file has been loaded."));
+        QMessageBox::warning(this, tr("No Simulation Directory"),
+                           tr("No simulation directory has been loaded."));
         return;
     }
 
-    ConfigDetailsDialog dialog(configFileName.toStdString(), this);
+    const auto summary = inspectSimulationDirectory(configFileName);
+    ConfigDetailsDialog dialog(configFileName.toStdString(), buildSimulationDirectoryTooltipHtml(summary), this);
     dialog.exec();
 }
 
@@ -856,8 +1356,8 @@ void MainWindow::switchToModel(const QString& modelName)
 
         std::cout << "[DEBUG] Model Changed: " <<
             tr("Successfully switched to %1 model, but no data was reloaded from files.\n"
-               "Use 'Reload Data' (F5), or open another configuration file to load data files.\n"
-               "Notice: Model has to be compatible with configuration file, if not - the behaviour is undefined")
+               "Use 'Reload Data' (F5), or open another simulation directory to load data files.\n"
+               "Notice: Model has to be compatible with the loaded directory, if not - the behaviour is undefined")
                 .arg(modelName).toStdString() << std::endl;
 
     }
@@ -874,8 +1374,8 @@ void MainWindow::clearActiveSubstates()
 {
     // Clear active substates for both 2D and 3D visualization
     ui->sceneWidget->setActiveSubstatesForColorring({});
-    ui->sceneWidget->setActiveSubstateFor3D("");
-    activeSubstateFor3D = "";
+    ui->sceneWidget->setActiveSubstatesFor3D({});
+    activeSubstatesFor3D.clear();
 }
 
 void MainWindow::updateSubstateDockeWidget()
@@ -888,10 +1388,11 @@ void MainWindow::updateSubstateDockeWidget()
 
         // TODO: GB: Do we really need to send this to MainWindow? Maybe SubstatesDockWidget can directly control SceneWidget?
         // Connect signal for 3D visualization state changes
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3dStateChanged, this, &MainWindow::onUse3dStateChanged);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::useSubstatesColorringRequested, this, &MainWindow::onUseSubstatesColorringRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::deactivateRequested, this, &MainWindow::onDeactivateRequested);
-        connect(ui->substatesDockWidget, &SubstatesDockWidget::visualizationRefreshRequested, ui->sceneWidget, &SceneWidget::refreshVisualization);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3dStateChanged, this, &MainWindow::onUse3dStateChanged, Qt::UniqueConnection);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::use3dSubstateOrderChanged, this, &MainWindow::onUse3dSubstateOrderChanged, Qt::UniqueConnection);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::useSubstatesColorringRequested, this, &MainWindow::onUseSubstatesColorringRequested, Qt::UniqueConnection);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::deactivateRequested, this, &MainWindow::onDeactivateRequested, Qt::UniqueConnection);
+        connect(ui->substatesDockWidget, &SubstatesDockWidget::visualizationRefreshRequested, ui->sceneWidget, &SceneWidget::refreshVisualization, Qt::UniqueConnection);
     }
 }
 
@@ -916,35 +1417,6 @@ void MainWindow::onReloadDataRequested()
     }
 }
 
-void MainWindow::onOpenConfigurationRequested()
-{
-    if (SceneWidgetVisualizerFactory::getAvailableModels().empty())
-    {
-        QMessageBox::information(this,
-                                 tr("No Models Loaded"),
-                                 tr("No models are currently loaded.\n\n"
-                                    "Load a model first using:\n"
-                                    "• Model → Load Plugin...\n"
-                                    "• File → Load Model from Directory..."));
-        return;
-    }
-
-    // Open file dialog to select configuration file
-    QString configFileName = QFileDialog::getOpenFileName(
-        this,
-        tr("Open Configuration File"),
-        getOOpenCalStartPath(),
-        tr("Configuration Files (*.txt *.ini);;All Files (*)")
-    );
-    
-    if (configFileName.isEmpty())
-    {
-        return; // User cancelled
-    }
-
-    openConfigurationFile(configFileName);
-}
-
 void MainWindow::openConfigurationFile(const QString& configFileName, std::shared_ptr<Config> optionalConfig)
 {
     try
@@ -956,14 +1428,14 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
                                      tr("No models are currently loaded.\n\n"
                                         "Load a model first using:\n"
                                         "• Model → Load Plugin...\n"
-                                        "• File → Load Model from Directory..."));
+                                    "• File → Open Model Directory..."));
             return;
         }
 
         // Stop any ongoing playback
         playbackTimer.stop();
 
-        // Clear active substates when opening new configuration
+        // Clear active substates when opening a new simulation directory
         clearActiveSubstates();
 
         if (bool isFirstConfiguration [[maybe_unused]] = ui->inputFilePathLabel->getFileName().isEmpty())
@@ -972,21 +1444,24 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         }
         else
         {
-            // Reload with new configuration
+            // Reload with the new Header.txt
             ui->sceneWidget->loadNewConfiguration(configFileName.toStdString(), 0);
 
-            // Update substate dock widget for new configuration
+            // Update substate dock widget for the new simulation data
             updateSubstateDockeWidget();
         }
 
         synchronizeViewModeWithLoadedModel();
 
-        // Initialize reduction manager for this configuration
+        // Initialize reduction manager for this Header.txt
         // If config is provided, use it; otherwise read from file
         initializeReductionManager(configFileName, optionalConfig);
 
         // Synchronize grid lines checkbox with current visibility state
         syncGridLinesCheckbox();
+
+        // Synchronize line detection checkbox with current enabled state
+        syncLineDetectionCheckbox();
 
         // Synchronize flat scene background checkbox with current visibility state
         syncFlatSceneBackgroundCheckbox();
@@ -994,24 +1469,22 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Synchronize cell rendering checkbox with current setting
         syncCellRenderingCheckbox();
 
-        // Update UI with new configuration
-        showInputFilePathOnBarLabel(configFileName);
+        // Update UI with the simulation directory that owns this Header.txt
+        showInputDirectoryOnBarLabel(configFileName);
 
-        // Reset to first step
-        currentStep = 0;
+        // Reset to first available step (not always 0)
+        // This handles cases where step 0 might not be available (e.g., steps [2, 4, 6, ...])
+        currentStep = availableSteps.empty() ? FIRST_STEP_NUMBER : availableSteps.front();
         setPositionOnWidgets(currentStep);
 
-        // Enable all widgets now that we have configuration
+        // Enable all widgets now that we have simulation data
         setWidgetsEnabledState(true);
 
-        // Add to recent files
-        addToRecentFiles(configFileName);
-
-        std::cout << "[DEBUG] Configuration Loaded: Successfully loaded configuration: " << configFileName.toStdString() << std::endl;
+        std::cout << "[DEBUG] Simulation Directory Loaded: Successfully loaded Header.txt: " << configFileName.toStdString() << std::endl;
     }
     catch (const std::exception& e)
     {
-        QMessageBox::critical(this, tr("Load Failed"), tr("Failed to load configuration:\n%1").arg(e.what()));
+        QMessageBox::critical(this, tr("Load Failed"), tr("Failed to load simulation directory:\n%1").arg(e.what()));
     }
 }
 
@@ -1067,15 +1540,16 @@ void MainWindow::enterNoConfigurationFileMode()
 {
     ui->sceneWidget->setHidden(true);
 
-    // Set UI to show no configuration loaded
+    // Set UI to show no simulation directory loaded
     ui->inputFilePathLabel->setFileName("");
+    ui->inputFilePathLabel->setToolTip(QString());
     if (SceneWidgetVisualizerFactory::getAvailableModels().empty())
     {
-        ui->inputFilePathLabel->setText(tr("No models loaded - use Model → Load Plugin or File → Load Model from Directory"));
+        ui->inputFilePathLabel->setText(tr("No models loaded - use Model → Load Plugin or File → Open Model Directory"));
     }
     else
     {
-        ui->inputFilePathLabel->setText(tr("No configuration loaded - use File → Open Configuration"));
+        ui->inputFilePathLabel->setText(tr("No simulation directory loaded - use File → Open Model Directory"));
     }
 
     totalStepsNumberChanged(0);
@@ -1308,7 +1782,7 @@ void MainWindow::loadModelDataWithExistingModel(const QString& modelDirectory, c
             return;
         }
 
-        // Clear scene before loading new configuration to avoid stale data
+        // Clear scene before loading new simulation data to avoid stale data
         ui->sceneWidget->clearScene();
 
         switchToModel(existingModelName);
@@ -1323,7 +1797,7 @@ void MainWindow::loadModelDataWithExistingModel(const QString& modelDirectory, c
             return;
         }
 
-        // Load configuration from Header.txt
+        // Load settings and data from Header.txt in the selected directory
         openConfigurationFile(QString::fromStdString(headerPath.string()));
 
         // Add directory to recent directories list
@@ -1450,6 +1924,18 @@ void MainWindow::syncGridLinesCheckbox()
     // Synchronize the checkbox state with the actual grid lines visibility
     QSignalBlocker blocker(ui->actionGridLines);
     ui->actionGridLines->setChecked(ui->sceneWidget->getGridLinesVisible());
+}
+
+void MainWindow::onLineDetectionToggled(bool checked)
+{
+    ui->sceneWidget->setLineDetectionEnabled(checked);
+}
+
+void MainWindow::syncLineDetectionCheckbox()
+{
+    // Synchronize the checkbox state with the actual line detection enabled state
+    QSignalBlocker blocker(ui->actionLineDetection);
+    ui->actionLineDetection->setChecked(ui->sceneWidget->getLineDetectionEnabled());
 }
 
 void MainWindow::onFlatSceneBackgroundToggled(bool checked)
@@ -1747,255 +2233,6 @@ void MainWindow::onCameraOrientationChanged(double roll, double pitch, double ya
     ui->yawSpinBox->setValue(yawDegrees);
 }
 
-// ============================================================================
-// Recent Files Management
-// ============================================================================
-
-void MainWindow::updateRecentFilesMenu()
-{
-    ui->menuRecentFiles->clear();
-    ui->menuRecentFiles->setToolTipsVisible(true);
-
-    QStringList recentFiles = loadRecentFiles();
-
-    // Remove files that don't exist anymore
-    recentFiles.erase(std::remove_if(recentFiles.begin(),
-                                     recentFiles.end(),
-                                     [](const QString& path)
-                                     {
-                                         return ! QFileInfo::exists(path);
-                                     }),
-                      recentFiles.end());
-
-    if (recentFiles.isEmpty())
-    {
-        QAction* noFilesAction = ui->menuRecentFiles->addAction(tr("No recent files"));
-        noFilesAction->setEnabled(false);
-        return;
-    }
-
-    // Save cleaned list
-    saveRecentFiles(recentFiles);
-
-    for (const QString& filePath : recentFiles)
-    {
-        QString displayName = getSmartDisplayName(filePath, recentFiles);
-
-        // Get last opened time from QSettings
-        QSettings settings;
-        QString timeKey = QString("recentFiles/time_%1").arg(QString(filePath.toUtf8().toBase64()));
-        QDateTime lastOpened = settings.value(timeKey, QDateTime::currentDateTime()).toDateTime();
-
-        // Format: "filename [2024-10-20 15:30:25]"
-        QString actionText = QString("%1 [%2]").arg(displayName).arg(lastOpened.toString("yyyy-MM-dd HH:mm:ss"));
-
-        QAction* action = ui->menuRecentFiles->addAction(actionText);
-        action->setData(filePath);
-        action->setToolTip(generateTooltipForFile(filePath));
-
-        connect(action, &QAction::triggered, this, &MainWindow::onRecentFileTriggered);
-    }
-
-    ui->menuRecentFiles->addSeparator();
-    QAction* clearAction = ui->menuRecentFiles->addAction(tr("Clear Recent Files"));
-    connect(clearAction,
-            &QAction::triggered,
-            this,
-            [this]()
-            {
-                saveRecentFiles(QStringList());
-                updateRecentFilesMenu();
-            });
-}
-
-void MainWindow::addToRecentFiles(const QString& filePath)
-{
-    QStringList recentFiles = loadRecentFiles();
-
-    // Remove if already exists (to move it to the top)
-    recentFiles.removeAll(filePath);
-
-    // Add to the beginning
-    recentFiles.prepend(filePath);
-
-    // Limit to MAX_RECENT_FILES
-    while (recentFiles.size() > MAX_RECENT_FILES)
-    {
-        recentFiles.removeLast();
-    }
-
-    saveRecentFiles(recentFiles);
-
-    // Store the timestamp when this file was opened
-    QSettings settings;
-    QString timeKey = QString("recentFiles/time_%1").arg(QString(filePath.toUtf8().toBase64()));
-    settings.setValue(timeKey, QDateTime::currentDateTime());
-
-    updateRecentFilesMenu();
-}
-
-QStringList MainWindow::loadRecentFiles() const
-{
-    QSettings settings;
-    return settings.value("recentFiles/list").toStringList();
-}
-
-void MainWindow::saveRecentFiles(const QStringList& files) const
-{
-    QSettings settings;
-    settings.setValue("recentFiles/list", files);
-}
-
-QString MainWindow::getSmartDisplayName(const QString& filePath, const QStringList& allPaths) const
-{
-    QFileInfo fileInfo(filePath);
-    QString fileName = fileInfo.fileName();
-    QDir fileDir = fileInfo.dir();
-
-    // Start with parent/filename as default (depth = 1)
-    QString displayName = fileDir.dirName() + "/" + fileName;
-
-    // Count how many files have the same filename
-    const int sameNameCount = std::count_if(allPaths.begin(), allPaths.end(), [&](const QString& otherPath)
-        {
-            return QFileInfo(otherPath).fileName() == fileName;
-        });
-
-    // If unique filename, return parent/filename
-    if (sameNameCount == 1)
-    {
-        return displayName;
-    }
-
-    // Otherwise, check if parent/filename is already unique
-    for (int depth = 1; depth <= 4; ++depth) // Try up to 4 parent directories
-    {
-        // Build display name with current depth
-        QDir currentDir = fileInfo.dir();
-        QString currentDisplayName = fileInfo.fileName();
-        for (int d = 0; d < depth; ++d)
-        {
-            currentDisplayName = currentDir.dirName() + "/" + currentDisplayName;
-            currentDir.cdUp();
-        }
-
-        // Check if this display name is unique among conflicting files
-        bool isUnique = true;
-        for (const QString& otherPath : allPaths)
-        {
-            if (otherPath == filePath)
-                continue;
-
-            QFileInfo otherInfo(otherPath);
-            if (otherInfo.fileName() != fileName)
-                continue; // Not a conflicting file
-
-            // Build same-depth display name for other file
-            QDir otherDir = otherInfo.dir();
-            QString otherDisplayName = otherInfo.fileName();
-            for (int d = 0; d < depth; ++d)
-            {
-                otherDisplayName = otherDir.dirName() + "/" + otherDisplayName;
-                otherDir.cdUp();
-            }
-
-            if (otherDisplayName == currentDisplayName)
-            {
-                isUnique = false;
-                break;
-            }
-        }
-
-        if (isUnique)
-        {
-            return currentDisplayName;
-        }
-    }
-
-    // If still not unique, return full path
-    return filePath;
-}
-
-QString MainWindow::generateTooltipForFile(const QString& filePath) const
-{
-    QFileInfo fileInfo(filePath);
-
-    if (! fileInfo.exists())
-    {
-        return tr("File does not exist:\n%1").arg(filePath);
-    }
-
-    QString tooltip = QString("<b>%1</b><br/>").arg(tr("Full path:"));
-    tooltip += QString("%1<br/><br/>").arg(filePath);
-    
-    tooltip += QString("<b>%1</b> %2<br/>")
-        .arg(tr("Created:"))
-        .arg(fileInfo.birthTime().toString("yyyy-MM-dd HH:mm:ss"));
-    
-    tooltip += QString("<b>%1</b> %2<br/><br/>")
-        .arg(tr("Modified:"))
-        .arg(fileInfo.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
-    
-    // Try to read configuration parameters
-    try
-    {
-        Config config(filePath.toStdString(), /*printWarnings=*/false);
-
-        tooltip += QString("<b>%1</b><br/>").arg(tr("Configuration parameters:"));
-
-        auto addParam = [&](const QString& category, const QString& paramName)
-        {
-            ConfigCategory* cat = config.getConfigCategory(category.toStdString(), /*ignoreCase=*/true);
-            if (cat)
-            {
-                const ConfigParameter* param = cat->getConfigParameter(paramName.toStdString());
-                if (param)
-                {
-                    tooltip += QString("&nbsp;&nbsp;• <b>%1:</b> %2<br/>")
-                                   .arg(paramName)
-                                   .arg(QString::fromStdString(param->getDefaultValue()));
-                }
-            }
-        };
-
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_STEPS);
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_ROWS);
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_COLUMNS);
-        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_X);
-        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_Y);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_MODE);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_SUBSTATES);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_REDUCTION);
-    }
-    catch (const std::exception& e)
-    {
-        tooltip += QString("<br/><i>%1: %2</i>")
-            .arg(tr("Could not read configuration"))
-            .arg(e.what());
-    }
-
-    return tooltip;
-}
-
-void MainWindow::onRecentFileTriggered()
-{
-    QAction* action = qobject_cast<QAction*>(sender());
-    if (! action)
-        return;
-
-    QString filePath = action->data().toString();
-
-    if (! QFileInfo::exists(filePath))
-    {
-        QMessageBox::warning(this, tr("File Not Found"),
-            tr("The file no longer exists:\n%1").arg(filePath));
-        updateRecentFilesMenu();
-        return;
-    }
-
-    openConfigurationFile(filePath);
-}
-
 void MainWindow::setWidgetsEnabledState(bool enabled)
 {
     // Playback controls
@@ -2020,10 +2257,10 @@ void MainWindow::setWidgetsEnabledState(bool enabled)
     // Menu actions - some should remain enabled
     // actionQuit - always enabled
     // actionAbout - always enabled
-    // actionOpenConfiguration - always enabled
+    // actionLoadModelFromDirectory - always enabled
     // Model actions - always enabled (can switch before loading config)
 
-    // These should be disabled without configuration:
+    // These should be disabled without loaded simulation data:
     ui->actionShow_config_details->setEnabled(enabled);
     ui->actionExport_Video->setEnabled(enabled);
     ui->actionReloadData->setEnabled(enabled);
@@ -2053,7 +2290,7 @@ void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
             // Switch to the model (switchToModel now handles menu update)
             switchToModel(modelQStr);
 
-            // Reload data with the new model only if configuration was loaded
+            // Reload data with the new model only if simulation data was loaded
             if (cmdParser.getConfigFile())
             {
                 try
@@ -2140,7 +2377,7 @@ void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
         }
     }
 
-    // Handle autoPlay - automatically start playback when configuration loads
+    // Handle autoPlay - automatically start playback when simulation data loads
     if (cmdParser.isAutoPlayRequested())
     {
         // Set flag so we know to exit after playback completes
@@ -2160,7 +2397,7 @@ void MainWindow::initializeReductionManager(const QString& configFileName, std::
 {
     ui->reductionWidget->setReductionManager(nullptr);
 
-    // Get reduction configuration from SettingParameter
+    // Get reduction settings from SettingParameter
     const auto* settingParam = this->ui->sceneWidget->getSettingParameter();
     if (!settingParam || settingParam->reduction.empty())
     {
@@ -2196,7 +2433,7 @@ void MainWindow::initializeReductionManager(const QString& configFileName, std::
             reductionFilePath = reductionDir / (outputFileNameFromCfg + "-red.txt");
         }
         
-        // Create ReductionManager with the reduction file path and configuration
+        // Create ReductionManager with the reduction file path and settings
         reductionManager = std::make_unique<ReductionManager>(
             QString::fromStdString(reductionFilePath.string()),
             QString::fromStdString(settingParam->reduction)
@@ -2220,7 +2457,7 @@ void MainWindow::onShowReductionRequested()
     if (!reductionManager || !reductionManager->isAvailable())
     {
         QMessageBox::warning(this, tr("No Reduction Data"),
-            tr("Reduction data is not available for the current configuration."));
+            tr("Reduction data is not available for the current simulation directory."));
         return;
     }
 
@@ -2249,8 +2486,8 @@ void MainWindow::addToRecentDirectories(const QString& directoryPath)
     // Add to the beginning
     recentDirectories.prepend(directoryPath);
 
-    // Limit to MAX_RECENT_FILES
-    while (recentDirectories.size() > MAX_RECENT_FILES)
+    // Limit to MAX_RECENT_DIRECTORIES
+    while (recentDirectories.size() > MAX_RECENT_DIRECTORIES)
     {
         recentDirectories.removeLast();
     }
@@ -2356,56 +2593,7 @@ QString MainWindow::generateTooltipForDirectory(const QString& directoryPath) co
         return tr("Directory is empty or does not contain %2:\n%1").arg(directoryPath, DirectoryConstants::HEADER_FILE_NAME);
     }
 
-    QString tooltip = QString("<b>%1</b><br/>").arg(tr("Full path:"));
-    tooltip += QString("%1<br/><br/>").arg(directoryPath);
-
-    tooltip += QString("<b>%1</b> %2<br/>")
-        .arg(tr("Created:"))
-        .arg(dirInfo.birthTime().toString("yyyy-MM-dd HH:mm:ss"));
-
-    tooltip += QString("<b>%1</b> %2<br/><br/>")
-        .arg(tr("Modified:"))
-        .arg(dirInfo.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
-
-    // Try to read configuration parameters from Header.txt
-    try
-    {
-        Config config(headerPath.toStdString(), /*printWarnings=*/false);
-
-        tooltip += QString("<b>%1</b><br/>").arg(tr("Configuration parameters:"));
-
-        auto addParam = [&](const QString& category, const QString& paramName)
-        {
-            ConfigCategory* cat = config.getConfigCategory(category.toStdString(), /*ignoreCase=*/true);
-            if (cat)
-            {
-                const ConfigParameter* param = cat->getConfigParameter(paramName.toStdString());
-                if (param)
-                {
-                    tooltip += QString("&nbsp;&nbsp;• <b>%1:</b> %2<br/>")
-                                   .arg(paramName)
-                                   .arg(QString::fromStdString(param->getDefaultValue()));
-                }
-            }
-        };
-
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_STEPS);
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_ROWS);
-        addParam(ConfigConstants::CATEGORY_GENERAL, ConfigConstants::PARAM_NUMBER_OF_COLUMNS);
-        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_X);
-        addParam(ConfigConstants::CATEGORY_DISTRIBUTED, ConfigConstants::PARAM_NUMBER_NODE_Y);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_MODE);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_SUBSTATES);
-        addParam(ConfigConstants::CATEGORY_VISUALIZATION, ConfigConstants::PARAM_REDUCTION);
-    }
-    catch (const std::exception& e)
-    {
-        tooltip += QString("<br/><i>%1: %2</i>")
-            .arg(tr("Could not read configuration"))
-            .arg(e.what());
-    }
-
-    return tooltip;
+    return buildSimulationDirectoryTooltipHtml(inspectSimulationDirectory(headerPath));
 }
 
 void MainWindow::updateRecentDirectoriesMenu()
@@ -2505,10 +2693,9 @@ void MainWindow::onRecentDirectoryTriggered()
     loadModelFromDirectory(directoryPath);
 }
 
-void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
+void MainWindow::apply3DSubstateSelection(const std::vector<std::string>& fieldNamesTopToBottom)
 {
-    // If checkbox is being unchecked, disable 3D mode
-    if (! checked)
+    if (fieldNamesTopToBottom.empty())
     {
         // Show wait cursor during view mode change
         WaitCursorGuard waitCursor("Switching to 2D visualization...");
@@ -2521,10 +2708,11 @@ void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
         }
         
         // Disable 3D substate visualization
-        ui->sceneWidget->setActiveSubstateFor3D("");
+        ui->sceneWidget->setActiveSubstatesFor3D({});
         
         // Clear active substate in MainWindow
-        activeSubstateFor3D = "";
+        activeSubstatesFor3D.clear();
+        ui->substatesDockWidget->setActiveSubstates({});
         
         // Switch back to 2D mode
         on2DModeRequested();
@@ -2535,18 +2723,18 @@ void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
         return;
     }
     
-    // Checkbox is being checked - enable 3D mode for this substate
+    // At least one checkbox is checked - enable 3D mode for this stack.
     // Show wait cursor during view mode change
     WaitCursorGuard waitCursor("Switching to 3D substate visualization...");
 
-    // Store the active substate for 3D visualization in MainWindow
-    activeSubstateFor3D = fieldName;
+    // Store the active substates for 3D visualization in MainWindow
+    activeSubstatesFor3D = fieldNamesTopToBottom;
 
-    // Also set it in SceneWidget so it knows which substate to use for 3D
-    ui->sceneWidget->setActiveSubstateFor3D(fieldName);
+    // Also set them in SceneWidget so it knows which substates to stack in 3D
+    ui->sceneWidget->setActiveSubstatesFor3D(fieldNamesTopToBottom);
 
-    // Highlight the active substate in the dock widget
-    ui->substatesDockWidget->setActiveSubstate(fieldName);
+    // Highlight the active substates in the dock widget
+    ui->substatesDockWidget->setActiveSubstates(fieldNamesTopToBottom);
 
     // Switch to 3D mode
     on3DModeRequested();
@@ -2563,6 +2751,16 @@ void MainWindow::onUse3dStateChanged(const std::string& fieldName, bool checked)
     updateSliceControls(true);
     
     // Cursor restored automatically by WaitCursorGuard destructor
+}
+
+void MainWindow::onUse3dStateChanged(const std::string&, bool)
+{
+    apply3DSubstateSelection(ui->substatesDockWidget->checked3DSubstatesInDisplayOrder());
+}
+
+void MainWindow::onUse3dSubstateOrderChanged()
+{
+    apply3DSubstateSelection(ui->substatesDockWidget->checked3DSubstatesInDisplayOrder());
 }
 
 void MainWindow::onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames)

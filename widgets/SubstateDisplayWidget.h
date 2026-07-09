@@ -148,6 +148,14 @@ public:
     /// @param checked True to check the checkbox
     void setUse3DChecked(bool checked);
 
+    /// @brief Get optional 3D altitude scale multiplier.
+    /// @return Positive multiplier, or NaN when empty/default
+    double getAltitudeScale() const;
+
+    /// @brief Set optional 3D altitude scale multiplier.
+    /// @param scale Positive multiplier, or NaN to clear/default to 1.0
+    void setAltitudeScale(double scale);
+
 signals:
     /** @brief Signal emitted when "Use as 3D" checkbox state changes.
      * 
@@ -173,6 +181,12 @@ signals:
      * @param noValue The noValue (or NaN if not set)
      * @param isEnabled True if noValue checkbox is checked */
     void noValueChanged(const std::string& fieldName, double noValue, bool isEnabled);
+
+    /** @brief Signal emitted when optional 3D altitude scale changes.
+     *
+     * @param fieldName The name of the field
+     * @param scale Positive multiplier, or NaN if empty/default */
+    void altitudeScaleChanged(const std::string& fieldName, double scale);
 
     /** @brief Signal emitted when user requests to calculate minimum value.
      * 
@@ -267,6 +281,9 @@ private:
 
     /// @brief Handle noValue checkbox state change
     void onNoValueCheckBoxChanged();
+
+    /// @brief Handle optional altitude scale text change commit
+    void onAltitudeScaleEditingFinished();
 
     /// @brief Start drag operation for reordering
     void startDrag();

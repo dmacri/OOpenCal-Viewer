@@ -315,7 +315,7 @@
     <item row="14" column="2">
      <widget class="QLabel" name="openConfigurationFileLabel">
       <property name="text">
-       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:26pt; color:#333333;&quot;&gt;Welcome!&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; color:#333333;&quot;&gt;&lt;br/&gt;To get started, please select&lt;br/&gt;&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; font-weight:700; color:#333333;&quot;&gt;File → Open Configuration&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; color:#333333;&quot;&gt;&lt;br/&gt;&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:10pt; color:#333333;&quot;&gt;from the menu to load your configuration. &lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:26pt; color:#333333;&quot;&gt;Welcome!&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; color:#333333;&quot;&gt;&lt;br/&gt;To get started, please select&lt;br/&gt;&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; font-weight:700; color:#333333;&quot;&gt;File → Open Model Directory&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:16px; color:#333333;&quot;&gt;&lt;br/&gt;&lt;/span&gt;&lt;span style=&quot; font-family:'Arial','sans-serif'; font-size:10pt; color:#333333;&quot;&gt;from the menu to load your simulation directory. &lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
       </property>
       <property name="textFormat">
        <enum>Qt::TextFormat::RichText</enum>
@@ -593,7 +593,7 @@
        <item>
         <widget class="ClickableLabel" name="inputFilePathLabel">
          <property name="sizePolicy">
-          <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
@@ -611,7 +611,7 @@
           <enum>QFrame::Shape::NoFrame</enum>
          </property>
          <property name="text">
-          <string>Input file: </string>
+          <string>Input directory: </string>
          </property>
         </widget>
        </item>
@@ -756,14 +756,6 @@
     <property name="title">
      <string>File</string>
     </property>
-    <widget class="QMenu" name="menuRecentFiles">
-     <property name="toolTip">
-      <string>Recent model configuration files</string>
-     </property>
-     <property name="title">
-      <string>Recent Files</string>
-     </property>
-    </widget>
     <widget class="QMenu" name="menuRecentDirectories">
      <property name="toolTip">
       <string>Recent model directories</string>
@@ -772,12 +764,8 @@
       <string>Recent Directories</string>
      </property>
     </widget>
-    <addaction name="actionOpenConfiguration"/>
-    <addaction name="separator"/>
-    <addaction name="menuRecentFiles"/>
-    <addaction name="menuRecentDirectories"/>
-    <addaction name="separator"/>
     <addaction name="actionLoadModelFromDirectory"/>
+    <addaction name="menuRecentDirectories"/>
     <addaction name="separator"/>
     <addaction name="actionShow_config_details"/>
     <addaction name="actionShow_reduction"/>
@@ -807,6 +795,7 @@
     <addaction name="actionCrossSectionControls"/>
     <addaction name="separator"/>
     <addaction name="actionGridLines"/>
+    <addaction name="actionLineDetection"/>
     <addaction name="actionFlatSceneBackground"/>
    </widget>
    <widget class="QMenu" name="menuSettings">
@@ -826,20 +815,6 @@
    <addaction name="menuSettings"/>
    <addaction name="menuHelp"/>
   </widget>
-  <action name="actionOpenConfiguration">
-   <property name="icon">
-    <iconset theme="QIcon::ThemeIcon::DocumentOpen"/>
-   </property>
-   <property name="text">
-    <string>Open Configuration...</string>
-   </property>
-   <property name="toolTip">
-    <string>Load a new configuration file</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+O</string>
-   </property>
-  </action>
   <action name="actionQuit">
    <property name="icon">
     <iconset resource="resources.qrc">
@@ -876,7 +851,7 @@
     <iconset theme="QIcon::ThemeIcon::DocumentProperties"/>
    </property>
    <property name="text">
-    <string>Show config details</string>
+    <string>Show Simulation Details...</string>
    </property>
   </action>
   <action name="actionExport_Video">
@@ -923,13 +898,13 @@
     <iconset theme="QIcon::ThemeIcon::FolderOpen"/>
    </property>
    <property name="text">
-    <string>Load Model from Directory...</string>
+    <string>Open Model Directory...</string>
    </property>
    <property name="toolTip">
-    <string>Load a model from a directory (auto-compile if needed)</string>
+    <string>Load a model from a directory containing Header.txt and data files</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+D</string>
+    <string>Ctrl+O</string>
    </property>
   </action>
   <action name="actionColor_settings">
@@ -1021,6 +996,20 @@
    </property>
    <property name="toolTip">
     <string>Show/hide grid lines between nodes</string>
+   </property>
+  </action>
+  <action name="actionLineDetection">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Line Detection in Tooltips</string>
+   </property>
+   <property name="toolTip">
+    <string>Enable/disable line detection when hovering with mouse (lines are detected few pixels from actual line)</string>
    </property>
   </action>
   <action name="actionFlatSceneBackground">

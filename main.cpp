@@ -2,7 +2,7 @@
  * @brief Main entry point for the OOpenCal-Visualiser application.
  *
  * This file initializes the Qt application, sets up the main window,
- * handles command-line arguments for loading initial configurations,
+ * handles command-line arguments for loading initial simulation directories,
  * and loads model plugins from the plugins directory.
  *
  * @mainpage OOpenCal-Visualiser
@@ -95,7 +95,7 @@ int main(int argc, char* argv[])
 
     MainWindow mainWindow;
 
-    // Load configuration file or model directory if provided
+    // Load model directory if provided
     if (cmdParser.getConfigFile())
     {
         const auto& path = cmdParser.getConfigFile().value();
@@ -108,8 +108,9 @@ int main(int argc, char* argv[])
             }
             else
             {
-                // Load configuration from file
-                mainWindow.openConfigurationFile(QString::fromStdString(path));
+                std::cerr << "Only simulation directories are supported as input. "
+                          << "Please pass the directory containing Header.txt instead of the Header.txt file itself: '"
+                          << path << "'" << std::endl;
             }
         }
         else

@@ -33,8 +33,6 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    /// @param config is optional, if not provided: data will be read from file
-    void openConfigurationFile(const QString& configFileName, std::shared_ptr<Config> optionalConfig={});
     void applyCommandLineOptions(const CommandLineParser& cmdParser);
     void loadModelFromDirectory(const QString& modelDirectory, bool forceCompilation=false);
     
@@ -47,12 +45,17 @@ public:
     /// @return Field name (e.g., "h", "z") or empty string if no 3D substate is active
     std::string getActiveSubstateFor3D() const
     {
-        return activeSubstateFor3D;
+        return activeSubstatesFor3D.empty() ? std::string{} : activeSubstatesFor3D.front();
+    }
+
+    /// @brief Get active 3D altitude substates in SubstatesDockWidget display order.
+    const std::vector<std::string>& getActiveSubstatesFor3D() const
+    {
+        return activeSubstatesFor3D;
     }
 
 private slots: // menu actions
     // File submenu
-    void onOpenConfigurationRequested();
     void showConfigDetailsDialog();
     void exportVideoDialog();
     void onLoadPluginRequested();
@@ -64,6 +67,8 @@ private slots: // menu actions
     void on3DModeRequested();
     void onGridLinesToggled(bool checked);
     void syncGridLinesCheckbox();
+    void onLineDetectionToggled(bool checked);
+    void syncLineDetectionCheckbox();
     void onFlatSceneBackgroundToggled(bool checked);
     void syncFlatSceneBackgroundCheckbox();
 
@@ -95,6 +100,7 @@ private slots: // menu actions
     void onSliceChanged(int fixedIndex);
 
     void onUse3dStateChanged(const std::string& fieldName, bool checked);
+    void onUse3dSubstateOrderChanged();
     void onUseSubstatesColorringRequested(const std::vector<std::string>& fieldNames);
     void onDeactivateRequested();
 
@@ -111,7 +117,6 @@ private slots: // menu actions
     void totalStepsNumberChanged(StepIndex totalStepsValue);
     void availableStepsLoadedFromConfigFile(std::vector<StepIndex> availableSteps);
 
-    void onRecentFileTriggered();
     void onPlaybackTimerTick();
 
 private:
@@ -131,7 +136,7 @@ private:
     void connectButtons();
     void connectSliders();
     void connectMenuActions();
-    void showInputFilePathOnBarLabel(const QString &inputFilePath);
+    void showInputDirectoryOnBarLabel(const QString &configFilePath);
 
     void loadStrings();
 
@@ -161,15 +166,8 @@ private:
 
     /// @brief Clear all active substates (2D and 3D)
     void clearActiveSubstates();
+    void apply3DSubstateSelection(const std::vector<std::string>& fieldNamesTopToBottom);
 
-    // Recent files management
-    void addToRecentFiles(const QString &filePath);
-    QStringList loadRecentFiles() const;
-    void saveRecentFiles(const QStringList &files) const;
-    QString getSmartDisplayName(const QString &filePath, const QStringList &allPaths) const;
-    QString generateTooltipForFile(const QString &filePath) const;
-    void updateRecentFilesMenu();
-    
     // Recent directories management
     void addToRecentDirectories(const QString &directoryPath);
     QStringList loadRecentDirectories() const;
@@ -179,12 +177,13 @@ private:
     void updateRecentDirectoriesMenu();
     void onRecentDirectoryTriggered();
     
-    /// @brief Initialize reduction manager for the current configuration.
-    /// @param configFileName Path to the configuration file
+    /// @brief Initialize reduction manager for the current Header.txt.
+    /// @param configFileName Path to Header.txt inside the selected simulation directory
     /// @param optionalConfig Optional pre-loaded Config object. If provided, avoids re-reading the file.
     ///                       If nullptr, the config will be read from configFileName.
     void initializeReductionManager(const QString& configFileName, std::shared_ptr<Config> optionalConfig = {});
     void updateReductionDisplay();
+    void openConfigurationFile(const QString& configFileName, std::shared_ptr<Config> optionalConfig = {});
 
     /// @brief Handle missing step during playback
     /// @param targetStep The step that was attempted but not found
@@ -200,7 +199,7 @@ private:
     bool findNearestAvailableStep(StepIndex targetStep, PlayingDirection direction, StepIndex& outNextStep) const;
 
 private:
-    static constexpr int MAX_RECENT_FILES = 10;
+    static constexpr int MAX_RECENT_DIRECTORIES = 10;
     Ui::MainWindow *ui;
     QTimer playbackTimer;
     QActionGroup *modelActionGroup = nullptr;
@@ -209,8 +208,8 @@ private:
     StepIndex currentStep;
     std::vector<StepIndex> availableSteps;
 
-    /// @brief Name of the substate field currently used for 3D visualization (empty if none)
-    std::string activeSubstateFor3D;
+    /// @brief Names of substates used as stacked 3D altitude layers in dock display order.
+    std::vector<std::string> activeSubstatesFor3D;
 
     // Playback state for timer-based playback
     PlayingDirection playbackDirection = PlayingDirection::Forward;

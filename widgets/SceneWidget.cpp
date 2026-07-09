@@ -2,6 +2,7 @@
  * @brief Implementation of the SceneWidget class for 3D visualization. */
 
 #include <iostream> // std::cout
+#include <algorithm>
 #include <cmath> // std::isfinite
 #include <filesystem>
 #include <string>
@@ -59,12 +60,17 @@ public:
     GridSliceAxis native3DSliceAxis() const override { return GridSliceAxis::Z; }
     int native3DSliceIndex() const override { return 0; }
     void drawWithVTK3DSubstate(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&) override {}
+    void drawWithVTK3DSubstates(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, const std::vector<const SubstateInfo*>&) override {}
     void refreshWindowsVTK3DSubstate(int, int, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&) override {}
+    void refreshWindowsVTK3DSubstates(int, int, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, const std::vector<const SubstateInfo*>&) override {}
     void drawWithVTK3DSubstateSlice(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double, const std::vector<const SubstateInfo*>&, GridSliceAxis, int) override {}
+    void drawWithVTK3DSubstatesSlice(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, const std::vector<const SubstateInfo*>&, GridSliceAxis, int) override {}
     void drawFlatSceneBackground(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>) override {}
     void refreshFlatSceneBackground(int, int, vtkSmartPointer<vtkActor>) override {}
     void drawGridLinesOn3DSurface(int, int, const std::vector<Line>&, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::string&, double, double) override {}
+    void drawGridLinesOn3DSubstateStack(int, int, const std::vector<Line>&, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&) override {}
     void refreshGridLinesOn3DSurface(int, int, const std::vector<Line>&, vtkSmartPointer<vtkActor>, const std::string&, double, double) override {}
+    void refreshGridLinesOn3DSubstateStack(int, int, const std::vector<Line>&, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&) override {}
 
     Visualizer& getVisualizer() override
     {
@@ -493,91 +499,132 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     }
     
     // Check if we should use 3D substate visualization
+    const auto heightSubstateInfosTopToBottom = get3DSubstateInfosTopToBottom();
     if (settingParameter->numberOfSlicesZ <= 1 &&
-        ! activeSubstateFor3D.empty() &&
-        settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
+        !heightSubstateInfosTopToBottom.empty())
     {
-        const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
-        if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
+        auto heightSubstateInfosBottomToTop = heightSubstateInfosTopToBottom;
+        std::reverse(heightSubstateInfosBottomToTop.begin(), heightSubstateInfosBottomToTop.end());
+        const bool stackedSubstates = heightSubstateInfosBottomToTop.size() > 1;
+
+        if (substateSliceEnabled)
         {
-            if (substateSliceEnabled)
+            const auto colorSubstateInfos = getColorSubstateInfos();
+            if (stackedSubstates)
             {
-                const auto colorSubstateInfos = getColorSubstateInfos();
+                sceneWidgetVisualizerProxy->drawWithVTK3DSubstatesSlice(
+                    settingParameter->numberOfRowsY,
+                    settingParameter->numberOfColumnX,
+                    renderer,
+                    gridActor,
+                    heightSubstateInfosBottomToTop,
+                    colorSubstateInfos,
+                    substateSliceAxis,
+                    substateSliceIndex);
+            }
+            else
+            {
+                const auto* substateInfo = heightSubstateInfosBottomToTop.front();
                 sceneWidgetVisualizerProxy->drawWithVTK3DSubstateSlice(
                     settingParameter->numberOfRowsY,
                     settingParameter->numberOfColumnX,
                     renderer,
                     gridActor,
-                    activeSubstateFor3D,
-                    substateInfo.minValue,
-                    substateInfo.maxValue,
+                    substateInfo->name,
+                    substateInfo->minValue,
+                    substateInfo->maxValue,
                     colorSubstateInfos,
                     substateSliceAxis,
                     substateSliceIndex);
-
-                if (backgroundActor)
-                    backgroundActor->SetVisibility(false);
-                if (actorBuildLine)
-                    actorBuildLine->SetVisibility(false);
-                if (gridLinesOnSurfaceActor)
-                    gridLinesOnSurfaceActor->SetVisibility(false);
-
-                updateCameraPivotFromBounds();
-                return;
             }
 
-            // Clear old background actor to remove any 2D artifacts
-            if (backgroundActor && renderer)
-            {
-                renderer->RemoveActor(backgroundActor);
-                backgroundActor = vtkSmartPointer<vtkActor>::New();
-            }
+            if (backgroundActor)
+                backgroundActor->SetVisibility(false);
+            if (actorBuildLine)
+                actorBuildLine->SetVisibility(false);
+            if (gridLinesOnSurfaceActor)
+                gridLinesOnSurfaceActor->SetVisibility(false);
 
-            // Draw flat background scene if enabled
-            if (flatSceneBackgroundVisible)
-            {
-                sceneWidgetVisualizerProxy->drawFlatSceneBackground(settingParameter->numberOfRowsY,
-                                                                    settingParameter->numberOfColumnX,
-                                                                    renderer,
-                                                                    backgroundActor);
-            }
+            updateCameraPivotFromBounds();
+            return;
+        }
 
-            // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
-            const auto colorSubstateInfos = getColorSubstateInfos();            
+        // Clear old background actor to remove any 2D artifacts
+        if (backgroundActor && renderer)
+        {
+            renderer->RemoveActor(backgroundActor);
+            backgroundActor = vtkSmartPointer<vtkActor>::New();
+        }
+
+        // Draw flat background scene if enabled
+        if (flatSceneBackgroundVisible)
+        {
+            sceneWidgetVisualizerProxy->drawFlatSceneBackground(settingParameter->numberOfRowsY,
+                                                                settingParameter->numberOfColumnX,
+                                                                renderer,
+                                                                backgroundActor);
+        }
+
+        const auto colorSubstateInfos = getColorSubstateInfos();
+        if (stackedSubstates)
+        {
+            sceneWidgetVisualizerProxy->drawWithVTK3DSubstates(settingParameter->numberOfRowsY,
+                                                               settingParameter->numberOfColumnX,
+                                                               renderer,
+                                                               gridActor,
+                                                               heightSubstateInfosBottomToTop,
+                                                               colorSubstateInfos);
+        }
+        else
+        {
+            const auto* substateInfo = heightSubstateInfosBottomToTop.front();
             sceneWidgetVisualizerProxy->drawWithVTK3DSubstate(settingParameter->numberOfRowsY,
                                                               settingParameter->numberOfColumnX,
                                                               renderer,
                                                               gridActor,
-                                                              activeSubstateFor3D,
-                                                              substateInfo.minValue,
-                                                              substateInfo.maxValue,
+                                                              substateInfo->name,
+                                                              substateInfo->minValue,
+                                                              substateInfo->maxValue,
                                                               colorSubstateInfos);
+        }
 
-            // Handle 2D grid lines visibility
-            if (actorBuildLine)
-            {
-                actorBuildLine->SetVisibility(false); // Always hide 2D lines in 3D mode
-            }
-            
-            // Draw 3D grid lines on surface with proper visibility
+        // Handle 2D grid lines visibility
+        if (actorBuildLine)
+        {
+            actorBuildLine->SetVisibility(false); // Always hide 2D lines in 3D mode
+        }
+
+        // Draw 3D grid lines on surface with proper visibility
+        if (stackedSubstates)
+        {
+            sceneWidgetVisualizerProxy->drawGridLinesOn3DSubstateStack(settingParameter->numberOfRowsY,
+                                                                       settingParameter->numberOfColumnX,
+                                                                       lines,
+                                                                       renderer,
+                                                                       gridLinesOnSurfaceActor,
+                                                                       heightSubstateInfosBottomToTop);
+        }
+        else
+        {
+            const auto* substateInfo = heightSubstateInfosBottomToTop.front();
             sceneWidgetVisualizerProxy->drawGridLinesOn3DSurface(settingParameter->numberOfRowsY,
                                                                  settingParameter->numberOfColumnX,
                                                                  lines,
                                                                  renderer,
                                                                  gridLinesOnSurfaceActor,
-                                                                 activeSubstateFor3D,
-                                                                 substateInfo.minValue,
-                                                                 substateInfo.maxValue);
-            
-            // Apply visibility setting to 3D grid lines
-            if (gridLinesOnSurfaceActor)
-            {
-                gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
-            }
-
-            updateCameraPivotFromBounds();
-            return;
+                                                                 substateInfo->name,
+                                                                 substateInfo->minValue,
+                                                                 substateInfo->maxValue);
         }
+
+        // Apply visibility setting to 3D grid lines
+        if (gridLinesOnSurfaceActor)
+        {
+            gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+        }
+
+        updateCameraPivotFromBounds();
+        return;
     }
 
     // Fallback to regular 2D visualization
@@ -600,6 +647,55 @@ std::vector<const SubstateInfo*> SceneWidget::getColorSubstateInfos()
         }
     }
     return colorSubstateInfos;
+}
+
+std::vector<const SubstateInfo*> SceneWidget::get3DSubstateInfosTopToBottom() const
+{
+    std::vector<const SubstateInfo*> heightSubstateInfos;
+    if (!settingParameter || isNative3DModel())
+        return heightSubstateInfos;
+
+    for (const auto& fieldName : activeSubstatesFor3D)
+    {
+        const auto it = settingParameter->substateInfo.find(fieldName);
+        if (it == settingParameter->substateInfo.end())
+            continue;
+
+        const auto& info = it->second;
+        if (!std::isnan(info.minValue) &&
+            !std::isnan(info.maxValue) &&
+            info.minValue < info.maxValue)
+        {
+            heightSubstateInfos.push_back(&info);
+        }
+    }
+
+    return heightSubstateInfos;
+}
+
+std::vector<const SubstateInfo*> SceneWidget::get3DSubstateInfosBottomToTop() const
+{
+    auto heightSubstateInfos = get3DSubstateInfosTopToBottom();
+    std::reverse(heightSubstateInfos.begin(), heightSubstateInfos.end());
+    return heightSubstateInfos;
+}
+
+std::string SceneWidget::active3DSubstateStackLabel() const
+{
+    const auto heightSubstateInfos = get3DSubstateInfosBottomToTop();
+    std::string label;
+
+    for (const auto* info : heightSubstateInfos)
+    {
+        if (!info)
+            continue;
+
+        if (!label.empty())
+            label += " + ";
+        label += info->name;
+    }
+
+    return label;
 }
 
 void SceneWidget::refreshVisualizationWithOptional3DSubstate()
@@ -644,57 +740,80 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
     }
 
     // Check if we should use 3D substate visualization
+    const auto heightSubstateInfosTopToBottom = get3DSubstateInfosTopToBottom();
     if (settingParameter->numberOfSlicesZ <= 1 &&
-        !activeSubstateFor3D.empty() &&
-        settingParameter->substateInfo.count(activeSubstateFor3D) > 0)
+        !heightSubstateInfosTopToBottom.empty())
     {
-        const auto& substateInfo = settingParameter->substateInfo[activeSubstateFor3D];
-        if (! std::isnan(substateInfo.minValue) && ! std::isnan(substateInfo.maxValue))
+        auto heightSubstateInfosBottomToTop = heightSubstateInfosTopToBottom;
+        std::reverse(heightSubstateInfosBottomToTop.begin(), heightSubstateInfosBottomToTop.end());
+        const bool stackedSubstates = heightSubstateInfosBottomToTop.size() > 1;
+
+        if (substateSliceEnabled)
         {
-            if (substateSliceEnabled)
-            {
-                drawVisualizationWithOptional3DSubstate();
-                update2DRulerAxesBounds();
-                triggerRenderUpdate();
-                return;
-            }
+            drawVisualizationWithOptional3DSubstate();
+            update2DRulerAxesBounds();
+            triggerRenderUpdate();
+            return;
+        }
 
-            // Refresh flat background scene if enabled
-            if (flatSceneBackgroundVisible && backgroundActor && backgroundActor->GetMapper())
-            {
-                sceneWidgetVisualizerProxy->refreshFlatSceneBackground(settingParameter->numberOfRowsY,
-                                                                       settingParameter->numberOfColumnX,
-                                                                       backgroundActor);
-            }
+        // Refresh flat background scene if enabled
+        if (flatSceneBackgroundVisible && backgroundActor && backgroundActor->GetMapper())
+        {
+            sceneWidgetVisualizerProxy->refreshFlatSceneBackground(settingParameter->numberOfRowsY,
+                                                                   settingParameter->numberOfColumnX,
+                                                                   backgroundActor);
+        }
 
-            // Use activeSubstateFor2D for coloring if available, otherwise use 3D substate for both height and color
-            const auto colorSubstateInfos = getColorSubstateInfos();            
+        const auto colorSubstateInfos = getColorSubstateInfos();
+        if (stackedSubstates)
+        {
+            sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstates(settingParameter->numberOfRowsY,
+                                                                     settingParameter->numberOfColumnX,
+                                                                     gridActor,
+                                                                     heightSubstateInfosBottomToTop,
+                                                                     colorSubstateInfos);
+        }
+        else
+        {
+            const auto* substateInfo = heightSubstateInfosBottomToTop.front();
             sceneWidgetVisualizerProxy->refreshWindowsVTK3DSubstate(settingParameter->numberOfRowsY,
                                                                     settingParameter->numberOfColumnX,
                                                                     gridActor,
-                                                                    activeSubstateFor3D,
-                                                                    substateInfo.minValue,
-                                                                    substateInfo.maxValue,
+                                                                    substateInfo->name,
+                                                                    substateInfo->minValue,
+                                                                    substateInfo->maxValue,
                                                                     colorSubstateInfos);
+        }
 
-            // Refresh 3D grid lines on surface
+        // Refresh 3D grid lines on surface
+        if (stackedSubstates)
+        {
+            sceneWidgetVisualizerProxy->refreshGridLinesOn3DSubstateStack(settingParameter->numberOfRowsY,
+                                                                          settingParameter->numberOfColumnX,
+                                                                          lines,
+                                                                          gridLinesOnSurfaceActor,
+                                                                          heightSubstateInfosBottomToTop);
+        }
+        else
+        {
+            const auto* substateInfo = heightSubstateInfosBottomToTop.front();
             sceneWidgetVisualizerProxy->refreshGridLinesOn3DSurface(settingParameter->numberOfRowsY,
                                                                     settingParameter->numberOfColumnX,
                                                                     lines,
                                                                     gridLinesOnSurfaceActor,
-                                                                    activeSubstateFor3D,
-                                                                    substateInfo.minValue,
-                                                                    substateInfo.maxValue);
-
-            // Apply visibility setting to 3D grid lines
-            if (gridLinesOnSurfaceActor)
-            {
-                gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
-            }
-
-            updateCameraPivotFromBounds();
-            return;
+                                                                    substateInfo->name,
+                                                                    substateInfo->minValue,
+                                                                    substateInfo->maxValue);
         }
+
+        // Apply visibility setting to 3D grid lines
+        if (gridLinesOnSurfaceActor)
+        {
+            gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
+        }
+
+        updateCameraPivotFromBounds();
+        return;
     }
     
     // Fallback to regular 2D visualization
@@ -873,7 +992,7 @@ void SceneWidget::setup2DRulerAxes()
     rulerAxisX->GetPosition2Coordinate()->SetCoordinateSystemToWorld();
     rulerAxisX->SetTitle("X");
     rulerAxisX->SetNumberOfLabels(5);
-    rulerAxisX->SetLabelFormat("%.1f");
+    rulerAxisX->SetLabelFormat("%.0f");
     rulerAxisX->GetTitleTextProperty()->SetColor(1.0, 1.0, 1.0);
     rulerAxisX->GetLabelTextProperty()->SetColor(1.0, 1.0, 1.0);
     rulerAxisX->GetProperty()->SetColor(0.8, 0.8, 0.8);
@@ -884,7 +1003,7 @@ void SceneWidget::setup2DRulerAxes()
     rulerAxisY->GetPosition2Coordinate()->SetCoordinateSystemToWorld();
     rulerAxisY->SetTitle("Y");
     rulerAxisY->SetNumberOfLabels(5);
-    rulerAxisY->SetLabelFormat("%.1f");
+    rulerAxisY->SetLabelFormat("%.0f");
     rulerAxisY->GetTitleTextProperty()->SetColor(1.0, 1.0, 1.0);
     rulerAxisY->GetLabelTextProperty()->SetColor(1.0, 1.0, 1.0);
     rulerAxisY->GetProperty()->SetColor(0.8, 0.8, 0.8);
@@ -916,9 +1035,17 @@ void SceneWidget::update2DRulerAxesBounds()
         return; // Invalid bounds
     }
 
-    // Set range for axes (this determines the numeric labels)
-    rulerAxisX->SetRange(bounds[0], bounds[1]);
-    rulerAxisY->SetRange(bounds[2], bounds[3]);
+    const double dataWidth = bounds[1] - bounds[0];
+    const double dataHeight = bounds[3] - bounds[2];
+
+    // Set user-facing pixel ranges for axes. VTK world Y grows upward, but image
+    // coordinates grow downward, so the grid Y ruler is intentionally reversed:
+    // top label = 0, bottom label = data height. Do not apply this to vertical
+    // altitude/Z cross-section axes.
+    rulerAxisX->SetRange(0.0, dataWidth);
+    const bool verticalTopOrigin = verticalRulerUsesTopOrigin();
+    rulerAxisY->SetRange(verticalTopOrigin ? dataHeight : 0.0,
+                         verticalTopOrigin ? 0.0 : dataHeight);
 
     // Position X axis at the bottom of the data (horizontal line)
     rulerAxisX->GetPositionCoordinate()->SetValue(bounds[0], bounds[2], 0.0);
@@ -928,14 +1055,17 @@ void SceneWidget::update2DRulerAxesBounds()
     rulerAxisY->GetPositionCoordinate()->SetValue(bounds[1], bounds[2], 0.0);
     rulerAxisY->GetPosition2Coordinate()->SetValue(bounds[1], bounds[3], 0.0);
 
-    std::cout << "Ruler axes updated: X=[" << bounds[0] << ", " << bounds[1]
-              << "], Y=[" << bounds[2] << ", " << bounds[3] << "]" << std::endl;
+    std::cout << "Ruler axes updated: X=[0, " << dataWidth
+              << "], vertical=[" << (verticalTopOrigin ? dataHeight : 0.0)
+              << ", " << (verticalTopOrigin ? 0.0 : dataHeight)
+              << "]" << std::endl;
 }
 
 void SceneWidget::update2DRulerAxisTitles()
 {
     const char* horizontalAxis = "X";
     const char* verticalAxis = "Y";
+    std::string verticalAxisStorage;
 
     if (isNative3DSliceView())
     {
@@ -956,11 +1086,25 @@ void SceneWidget::update2DRulerAxisTitles()
     else if (substateSliceEnabled)
     {
         horizontalAxis = substateSliceAxis == GridSliceAxis::Y ? "X" : "Y";
-        verticalAxis = activeSubstateFor3D.c_str();
+        verticalAxisStorage = active3DSubstateStackLabel();
+        verticalAxis = verticalAxisStorage.empty() ? "Altitude" : verticalAxisStorage.c_str();
     }
 
     rulerAxisX->SetTitle(horizontalAxis);
     rulerAxisY->SetTitle(verticalAxis);
+}
+
+bool SceneWidget::verticalRulerUsesTopOrigin() const
+{
+    if (substateSliceEnabled)
+        return false;
+
+    if (isNative3DSliceView())
+    {
+        return sceneWidgetVisualizerProxy->native3DSliceAxis() == GridSliceAxis::Z;
+    }
+
+    return true;
 }
 
 void SceneWidget::connectKeyboardCallback()
@@ -1097,17 +1241,23 @@ void SceneWidget::mouseCallbackFunction(vtkObject* caller, long unsigned int eve
 
     const auto lastMousePos = QPoint(vtkX, qtY);
 
-    // 3) Use a picker to obtain an accurate world position (if something was "hit")
+    self->m_lastMousePickedGrid = false;
+
+    // 3) Use a picker restricted to the data grid actor. Picking any visible prop
+    // would also hit ruler axes or load-balancing helper lines, which can make a
+    // tooltip appear when the cursor is visually outside the simulation grid.
     vtkNew<vtkPropPicker> picker;
     bool picked = false;
-    if (self->renderer)
+    if (self->renderer && self->gridActor)
     {
-        // Pick returns 1 if something was hit (depending on the picker). Pass the renderer.
+        picker->PickFromListOn();
+        picker->AddPickList(self->gridActor);
         if (picker->Pick(vtkX, vtkY, 0.0, self->renderer))
         {
             double pickPos[3];
             picker->GetPickPosition(pickPos);
             self->m_lastWorldPos = { pickPos[0], pickPos[1], pickPos[2] };
+            self->m_lastMousePickedGrid = true;
             picked = true;
         }
     }
@@ -1219,7 +1369,7 @@ std::array<double, 3> SceneWidget::screenToWorldCoordinates(const QPoint& pos) c
 
 QString SceneWidget::getNodeAtWorldPosition(const std::array<double, 3>& worldPos) const
 {
-    if (! settingParameter || ! sceneWidgetVisualizerProxy || ! renderer)
+    if (! settingParameter || ! sceneWidgetVisualizerProxy)
     {
         return {};
     }
@@ -1230,9 +1380,8 @@ QString SceneWidget::getNodeAtWorldPosition(const std::array<double, 3>& worldPo
         return {}; // Outside scene bounds
     }
 
-    // Get the bounds of the entire scene
-    const double* bounds = renderer->ComputeVisiblePropBounds();
-    if (! bounds)
+    double bounds[6];
+    if (! currentGridBounds(bounds))
     {
         return {};
     }
@@ -1246,7 +1395,8 @@ QString SceneWidget::getNodeAtWorldPosition(const std::array<double, 3>& worldPo
 
     // Calculate which node the position is in (0-based indices)
     const int nodeX = static_cast<int>((worldPos[0] - bounds[0]) / nodeWidth);
-    const int nodeY = static_cast<int>((worldPos[1] - bounds[2]) / nodeHeight);
+    const int nodeYFromBottom = static_cast<int>((worldPos[1] - bounds[2]) / nodeHeight);
+    const int nodeY = static_cast<int>(settingParameter->nNodeY) - 1 - nodeYFromBottom;
 
     // Check if the calculated node is within bounds
     if (nodeX >= 0 && nodeX < static_cast<int>(settingParameter->nNodeX) &&
@@ -1322,7 +1472,7 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
     if (! renderer || ! renderWindow())
         return;
 
-    if (isCrossSectionView() && isWorldPositionInGrid(m_lastWorldPos.data()))
+    if (m_lastMousePickedGrid && isCrossSectionView() && isWorldPositionInGrid(m_lastWorldPos.data()))
     {
         int planeRow = 0;
         int planeColumn = 0;
@@ -1379,10 +1529,14 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
     // m_lastMousePos is already in Qt coordinates (origin: top-left)
     // m_lastWorldPos is set by the VTK callback (picker or DisplayToWorld fallback)
 
-    // Check if we're over a line
+    // Check if we're over a line (only if line detection is enabled)
     size_t lineIndex = 0;
     double distanceSq = 0.0;
-    const Line* nearestLine = findNearestLine(m_lastWorldPos, lineIndex, distanceSq);
+    const Line* nearestLine = nullptr;
+    if (lineDetectionEnabled)
+    {
+        nearestLine = findNearestLine(m_lastWorldPos, lineIndex, distanceSq);
+    }
 
     // Prepare tooltip text
     QString tooltipText;
@@ -1391,23 +1545,34 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
     {
         tooltipText += QString("Line %1/%2:").arg(lineIndex).arg(lines.size());
         tooltipText += QString("\n  From: (x1=%1, y1=%2)")
-                           .arg(nearestLine->x1, 0, 'f', 2)
-                           .arg(nearestLine->y1, 0, 'f', 2);
+                           .arg(static_cast<int>(std::lround(nearestLine->x1)))
+                           .arg(static_cast<int>(std::lround(nearestLine->y1)));
         tooltipText += QString("\n  To:   (x2=%1, y2=%2)")
-                           .arg(nearestLine->x2, 0, 'f', 2)
-                           .arg(nearestLine->y2, 0, 'f', 2);
+                           .arg(static_cast<int>(std::lround(nearestLine->x2)))
+                           .arg(static_cast<int>(std::lround(nearestLine->y2)));
         tooltipText += cellValueAtThisPositionAsText();
     }
-    else if (QString nodeInfo = getNodeAtWorldPosition(m_lastWorldPos); ! nodeInfo.isEmpty())
+    else if (m_lastMousePickedGrid)
     {
-        tooltipText = QString("World Position: (x: %1, y: %2, z: %3)")
-                          .arg(m_lastWorldPos[0], 0, 'f', 2)
-                          .arg(m_lastWorldPos[1], 0, 'f', 2)
-                          .arg(m_lastWorldPos[2], 0, 'f', 2);
+        int displayX = 0;
+        int displayY = 0;
+        int displayZ = 0;
+        const QString nodeInfo = getNodeAtWorldPosition(m_lastWorldPos);
+        if (nodeInfo.isEmpty() || !convertWorldToDisplayCoordinates(m_lastWorldPos.data(), displayX, displayY, displayZ))
+        {
+            tooltipText = "(Outside the grid)";
+        }
+        else
+        {
+            tooltipText = QString("Pixel Position: (x: %1, y: %2, z: %3)")
+                              .arg(displayX)
+                              .arg(displayY)
+                              .arg(displayZ);
 
-        tooltipText += QString("\n%1").arg(nodeInfo);
+            tooltipText += QString("\n%1").arg(nodeInfo);
 
-        tooltipText += cellValueAtThisPositionAsText();
+            tooltipText += cellValueAtThisPositionAsText();
+        }
     }
     else
         tooltipText = "(Outside the grid)";
@@ -1419,6 +1584,9 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
 QString SceneWidget::cellValueAtThisPositionAsText() const
 {
     if (!sceneWidgetVisualizerProxy || !settingParameter)
+        return {};
+
+    if (!m_lastMousePickedGrid)
         return {};
 
     int row = 0, col = 0;
@@ -1625,7 +1793,10 @@ void SceneWidget::setViewMode2D()
     
     // Disable 3D substate visualization when switching to 2D mode
     if (!substateSliceEnabled)
+    {
         activeSubstateFor3D.clear();
+        activeSubstatesFor3D.clear();
+    }
     
     // In 2D mode, flat scene background is always visible (it's the 2D visualization itself)
     flatSceneBackgroundVisible = true;
@@ -1754,14 +1925,10 @@ bool SceneWidget::isNative3DSliceView() const
 
 bool SceneWidget::is3DSubstateSurface() const
 {
-    if (!settingParameter || isNative3DModel() || activeSubstateFor3D.empty())
+    if (!settingParameter || isNative3DModel())
         return false;
 
-    const auto info = settingParameter->substateInfo.find(activeSubstateFor3D);
-    return info != settingParameter->substateInfo.end() &&
-           !std::isnan(info->second.minValue) &&
-           !std::isnan(info->second.maxValue) &&
-           info->second.minValue < info->second.maxValue;
+    return !get3DSubstateInfosTopToBottom().empty();
 }
 
 bool SceneWidget::hasSliceable3DView() const
@@ -1868,10 +2035,15 @@ void SceneWidget::setAxesWidgetVisible(bool visible)
 void SceneWidget::setGridLinesVisible(bool visible)
 {
     gridLinesVisible = visible;
-    
+
     applyGridLinesSettings();
-    
+
     triggerRenderUpdate();
+}
+
+void SceneWidget::setLineDetectionEnabled(bool enabled)
+{
+    lineDetectionEnabled = enabled;
 }
 
 void SceneWidget::setFlatSceneBackgroundVisible(bool visible)
@@ -1896,8 +2068,22 @@ void SceneWidget::setUseCellRendering(bool useCellRenderingMode)
 void SceneWidget::setActiveSubstateFor3D(const std::string& fieldName)
 {
     if (fieldName.empty())
+    {
+        setActiveSubstatesFor3D({});
+    }
+    else
+    {
+        setActiveSubstatesFor3D({fieldName});
+    }
+}
+
+void SceneWidget::setActiveSubstatesFor3D(const std::vector<std::string>& fieldNames)
+{
+    if (fieldNames.empty())
         substateSliceEnabled = false;
-    activeSubstateFor3D = fieldName;
+
+    activeSubstatesFor3D = fieldNames;
+    activeSubstateFor3D = fieldNames.empty() ? std::string{} : fieldNames.front();
 }
 
 void SceneWidget::setActiveSubstatesForColorring(const std::vector<std::string>& fieldNames)
@@ -1976,7 +2162,7 @@ void SceneWidget::mousePressEvent(QMouseEvent* event)
     if (m_substatesDockWidget && sceneWidgetVisualizerProxy && event->button() == Qt::LeftButton && !(event->modifiers() & Qt::ShiftModifier))
     {
         // Check if click was inside the grid
-        if (isWorldPositionInGrid(m_lastWorldPos.data()))
+        if (m_lastMousePickedGrid && isWorldPositionInGrid(m_lastWorldPos.data()))
         {
             int row = 0, col = 0;
             if (convertWorldToGridCoordinates(m_lastWorldPos.data(), row, col))
@@ -1997,12 +2183,11 @@ void SceneWidget::mousePressEvent(QMouseEvent* event)
 
 bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& outRow, int& outCol) const
 {
-    if (!renderer || !settingParameter)
+    if (!settingParameter)
         return false;
 
-    // Get the bounds of the entire scene
-    const double* bounds = renderer->ComputeVisiblePropBounds();
-    if (! bounds)
+    double bounds[6];
+    if (! currentGridBounds(bounds) || ! isWorldPositionInGrid(worldPos))
         return false;
 
     // Calculate grid dimensions
@@ -2060,6 +2245,31 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
     return true;
 }
 
+bool SceneWidget::currentGridBounds(double bounds[6]) const
+{
+    if (!gridActor)
+        return false;
+
+    gridActor->GetBounds(bounds);
+
+    return std::isfinite(bounds[0]) && std::isfinite(bounds[1]) &&
+           std::isfinite(bounds[2]) && std::isfinite(bounds[3]) &&
+           bounds[0] < bounds[1] && bounds[2] < bounds[3];
+}
+
+bool SceneWidget::convertWorldToDisplayCoordinates(const double worldPos[3], int& outX, int& outY, int& outZ) const
+{
+    double bounds[6];
+    if (! currentGridBounds(bounds) || ! isWorldPositionInGrid(worldPos))
+        return false;
+
+    outX = static_cast<int>(std::lround(worldPos[0] - bounds[0]));
+    outY = static_cast<int>(std::lround(bounds[3] - worldPos[1]));
+    outZ = static_cast<int>(std::lround(worldPos[2]));
+
+    return true;
+}
+
 int SceneWidget::displayedRowCount() const
 {
     if (!settingParameter)
@@ -2086,12 +2296,11 @@ int SceneWidget::displayedColumnCount() const
 
 bool SceneWidget::isWorldPositionInGrid(const double worldPos[3]) const
 {
-    if (!renderer || !settingParameter)
+    if (!settingParameter)
         return false;
 
-    // Get the bounds of the entire scene
-    const double* bounds = renderer->ComputeVisiblePropBounds();
-    if (! bounds)
+    double bounds[6];
+    if (! currentGridBounds(bounds))
         return false;
 
     // Check if position is within grid bounds
@@ -2145,10 +2354,7 @@ void SceneWidget::applyGridLinesSettings()
     const bool isSubstateSurface =
         !isNative3D &&
         settingParameter &&
-        !activeSubstateFor3D.empty() &&
-        settingParameter->substateInfo.count(activeSubstateFor3D) > 0 &&
-        !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].minValue) &&
-        !std::isnan(settingParameter->substateInfo[activeSubstateFor3D].maxValue);
+        !get3DSubstateInfosTopToBottom().empty();
     const bool isIn3DMode = isNative3D || isSubstateSurface;
     
     if (isIn3DMode)

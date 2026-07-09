@@ -351,13 +351,45 @@
            </size>
           </property>
           <property name="toolTip">
-           <string>Use this field as 3rd dimension in 3D visualization (only one substate can be 3D at a time)</string>
+           <string>Use this field as a 3D altitude layer. Multiple checked fields are stacked in dock order.</string>
           </property>
           <property name="styleSheet">
            <string>QCheckBox { font-size: 8pt; padding: 2px; }</string>
           </property>
           <property name="text">
            <string>Use as 3D altitude</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="altitudeScaleLabel">
+          <property name="toolTip">
+           <string>Optional multiplier for this layer height. Empty means 1.0.</string>
+          </property>
+          <property name="styleSheet">
+           <string>QLabel { font-size: 8pt; padding-left: 4px; }</string>
+          </property>
+          <property name="text">
+           <string>Scale:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="altitudeScaleLineEdit">
+          <property name="maximumSize">
+           <size>
+            <width>52</width>
+            <height>22</height>
+           </size>
+          </property>
+          <property name="toolTip">
+           <string>Optional multiplier for this layer height. Empty means 1.0. Colors still use original values.</string>
+          </property>
+          <property name="styleSheet">
+           <string>QLineEdit { font-size: 8pt; padding: 1px; }</string>
+          </property>
+          <property name="placeholderText">
+           <string>1.0</string>
           </property>
          </widget>
         </item>

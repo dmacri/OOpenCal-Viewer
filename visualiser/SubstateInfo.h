@@ -16,6 +16,7 @@ struct SubstateInfo
     double maxValue = std::numeric_limits<double>::quiet_NaN(); ///< Maximum value for display (user-editable, NaN if not set)
     double noValue = std::numeric_limits<double>::quiet_NaN();  ///< Value representing "no data" (NaN if not set)
     bool noValueEnabled = false;                                ///< Whether noValue filtering is enabled (checkbox state)
+    double altitudeScale = std::numeric_limits<double>::quiet_NaN(); ///< Optional geometry-only multiplier for 3D altitude layers (NaN means 1.0)
     std::string minColor = "";                                  ///< Hex color for minimum value (e.g., "#000011", empty if not set)
     std::string maxColor = "";                                  ///< Hex color for maximum value (e.g., "#0011ff", empty if not set)
     int order = -1;                                             ///< Display order for the field (-1 means not set, use default order)
