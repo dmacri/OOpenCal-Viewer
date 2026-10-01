@@ -21,11 +21,16 @@
  * @include README.md */
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QFile>
 #include <QFileInfo>
 #include <QStyleFactory>
 #include <QSurfaceFormat>
 #include <filesystem>
+#include <iostream>
+#include <optional>
+#include <string>
+#include <string_view>
 
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkGenericOpenGLRenderWindow.h>
@@ -34,13 +39,70 @@
 #include "core/CommandLineParser.h"
 #include "plugins/PluginLoader.h"
 #include "data/PerformanceMetrics.h"
+#include "plugins/CompilationConfig.h"
+#include "plugins/CppModuleBuilder.h"
+#include "plugins/ModelLoader.h"
 
 
 void applyStyleSheet(MainWindow& mainWindow);
 
 
+namespace
+{
+/// Looks for --buildPrecompiledHeader[=<dir>]. Returns the directory ("" if none was given) when the option is present.
+std::optional<std::string> findBuildPrecompiledHeaderRequest(int argc, char* argv[])
+{
+    constexpr std::string_view option = CommandLineParser::ARG_BUILD_PRECOMPILED_HEADER;
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string_view arg = argv[i];
+        if (arg == option)
+            return std::string();
+        if (arg.size() > option.size() && arg.substr(0, option.size()) == option && arg[option.size()] == '=')
+            return std::string(arg.substr(option.size() + 1));
+    }
+    return std::nullopt;
+}
+
+/// Builds the precompiled header used to speed up compilation of models. Returns the exit code of the application.
+int buildPrecompiledHeader(const std::string& requestedDirectory)
+{
+    const std::string directory = requestedDirectory.empty()
+                                      ? viz::plugins::CompilationConfig::getInstance().getPrecompiledHeaderDir()
+                                      : requestedDirectory;
+    if (directory.empty())
+    {
+        std::cerr << "Error: no directory for the precompiled header. Pass "
+                  << CommandLineParser::ARG_BUILD_PRECOMPILED_HEADER
+                  << "=<directory> or set OOPENCAL_PRECOMPILED_HEADER_DIR." << std::endl;
+        return 2;
+    }
+
+    viz::plugins::CppModuleBuilder builder;
+    std::cout << "Building the precompiled header in '" << directory << "'" << std::endl;
+
+    const auto result = builder.buildPrecompiledHeader(directory);
+    if (! result.success)
+    {
+        std::cerr << "✗ Building the precompiled header failed (exit code " << result.exitCode << ")\n"
+                  << result.stdErr << std::endl;
+        return 1;
+    }
+
+    std::cout << "✓ Precompiled header is ready: " << result.outputFile << std::endl;
+    return 0;
+}
+} // namespace
+
 int main(int argc, char* argv[])
 {
+    // Helper mode without any GUI (and without a display): build the precompiled header used by model compilation
+    if (const auto precompiledHeaderRequest = findBuildPrecompiledHeaderRequest(argc, argv))
+    {
+        QCoreApplication coreApplication(argc, argv);
+        return buildPrecompiledHeader(*precompiledHeaderRequest);
+    }
+
     // vtkObject::GlobalWarningDisplayOff();
 
     QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());

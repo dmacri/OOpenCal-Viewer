@@ -78,3 +78,25 @@ target_include_directories(SettingParameterTests PRIVATE
 
 # Register SettingParameterTests
 add_test(NAME SettingParameterTests COMMAND SettingParameterTests)
+
+# ============================================
+# Add test executable for PrecompiledHeader helpers
+# ============================================
+add_executable(PrecompiledHeaderTests
+    PrecompiledHeaderTests.cpp
+    ${CMAKE_SOURCE_DIR}/plugins/PrecompiledHeader.cpp
+)
+
+# Link against GTest
+target_link_libraries(PrecompiledHeaderTests
+    GTest::gtest_main
+)
+
+# Include directories for the project
+target_include_directories(PrecompiledHeaderTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/plugins
+)
+
+# Register PrecompiledHeaderTests
+add_test(NAME PrecompiledHeaderTests COMMAND PrecompiledHeaderTests)

@@ -25,7 +25,9 @@
  * - configFile: Path to simulation directory (positional argument)
  * - --autoPlay: Automatically start playback when simulation data loads
  * - --metrics: Enable performance metrics (default enabled)
- * - --disableMetrics: Disable performance metrics reporting */
+ * - --disableMetrics: Disable performance metrics reporting
+ * - --buildPrecompiledHeader[=<dir>]: Build the precompiled header which speeds up compilation of models and exit
+ *   (handled in main() before any GUI is created, listed here for --help) */
 class CommandLineParser
 {
 public:
@@ -42,6 +44,7 @@ public:
     static constexpr const char ARG_DISABLE_METRICS[] = "--disableMetrics";
     static constexpr const char ARG_METRICS_MODE[] = "--metricsMode";
     static constexpr const char ARG_AUTO_PLAY[] = "--autoPlay";
+    static constexpr const char ARG_BUILD_PRECOMPILED_HEADER[] = "--buildPrecompiledHeader";
 
     /** @brief Parse command-line arguments.
      * @param argc Number of arguments

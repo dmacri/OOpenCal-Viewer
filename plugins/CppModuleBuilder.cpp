@@ -2,7 +2,9 @@
  * @brief Implementation of CppModuleBuilder for compiling C++ modules. */
 
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <optional>
 #include <sstream>
 
 #ifdef _WIN32
@@ -60,6 +62,26 @@ std::string quoteIfNeeded(const std::string& path)
         return path;
     }
     return "\"" + path + "\"";
+}
+
+std::string readTextFile(const fs::path& path)
+{
+    std::ifstream input(path, std::ios::binary);
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+}
+
+/// Writes the file only when its content changes (keeps the modification time stable otherwise)
+bool writeTextFileIfDifferent(const fs::path& path, const std::string& content)
+{
+    if (fs::is_regular_file(path) && readTextFile(path) == content)
+    {
+        return true;
+    }
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output << content;
+    return static_cast<bool>(output);
 }
 
 std::vector<std::string> splitEnvPaths(const char* value)
@@ -293,8 +315,12 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     if (progressCallback)
         progressCallback("Preparing compilation command...");
 
+    // Optional precompiled header (see doc/PRECOMPILED_HEADER.md): used only when it is valid for the current settings
+    const std::optional<PrecompiledHeaderUse> precompiledHeader = selectPrecompiledHeader(detectCppStandard(cppStandard));
+
     // Build the compilation command
-    lastResult->compileCommand = buildCompileCommand(sourceFile, outputFile, cppStandard);
+    lastResult->compileCommand = buildCompileCommand(sourceFile, outputFile, cppStandard,
+                                                     precompiledHeader ? &*precompiledHeader : nullptr);
 
     std::cout << "Compiling module: " << sourceFile << std::endl;
     std::cout << "Command: " << lastResult->compileCommand << std::endl;
@@ -304,24 +330,45 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
         progressCallback("Compilation of module ...");
 
     // Execute the compilation command with progress reporting
-    int lineCount = 0;
-    lastResult->exitCode = executeCommand(
-        lastResult->compileCommand,
-        [this, &lineCount](const std::string& line) { 
-            lastResult->stdOut += line + "\n";
-            // Report compilation progress every 5 lines to avoid too many updates
-            if (progressCallback && !line.empty() && (++lineCount % 5 == 0))
-                progressCallback("Compiling... (" + std::to_string(lineCount) + " lines)");
-        },
-        [this](const std::string& line) { 
-            lastResult->stdErr += line + "\n";
-            // Report compilation errors immediately
-            if (progressCallback && !line.empty())
-                progressCallback("Error: " + line);
-        });
+    const auto runCompilation = [this, &outputFile]() -> bool
+    {
+        int lineCount = 0;
+        lastResult->stdOut.clear();
+        lastResult->stdErr.clear();
+        lastResult->exitCode = executeCommand(
+            lastResult->compileCommand,
+            [this, &lineCount](const std::string& line) {
+                lastResult->stdOut += line + "\n";
+                // Report compilation progress every 5 lines to avoid too many updates
+                if (progressCallback && !line.empty() && (++lineCount % 5 == 0))
+                    progressCallback("Compiling... (" + std::to_string(lineCount) + " lines)");
+            },
+            [this](const std::string& line) {
+                lastResult->stdErr += line + "\n";
+                // Report compilation errors immediately
+                if (progressCallback && !line.empty())
+                    progressCallback("Error: " + line);
+            });
+        return lastResult->exitCode == 0 && moduleExists(outputFile);
+    };
+
+    bool compiled = runCompilation();
+
+    if (! compiled && precompiledHeader)
+    {
+        // The precompiled header is only an optimization: it must never be the reason a model cannot be loaded
+        std::cerr << "[PCH] Compilation with the precompiled header failed, retrying without it.\n"
+                  << "Compiler output of the failed attempt:\n" << lastResult->stdErr << std::endl;
+        if (progressCallback)
+            progressCallback("Precompiled header could not be used, compiling without it...");
+
+        lastResult->compileCommand = buildCompileCommand(sourceFile, outputFile, cppStandard);
+        std::cout << "Command: " << lastResult->compileCommand << std::endl;
+        compiled = runCompilation();
+    }
 
     // Check if compilation succeeded
-    if (lastResult->exitCode == 0 && moduleExists(outputFile))
+    if (compiled)
     {
         lastResult->success = true;
         std::cout << "✓ Module compiled successfully: " << outputFile << std::endl;
@@ -339,19 +386,51 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
     return *lastResult;
 }
 
-std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
-                                                  const std::string& outputFile,
-                                                  const std::string& cppStandard) const
+std::optional<CppModuleBuilder::PrecompiledHeaderUse> CppModuleBuilder::selectPrecompiledHeader(const std::string& standard) const
 {
-    // Auto-detect C++ standard if not provided
-    std::string standard = detectCppStandard(cppStandard);
+#ifdef _WIN32
+    (void)standard;
+    return std::nullopt; // MSVC uses a different mechanism, which is not supported
+#else
+    const std::string directory = CompilationConfig::getInstance().getPrecompiledHeaderDir();
 
+    std::error_code ec;
+    if (directory.empty() || ! fs::is_directory(directory, ec))
+    {
+        return std::nullopt; // the feature is optional: stay quiet when nothing has been built
+    }
+
+    const pch::CompilerIdentity compiler = pch::identifyCompiler(compilerPath);
+    const std::string root = (compiler.family == pch::CompilerFamily::Clang) ? pch::relocationRootFromEnvironment()
+                                                                              : std::string();
+    const std::string expectedCommand = pch::normalizePaths(buildBaseCommand(standard, /*forPrecompiledHeader=*/true), root);
+
+    const pch::Usability usability = pch::evaluate(directory, compiler, expectedCommand, root);
+    if (! usability.usable)
+    {
+        std::cout << "[PCH] Precompiled header in '" << directory << "' is not used: " << usability.reason << std::endl;
+        return std::nullopt;
+    }
+
+    std::cout << "[PCH] Using precompiled header: " << usability.artifactPath << std::endl;
+    return PrecompiledHeaderUse{compiler.family, directory, root};
+#endif
+}
+
+std::string CppModuleBuilder::buildBaseCommand(const std::string& standard, bool forPrecompiledHeader) const
+{
     // Get configuration from singleton
     auto& config = CompilationConfig::getInstance();
-    
+
+    std::string flags = config.getCompilationFlags();
+    if (forPrecompiledHeader)
+    {
+        flags = pch::stripLinkerOnlyFlags(flags);
+    }
+
     std::ostringstream cmd;
     cmd << quoteIfNeeded(compilerPath)
-        << " " << config.getCompilationFlags()
+        << " " << flags
         << " -std=" << standard;
 
     const char* compilerInclude = std::getenv("COMPILER_INCLUDEDIR");
@@ -415,9 +494,158 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
         cmd << " " << vtkFlags;
     }
 
+    return cmd.str();
+}
+
+std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
+                                                  const std::string& outputFile,
+                                                  const std::string& cppStandard,
+                                                  const PrecompiledHeaderUse* precompiledHeader) const
+{
+    // Auto-detect C++ standard if not provided
+    const std::string standard = detectCppStandard(cppStandard);
+
+    std::ostringstream cmd;
+    cmd << buildBaseCommand(standard, /*forPrecompiledHeader=*/false);
+
+    if (precompiledHeader)
+    {
+        cmd << pch::usageFlags(precompiledHeader->family, precompiledHeader->directory, precompiledHeader->relocationRoot);
+    }
+
     cmd << " \"" << sourceFile << "\"" << " -o \"" << outputFile << "\"";
 
     return cmd.str();
+}
+
+CompilationResult CppModuleBuilder::buildPrecompiledHeader(const std::string& outputDirectory,
+                                                           const std::string& cppStandard)
+{
+    CompilationResult result;
+
+#ifdef _WIN32
+    (void)outputDirectory;
+    (void)cppStandard;
+    result.stdErr = "Precompiled headers are not supported on Windows";
+    return result;
+#else
+    const auto fail = [&result](const std::string& message) -> CompilationResult
+    {
+        result.success = false;
+        result.stdErr += message + "\n";
+        return result;
+    };
+
+    if (outputDirectory.empty())
+        return fail("No directory for the precompiled header was given");
+
+    const std::string availableCompiler = findAvailableCompiler(compilerPath);
+    if (availableCompiler.empty())
+        return fail("No C++ compiler found. Please install clang++ or g++.");
+    compilerPath = availableCompiler;
+
+    const pch::CompilerIdentity compiler = pch::identifyCompiler(compilerPath);
+    if (compiler.family == pch::CompilerFamily::Unknown)
+        return fail("Cannot build a precompiled header: '" + compilerPath + "' is neither clang nor g++");
+
+    std::error_code ec;
+    const fs::path directory = fs::absolute(fs::path(outputDirectory), ec).lexically_normal();
+    if (ec)
+        return fail("Invalid directory '" + outputDirectory + "': " + ec.message());
+    fs::create_directories(directory, ec);
+    if (ec)
+        return fail("Cannot create directory '" + directory.string() + "': " + ec.message());
+
+    const fs::path header = directory / pch::HEADER_FILE_NAME;
+    const fs::path artifact = directory / pch::artifactFileName(compiler.family);
+    const fs::path manifestFile = directory / pch::manifestFileName(compiler.family);
+    const fs::path dependencyFile = directory / (std::string(pch::HEADER_FILE_NAME) + ".d");
+    const fs::path probeSource = directory / "OOpenCalViewerPrecompiledProbe.cpp";
+
+    // A failed build must never leave anything that looks usable behind
+    const auto removeOutputs = [&]
+    {
+        std::error_code ignored;
+        fs::remove(artifact, ignored);
+        fs::remove(manifestFile, ignored);
+        fs::remove(dependencyFile, ignored);
+        fs::remove(probeSource, ignored);
+    };
+    removeOutputs();
+
+    if (! writeTextFileIfDifferent(header, pch::headerFileContent()))
+        return fail("Cannot write " + header.string());
+
+    const std::string standard = detectCppStandard(cppStandard);
+    const std::string root = (compiler.family == pch::CompilerFamily::Clang) ? pch::relocationRootFromEnvironment()
+                                                                              : std::string();
+    const std::string baseCommand = buildBaseCommand(standard, /*forPrecompiledHeader=*/true);
+
+    result.sourceFile = header.string();
+    result.outputFile = artifact.string();
+    result.compileCommand = baseCommand + pch::buildFlags(compiler.family, header.string(), artifact.string(),
+                                                          dependencyFile.string(), root);
+    std::cout << "Compiler: " << compilerPath << " (" << compiler.versionLine << ")\n"
+              << "Command: " << result.compileCommand << std::endl;
+
+    result.exitCode = executeCommand(
+        result.compileCommand,
+        [&result](const std::string& text) { result.stdOut += text; },
+        [&result](const std::string& text) { result.stdErr += text; });
+    if (result.exitCode != 0 || ! fs::is_regular_file(artifact, ec))
+    {
+        removeOutputs();
+        return fail("Building the precompiled header failed");
+    }
+
+    // The manifest tells later compilations whether the result may be used
+    auto& config = CompilationConfig::getInstance();
+    const std::string oopencalDir = config.getOopencalDir();
+    const std::vector<std::string> dependencies = pch::filterProjectDependencies(
+        pch::parseMakeDependencies(readTextFile(dependencyFile)),
+        {config.getViewerRootDir(), oopencalDir.empty() ? std::string() : (fs::path(oopencalDir) / "OOpenCAL").string()});
+
+    pch::Manifest manifest;
+    manifest.family = pch::toString(compiler.family);
+    manifest.compilerVersion = compiler.versionLine;
+    manifest.command = pch::normalizePaths(baseCommand, root);
+    for (const auto& dependency : dependencies)
+    {
+        manifest.dependencies.push_back(pch::normalizePaths(dependency, root));
+    }
+    if (! writeTextFileIfDifferent(manifestFile, pch::serializeManifest(manifest)))
+    {
+        removeOutputs();
+        return fail("Cannot write " + manifestFile.string());
+    }
+    fs::remove(dependencyFile, ec);
+
+    // Self-test: never leave a precompiled header which the compiler cannot load
+    const std::string probeText = std::string("#include \"") + pch::HEADER_FILE_NAME + "\"\nint main() { return 0; }\n";
+    if (! writeTextFileIfDifferent(probeSource, probeText))
+    {
+        removeOutputs();
+        return fail("Cannot write " + probeSource.string());
+    }
+    const std::string probeCommand = baseCommand + pch::probeFlags(compiler.family, directory.string(), root, probeSource.string());
+    std::cout << "Self-test: " << probeCommand << std::endl;
+
+    std::string probeErrors;
+    const int probeExitCode = executeCommand(
+        probeCommand,
+        [](const std::string&) {},
+        [&probeErrors](const std::string& text) { probeErrors += text; });
+    if (probeExitCode != 0)
+    {
+        removeOutputs();
+        result.exitCode = probeExitCode;
+        return fail("Self-test of the freshly built precompiled header failed:\n" + probeErrors);
+    }
+    fs::remove(probeSource, ec);
+
+    result.success = true;
+    return result;
+#endif
 }
 
 int CppModuleBuilder::executeCommand(const std::string& command,

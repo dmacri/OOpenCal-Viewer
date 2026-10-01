@@ -188,6 +188,7 @@ list(APPEND Sources
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp
     plugins/CompilationConfig.cpp
+    plugins/PrecompiledHeader.cpp
     core/CommandLineParser.cpp
     data/ReductionManager.cpp
     data/ModelReader.cpp
@@ -381,6 +382,34 @@ else()
     message(WARNING "OOPENCAL_DIR not set! Includes like <OOpenCAL/...> may not work.")
 endif()
 
+
+# ============================================
+# Precompiled header for on-the-fly compilation of models (optional)
+# ============================================
+# The directory where the precompiled header is looked for at runtime. It can be overridden by the environment
+# variable OOPENCAL_PRECOMPILED_HEADER_DIR or in the compilation settings of the application.
+# The header is built by:  cmake --build . --target precompiled-header
+# (or by:  OOpenCal-Viewer --buildPrecompiledHeader=<dir>). Nothing changes until it has been built.
+# See doc/PRECOMPILED_HEADER.md
+set(OOPENCAL_PRECOMPILED_HEADER_DIR "${CMAKE_BINARY_DIR}/precompiled-header" CACHE PATH
+    "Directory with the precompiled header used to speed up compilation of models")
+
+if(OOPENCAL_PRECOMPILED_HEADER_DIR)
+    get_filename_component(OOPENCAL_PRECOMPILED_HEADER_DIR_ABS "${OOPENCAL_PRECOMPILED_HEADER_DIR}" ABSOLUTE)
+    message(STATUS "Precompiled header directory: ${OOPENCAL_PRECOMPILED_HEADER_DIR_ABS}")
+
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        OOPENCAL_PRECOMPILED_HEADER_DIR="${OOPENCAL_PRECOMPILED_HEADER_DIR_ABS}"
+    )
+
+    add_custom_target(precompiled-header
+        COMMAND $<TARGET_FILE:${PROJECT_NAME}> --buildPrecompiledHeader=${OOPENCAL_PRECOMPILED_HEADER_DIR_ABS}
+        DEPENDS ${PROJECT_NAME}
+        COMMENT "Building the precompiled header for on-the-fly compilation of models"
+        USES_TERMINAL
+        VERBATIM
+    )
+endif()
 
 # ============================================
 # FetchContent setup (offline-friendly)
