@@ -2,6 +2,8 @@
  * @brief Implementation of CppModuleBuilder for compiling C++ modules. */
 
 #include <filesystem>
+#include <chrono>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -330,8 +332,9 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
         progressCallback("Compilation of module ...");
 
     // Execute the compilation command with progress reporting
-    const auto runCompilation = [this, &outputFile]() -> bool
+    const auto runCompilation = [this, &outputFile](bool usingPrecompiledHeader) -> bool
     {
+        const auto started = std::chrono::steady_clock::now();
         int lineCount = 0;
         lastResult->stdOut.clear();
         lastResult->stdErr.clear();
@@ -349,10 +352,18 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
                 if (progressCallback && !line.empty())
                     progressCallback("Error: " + line);
             });
-        return lastResult->exitCode == 0 && moduleExists(outputFile);
+        const bool succeeded = lastResult->exitCode == 0 && moduleExists(outputFile);
+
+        // Shown regardless of --metricsMode, right below the command it refers to
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+        std::cout << std::format("Compilation {} in {:.2f} s ({} precompiled header)",
+                                 succeeded ? "finished" : "failed", seconds,
+                                 usingPrecompiledHeader ? "with" : "without")
+                  << std::endl;
+        return succeeded;
     };
 
-    bool compiled = runCompilation();
+    bool compiled = runCompilation(/*usingPrecompiledHeader=*/precompiledHeader.has_value());
 
     if (! compiled && precompiledHeader)
     {
@@ -364,7 +375,7 @@ CompilationResult CppModuleBuilder::compileModule(const std::string& sourceFile,
 
         lastResult->compileCommand = buildCompileCommand(sourceFile, outputFile, cppStandard);
         std::cout << "Command: " << lastResult->compileCommand << std::endl;
-        compiled = runCompilation();
+        compiled = runCompilation(/*usingPrecompiledHeader=*/false);
     }
 
     // Check if compilation succeeded
@@ -588,10 +599,15 @@ CompilationResult CppModuleBuilder::buildPrecompiledHeader(const std::string& ou
     std::cout << "Compiler: " << compilerPath << " (" << compiler.versionLine << ")\n"
               << "Command: " << result.compileCommand << std::endl;
 
+    const auto buildStarted = std::chrono::steady_clock::now();
     result.exitCode = executeCommand(
         result.compileCommand,
         [&result](const std::string& text) { result.stdOut += text; },
         [&result](const std::string& text) { result.stdErr += text; });
+    std::cout << std::format("Building the precompiled header {} in {:.2f} s",
+                             result.exitCode == 0 ? "finished" : "failed",
+                             std::chrono::duration<double>(std::chrono::steady_clock::now() - buildStarted).count())
+              << std::endl;
     if (result.exitCode != 0 || ! fs::is_regular_file(artifact, ec))
     {
         removeOutputs();
