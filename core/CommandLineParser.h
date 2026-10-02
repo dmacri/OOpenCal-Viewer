@@ -27,7 +27,7 @@
  * - --metrics: Enable performance metrics (default enabled)
  * - --disableMetrics: Disable performance metrics reporting
  * - --buildPrecompiledHeader[=<dir>]: Build the precompiled header which speeds up compilation of models and exit
- *   (handled in main() before any GUI is created, listed here for --help) */
+ *   (handled by viz::cli::runBuildPrecompiledHeaderCommand() before any GUI is created, listed here for --help) */
 class CommandLineParser
 {
 public:
