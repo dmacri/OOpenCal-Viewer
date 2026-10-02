@@ -70,6 +70,25 @@ Like the other paths for compilation (`OOPENCAL_DIR`, `OOPENCAL_VIEWER_ROOT`), i
 
 To switch it off, point it at a directory which does not exist. Windows (MSVC) is not supported.
 
+## Models built with `visualizer.sh` (plugins)
+
+`visualizer.sh <model>` (OOpenCAL) does not use the compilation described above. It builds the model as a plugin with
+`scripts/build_plugin.sh`, which configures the CMake project `examples/custom_model_plugin`. That build uses other flags
+(`-std=gnu++23`, the definitions of VTK) and g++ accepts a precompiled header only when flags and macros match, so plugins
+have their own precompiled header (`examples/custom_model_plugin/OOpenCalPluginPrecompiled.h`). It is built **by the same CMake
+project** (`-DOOPENCAL_PLUGIN_PCH_ONLY=ON`), therefore its flags are identical to the flags of the plugins by construction.
+
+- It is shared by all the models of one Viewer and lives in `<viewer>/build/plugin-precompiled-header/<key>/`. The key depends on
+  the OOpenCAL directories, the compiler and the other CMake arguments, so different setups never share one.
+- `visualizer.sh --build` (`scripts/prepare_and_build.sh`) prepares it right after building the Viewer, so even the first model uses it.
+  If it does not exist yet, the first `build_plugin.sh` creates it (about 8 s, once). `visualizer.sh` itself needs no change.
+- Every `build_plugin.sh` first runs `cmake --build` on it (0.3 s when it is up to date), so it is rebuilt when a header of the Viewer or of OOpenCAL changed.
+- It is best effort: when it cannot be prepared the plugin is built as before. `OOPENCAL_NO_PRECOMPILED_HEADER=1` switches it off.
+- Manually: `scripts/build_plugin.sh --prepare-precompiled-header -DOOPENCAL_DIR=<dir> -DOOPENCALVIEWER_DIR=<dir> --includes <OOpenCAL>/base`.
+
+Plugin build time (`SciddicaT`, 1 core, warm cache, without the one-time preparation): g++-13 7.2 s → 5.3 s, clang++-18 6.5 s → 3.3 s.
+The header takes about 185 MB for g++ and much less for clang.
+
 ## Notes for packaging
 
 Nothing may modify the headers inside the package after the precompiled header has been built: clang validates their

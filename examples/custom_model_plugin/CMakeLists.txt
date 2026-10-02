@@ -72,6 +72,28 @@ if(EXTRA_INCLUDE_DIR)
 endif()
 
 # ============================================================================
+# Precompiled header shared by all plugins (optional, see doc/PRECOMPILED_HEADER.md)
+# ============================================================================
+# Parsing the Viewer headers is a big part of the time needed to build a plugin, and every plugin parses the same ones.
+# scripts/build_plugin.sh therefore builds them once per Viewer: it configures THIS project with
+# -DOOPENCAL_PLUGIN_PCH_ONLY=ON in a separate build directory (so the compiler flags are identical by construction) and passes
+# that directory to the plugin builds as OOPENCAL_PRECOMPILED_HEADER_DIR. When it does not fit, the compiler just
+# parses the headers as usual.
+option(OOPENCAL_PLUGIN_PCH_ONLY "Only build the precompiled header which is shared by the plugins" OFF)
+set(OOPENCAL_PRECOMPILED_HEADER_DIR "" CACHE PATH "Build directory of the shared precompiled header (see OOPENCAL_PLUGIN_PCH_ONLY)")
+
+if(OOPENCAL_PLUGIN_PCH_ONLY)
+    add_library(OOpenCalPluginPch SHARED PluginPrecompiledStub.cpp)
+    target_precompile_headers(OOpenCalPluginPch PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/OOpenCalPluginPrecompiled.h")
+    target_link_libraries(OOpenCalPluginPch PRIVATE ${VTK_LIBRARIES})
+    # g++ accepts a precompiled header only when every macro defined while it was built is defined for the plugin too.
+    # CMake would add -D<target>_EXPORTS, which the plugins do not have.
+    set_target_properties(OOpenCalPluginPch PROPERTIES DEFINE_SYMBOL "")
+    message(STATUS "Building only the precompiled header shared by the plugins")
+    return()
+endif()
+
+# ============================================================================
 # Build the plugin as a shared library
 # ============================================================================
 set(PLUGIN_LIB_NAME "${PLUGIN_CELL_CLASS}Plugin")
@@ -99,6 +121,24 @@ target_link_libraries(${PLUGIN_LIB_NAME}
 set_target_properties(${PLUGIN_LIB_NAME} PROPERTIES
     PREFIX "lib"
 )
+
+# Use the shared precompiled header when it has been built (g++: .gch next to cmake_pch.hxx, clang: .pch)
+if(OOPENCAL_PRECOMPILED_HEADER_DIR)
+    file(GLOB_RECURSE OOPENCAL_PCH_CANDIDATES "${OOPENCAL_PRECOMPILED_HEADER_DIR}/CMakeFiles/OOpenCalPluginPch.dir/cmake_pch.hxx")
+    if(OOPENCAL_PCH_CANDIDATES)
+        list(GET OOPENCAL_PCH_CANDIDATES 0 OOPENCAL_PCH_HXX)
+    endif()
+endif()
+
+if(OOPENCAL_PCH_HXX AND EXISTS "${OOPENCAL_PCH_HXX}.gch")
+    message(STATUS "Using the shared precompiled header: ${OOPENCAL_PCH_HXX}.gch")
+    target_compile_options(${PLUGIN_LIB_NAME} PRIVATE "SHELL:-include ${OOPENCAL_PCH_HXX}" -Winvalid-pch)
+elseif(OOPENCAL_PCH_HXX AND EXISTS "${OOPENCAL_PCH_HXX}.pch")
+    message(STATUS "Using the shared precompiled header: ${OOPENCAL_PCH_HXX}.pch")
+    target_compile_options(${PLUGIN_LIB_NAME} PRIVATE "SHELL:-Xclang -include-pch -Xclang ${OOPENCAL_PCH_HXX}.pch")
+else()
+    message(STATUS "Shared precompiled header: not used")
+endif()
 
 # ============================================================================
 # Installation (optional)
