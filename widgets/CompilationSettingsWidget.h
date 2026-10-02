@@ -68,6 +68,7 @@ public:
         OOPENCAL_DIR_ROW = 0,
         OOPENCAL_VIEWER_ROOT_ROW = 1,
         VTK_INCLUDES_ROW = 2,
+        PRECOMPILED_HEADER_DIR_ROW = 3,
 
         CONFIG_ROWS_COUNT
     };
@@ -143,6 +144,9 @@ private:
     
     /** @brief Get configuration values for VTK_INCLUDES */
     ConfigValues getVtkFlagsConfig();
+
+    /** @brief Get configuration values for OOPENCAL_PRECOMPILED_HEADER_DIR */
+    ConfigValues getPrecompiledHeaderDirConfig();
 
     /** @brief Update additional paths label with current configuration values */
     void updateAdditionalPaths();

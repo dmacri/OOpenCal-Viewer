@@ -51,6 +51,7 @@ The generated documentation will be available in the `doc/html` directory.
 
 - **[doc/LOAD_MODEL_FROM_DIRECTORY.md](doc/LOAD_MODEL_FROM_DIRECTORY.md)** - User guide for loading models from directory
 - **[doc/DEVELOPER_GUIDE_MODEL_LOADING.md](doc/DEVELOPER_GUIDE_MODEL_LOADING.md)** - Developer documentation for model loading feature
+- **[doc/PRECOMPILED_HEADER.md](doc/PRECOMPILED_HEADER.md)** - Speeding up on-the-fly compilation of models with a precompiled header
 - **[doc/PLUGIN_USER_GUIDE.md](doc/PLUGIN_USER_GUIDE.md)** - Complete guide to creating and using plugins
 - **[doc/PLUGIN_ARCHITECTURE.md](doc/PLUGIN_ARCHITECTURE.md)** - Technical implementation details
 - **[doc/VIEW_MODES.md](doc/VIEW_MODES.md)** - 2D/3D view modes documentation

@@ -16,6 +16,7 @@
 #include "config/Config.h"
 #include "config/ConfigConstants.h"
 #include "CppModuleBuilder.h"
+#include "PrecompiledHeader.h"
 #include "core/directoryConstants.h"
 
 
@@ -301,17 +302,10 @@ bool ModelLoader::generateWrapper(const std::string& wrapperPath, const std::str
         }
 
         // Generate single wrapper with platform detection inside
+        // The preamble includes the precompiled header when it is on the include path (see PrecompiledHeader.h),
+        // otherwise the same headers one by one
         wrapper << "/** Auto-generated wrapper for " << modelName << " model */\n"
-                << "#include <iostream>\n"
-                << "#include <memory>\n"
-                << "#include <string>\n"
-                << "\n"
-                << "#ifdef _WIN32\n"
-                << "    #include <windows.h>\n"
-                << "#endif\n"
-                << "\n"
-                << "#include \"visualiserProxy/SceneWidgetVisualizerProxy.h\"\n"
-                << "#include \"visualiserProxy/SceneWidgetVisualizerFactory.h\"\n"
+                << viz::plugins::pch::wrapperPreamble()
                 << "#include \"" << className << ".h\"\n"
                 << "\n"
                 << "#define MODEL_NAME \"" << modelName << "\"\n"

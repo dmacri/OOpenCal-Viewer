@@ -8,8 +8,10 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
+#include "PrecompiledHeader.h"
 
 namespace viz::plugins
 {
@@ -62,6 +64,18 @@ public:
                                     const std::string& outputFile,
                                     const std::string& cppStandard = "");
 
+    /** @brief Build the precompiled header which speeds up compilation of models
+     *
+     * It precompiles the headers which every generated wrapper includes (standard library, VTK, Viewer templates,
+     * OOpenCAL Cell.h) with the same compiler and flags which compileModule() uses. compileModule() uses the result
+     * automatically as long as it is valid for the current settings and falls back to a normal compilation otherwise.
+     * Existing results in the directory are replaced; a failed build leaves nothing usable behind.
+     * @param outputDirectory Directory for OOpenCalViewerPrecompiled.h, its .pch/.gch and the manifest (created if missing)
+     * @param cppStandard C++ standard to use. If empty, auto-detects from __cplusplus
+     * @return CompilationResult with success status, the command and the compiler output */
+    CompilationResult buildPrecompiledHeader(const std::string& outputDirectory,
+                                             const std::string& cppStandard = "");
+
     /** @brief Get the last compilation result
      * @return Pointer to the last result, or nullptr if no compilation has been done */
     const CompilationResult* getLastResult() const
@@ -109,14 +123,36 @@ private:
     ProgressCallback progressCallback;
     std::unique_ptr<CompilationResult> lastResult;
 
+    /// Describes how the precompiled header is used by one compilation
+    struct PrecompiledHeaderUse
+    {
+        pch::CompilerFamily family = pch::CompilerFamily::Unknown;
+        std::string directory;      ///< Directory with the precompiled header
+        std::string relocationRoot; ///< Root of the bundled toolchain (empty for a system compiler)
+    };
+
+    /** @brief Decide whether the configured precompiled header can be used by the current compiler and settings
+     * @param standard C++ standard which is going to be used
+     * @return How to use it, or nothing (the reason is logged unless no precompiled header was built at all) */
+    std::optional<PrecompiledHeaderUse> selectPrecompiledHeader(const std::string& standard) const;
+
+    /** @brief Build the part of the command shared by compiling a module and building the precompiled header:
+     *         compiler, flags, standard, toolchain options, include paths and VTK flags
+     * @param standard C++ standard
+     * @param forPrecompiledHeader If true, flags which matter only for linking (-shared) are left out
+     * @return The command without the source file, the output file and the precompiled header options */
+    std::string buildBaseCommand(const std::string& standard, bool forPrecompiledHeader) const;
+
     /** @brief Build the compilation command
      * @param sourceFile Source file path
      * @param outputFile Output file path
      * @param cppStandard C++ standard
+     * @param precompiledHeader Precompiled header to use, or nullptr to compile without it
      * @return The complete compilation command */
     std::string buildCompileCommand(const std::string& sourceFile,
                                     const std::string& outputFile,
-                                    const std::string& cppStandard) const;
+                                    const std::string& cppStandard,
+                                    const PrecompiledHeaderUse* precompiledHeader = nullptr) const;
 
     /** @brief Execute a system command and capture output
      * @param command The command to execute

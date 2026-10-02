@@ -502,6 +502,10 @@ jobs:
           export OOPENCAL_DIR="${HERE}/compiler/include"
           export VTK_INCLUDES="${HERE}/compiler/include/vtk"
 
+          # Precompiled header which speeds up in-app module compilation (built by the CI step above, see doc/PRECOMPILED_HEADER.md).
+          # When the directory is missing the application simply compiles models without it.
+          export OOPENCAL_PRECOMPILED_HEADER_DIR="${HERE}/compiler/precompiled"
+
           # Make sure compiler can find libraries
           export LDFLAGS="-L${HERE}/compiler/lib"
           export LDLIBS="-L${HERE}/compiler/lib"
@@ -530,6 +534,26 @@ jobs:
           # Fix RPATH for compiler libraries
           find AppDir/compiler/lib -name "*.so*" -type f -exec \
             patchelf --set-rpath '$ORIGIN' {} \; 2>/dev/null || true
+
+      ################### precompiled header for in-app module compilation ###################
+      - name: Build precompiled header with the bundled clang
+        env:
+          # no display on the runner; leak reports of the sanitized build would only add noise to this helper run
+          QT_QPA_PLATFORM: offscreen
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          # The precompiled header is built through AppRun, which exports the whole environment of the bundled compiler.
+          # Thanks to that it is built with exactly the command line which the application uses to compile models,
+          # and it is stored as relocatable, so it stays valid although the AppImage is mounted somewhere else on every run.
+          # Nothing may modify the headers inside AppDir after this step (clang validates their modification times).
+          # It is only an optimization: if it fails, the AppImage still works (it compiles models without it).
+          if ./AppDir/AppRun --buildPrecompiledHeader; then
+            ls -la AppDir/compiler/precompiled
+            du -sh AppDir/compiler/precompiled
+          else
+            echo "::warning::Precompiled header could not be built, the AppImage will compile models without it"
+            rm -rf AppDir/compiler/precompiled
+          fi
 
       ################### create AppImage ###################
       - name: Download appimagetool

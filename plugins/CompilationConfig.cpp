@@ -476,6 +476,37 @@ void CompilationConfig::resetViewerRootDir()
     m_state.viewerRootDirOverride.reset();
 }
 
+std::string CompilationConfig::getPrecompiledHeaderDir() const
+{
+    if (m_state.precompiledHeaderDirOverride.has_value())
+    {
+        return m_state.precompiledHeaderDirOverride.value();
+    }
+    return getDefaultPrecompiledHeaderDir();
+}
+
+std::string CompilationConfig::getDefaultPrecompiledHeaderDir() const
+{
+    return getDefaultPrecompiledHeaderDirImpl();
+}
+
+void CompilationConfig::setPrecompiledHeaderDir(const std::string& path)
+{
+    if (path.empty())
+    {
+        m_state.precompiledHeaderDirOverride.reset();
+    }
+    else
+    {
+        m_state.precompiledHeaderDirOverride = path;
+    }
+}
+
+void CompilationConfig::resetPrecompiledHeaderDir()
+{
+    m_state.precompiledHeaderDirOverride.reset();
+}
+
 std::vector<std::string> CompilationConfig::getIncludePaths() const
 {
     std::vector<std::string> paths;
@@ -525,7 +556,8 @@ bool CompilationConfig::hasOverrides() const
     return m_state.compilationFlagsOverride.has_value() ||
            m_state.vtkFlagsOverride.has_value() ||
            m_state.oopencalDirOverride.has_value() ||
-           m_state.viewerRootDirOverride.has_value();
+           m_state.viewerRootDirOverride.has_value() ||
+           m_state.precompiledHeaderDirOverride.has_value();
 }
 
 void CompilationConfig::resetToDefaults()
@@ -534,6 +566,7 @@ void CompilationConfig::resetToDefaults()
     m_state.vtkFlagsOverride.reset();
     m_state.oopencalDirOverride.reset();
     m_state.viewerRootDirOverride.reset();
+    m_state.precompiledHeaderDirOverride.reset();
 }
 
 std::string CompilationConfig::getConfigurationSummary() const
@@ -568,6 +601,13 @@ std::string CompilationConfig::getConfigurationSummary() const
     }
     summary += "\n";
     
+    summary += "  Precompiled header dir: " + getPrecompiledHeaderDir();
+    if (m_state.precompiledHeaderDirOverride.has_value())
+    {
+        summary += " (override: " + getDefaultPrecompiledHeaderDir() + ")";
+    }
+    summary += "\n";
+
     return summary;
 }
 
@@ -578,6 +618,7 @@ std::string CompilationConfig::exportConfiguration() const
     json += "  \"vtkFlags\": \"" + getVtkFlags() + "\",\n";
     json += "  \"oopencalDir\": \"" + getOopencalDir() + "\",\n";
     json += "  \"viewerRootDir\": \"" + getViewerRootDir() + "\",\n";
+    json += "  \"precompiledHeaderDir\": \"" + getPrecompiledHeaderDir() + "\",\n";
     json += "  \"hasOverrides\": " + std::string(hasOverrides() ? "true" : "false") + "\n";
     json += "}";
     return json;
@@ -633,6 +674,12 @@ bool CompilationConfig::importConfiguration(const std::string& configJson)
     {
         setViewerRootDir(viewerRoot);
     }
+
+    std::string precompiledHeaderDir = extractValue(configJson, "precompiledHeaderDir");
+    if (! precompiledHeaderDir.empty())
+    {
+        setPrecompiledHeaderDir(precompiledHeaderDir);
+    }
     
     return true;
 }
@@ -644,6 +691,7 @@ std::string CompilationConfig::getDefaultsSummary() const
     summary += "  VTK flags: " + getDefaultVtkFlags() + "\n";
     summary += "  OOpenCAL dir: " + getDefaultOopencalDir() + "\n";
     summary += "  Viewer root: " + getDefaultViewerRootDir() + "\n";
+    summary += "  Precompiled header dir: " + getDefaultPrecompiledHeaderDir() + "\n";
     return summary;
 }
 
@@ -692,6 +740,21 @@ std::string CompilationConfig::getDefaultViewerRootDirImpl() const
     return resolveDirectoryPath("OOPENCAL_VIEWER_ROOT", OOPENCAL_VIEWER_ROOT);
 #else
     return resolveDirectoryPath("OOPENCAL_VIEWER_ROOT", nullptr);
+#endif
+}
+
+std::string CompilationConfig::getDefaultPrecompiledHeaderDirImpl() const
+{
+    // 1. Environment variable, 2. CMake define. Unlike the other directories it does not have to exist:
+    //    --buildPrecompiledHeader creates it, and a missing directory simply means "no precompiled header".
+    if (const char* envPath = std::getenv("OOPENCAL_PRECOMPILED_HEADER_DIR"); envPath && *envPath != '\0')
+    {
+        return envPath;
+    }
+#ifdef OOPENCAL_PRECOMPILED_HEADER_DIR
+    return OOPENCAL_PRECOMPILED_HEADER_DIR;
+#else
+    return {};
 #endif
 }
 
