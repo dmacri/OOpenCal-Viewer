@@ -37,6 +37,7 @@
 #include "visualiser/Visualizer.hpp"
 #include "visualiser/SettingParameter.h"
 #include "widgets/ColorSettings.h"
+#include "widgets/GridWorldMapping.h"
 #include "widgets/SubstatesDockWidget.h"
 #include "widgets/CustomInteractorStyle.h"
 #include "data/PerformanceMetrics.h"
@@ -2224,25 +2225,19 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
     if (columnCount <= 0 || rowCount <= 0)
         return false;
 
-    const double cellWidth = sceneWidth / columnCount;
-    const double cellHeight = sceneHeight / rowCount;
+    // 3D height surface: a mesh over the cell vertices (x = col, y = nRows - 1 - row), so the cell
+    // under the cursor is the one with the nearest vertex. Independent of the (cropped) mesh bounds.
+    if (isHeightSurfaceDisplayed())
+    {
+        return GridWorldMapping::worldToNearestVertexCell(worldPos[0], worldPos[1],
+                                                          rowCount, columnCount, outRow, outCol);
+    }
 
-    // Convert world position to grid indices
-    // Points are positioned with Y inverted: (nRows - 1 - row)
-    // So we need to invert the row calculation to get the correct matrix index
-    int col = static_cast<int>((worldPos[0] - bounds[0]) / cellWidth);
-    int row = static_cast<int>((worldPos[1] - bounds[2]) / cellHeight);
-    
-    // Invert row to match the inverted Y coordinates used in visualization
-    row = rowCount - 1 - row;
-
-    // Clamp to valid range
-    col = std::max(0, std::min(col, columnCount - 1));
-    row = std::max(0, std::min(row, rowCount - 1));
-
-    outRow = row;
-    outCol = col;
-    return true;
+    // Flat view: points are positioned with Y inverted: (nRows - 1 - row), so the row index has
+    // to be inverted back.
+    const GridWorldMapping::Bounds2D gridExtent{bounds[0], bounds[1], bounds[2], bounds[3]};
+    return GridWorldMapping::worldToGridCell(worldPos[0], worldPos[1], gridExtent,
+                                             rowCount, columnCount, outRow, outCol);
 }
 
 bool SceneWidget::currentGridBounds(double bounds[6]) const
@@ -2252,9 +2247,34 @@ bool SceneWidget::currentGridBounds(double bounds[6]) const
 
     gridActor->GetBounds(bounds);
 
+    if (isHeightSurfaceDisplayed())
+    {
+        // The 3D surface contains quads only where the height substate lies in (Min, Max], so
+        // the actor's bounding box covers just a part of the grid (e.g. SciddicaT "z" with
+        // Min=490 leaves out the whole lowland). Using it to map the mouse position to a cell
+        // made the tooltip read cells far away from the cursor (issue #139), so for X/Y use the
+        // logical extent of the whole grid. Vertices of the surface lie exactly on it.
+        const auto extent = GridWorldMapping::pointGridBounds(settingParameter->numberOfRowsY,
+                                                              settingParameter->numberOfColumnX);
+        bounds[0] = extent.xMin;
+        bounds[1] = extent.xMax;
+        bounds[2] = extent.yMin;
+        bounds[3] = extent.yMax;
+    }
+
     return std::isfinite(bounds[0]) && std::isfinite(bounds[1]) &&
            std::isfinite(bounds[2]) && std::isfinite(bounds[3]) &&
            bounds[0] < bounds[1] && bounds[2] < bounds[3];
+}
+
+bool SceneWidget::isHeightSurfaceDisplayed() const
+{
+    // Mirrors the condition used in drawVisualizationWithOptional3DSubstate() to draw the
+    // height surface; cross-section (substateSliceEnabled) draws a profile instead.
+    return settingParameter &&
+           !substateSliceEnabled &&
+           !isNative3DModel() &&
+           !get3DSubstateInfosTopToBottom().empty();
 }
 
 bool SceneWidget::convertWorldToDisplayCoordinates(const double worldPos[3], int& outX, int& outY, int& outZ) const
