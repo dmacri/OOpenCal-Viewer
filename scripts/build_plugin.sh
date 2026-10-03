@@ -213,12 +213,31 @@ prepare_precompiled_header() {
     fi
 
     info "Preparing the precompiled header shared by all plugins: $pch_build_dir"
-    local started
+    local started ok=0 configured_now attempt
     started="$(now_ms)"
-    if {
-        cmake -S "$TEMPLATE_DIR" -B "$pch_build_dir" -DOOPENCAL_PLUGIN_PCH_ONLY=ON ${producer_args[@]+"${producer_args[@]}"} &&
-        cmake --build "$pch_build_dir" -j"$(nproc)"
-    } > "$log_file" 2>&1; then
+    : > "$log_file"
+    for attempt in 1 2; do
+        # Configured only once per key (the key already holds everything which decides about the flags). Configuring is
+        # expensive (find_package(VTK)), whereas `cmake --build` is cheap when nothing changed and regenerates
+        # the build system by itself when the CMake files of the template changed.
+        configured_now=0
+        if [[ ! -f "$pch_build_dir/CMakeCache.txt" ]]; then
+            configured_now=1
+            if ! cmake -S "$TEMPLATE_DIR" -B "$pch_build_dir" -DOOPENCAL_PLUGIN_PCH_ONLY=ON ${producer_args[@]+"${producer_args[@]}"} >> "$log_file" 2>&1; then
+                rm -rf "$pch_build_dir"
+                break
+            fi
+        fi
+        if cmake --build "$pch_build_dir" -j"$(nproc)" >> "$log_file" 2>&1; then
+            ok=1
+            break
+        fi
+        # A leftover of an interrupted or outdated configuration is possible: start from scratch (once)
+        rm -rf "$pch_build_dir"
+        [[ "$configured_now" -eq 1 ]] && break
+    done
+
+    if [[ "$ok" -eq 1 ]]; then
         info "Precompiled header is ready ($(format_duration_ms $(( $(now_ms) - started ))))"
         PCH_CMAKE_ARGS=("-DOOPENCAL_PRECOMPILED_HEADER_DIR=${pch_build_dir}")
         PCH_STATUS="with precompiled header"
