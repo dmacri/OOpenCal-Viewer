@@ -117,3 +117,20 @@ target_include_directories(GridWorldMappingTests PRIVATE
 )
 
 add_test(NAME GridWorldMappingTests COMMAND GridWorldMappingTests)
+
+# ============================================
+# Add test executable for NumberFormatting (header-only, no Qt/VTK)
+# ============================================
+add_executable(NumberFormattingTests
+    NumberFormattingTests.cpp
+)
+
+target_link_libraries(NumberFormattingTests
+    GTest::gtest_main
+)
+
+target_include_directories(NumberFormattingTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME NumberFormattingTests COMMAND NumberFormattingTests)

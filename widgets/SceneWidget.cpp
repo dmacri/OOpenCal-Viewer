@@ -2,6 +2,7 @@
  * @brief Implementation of the SceneWidget class for 3D visualization. */
 
 #include <iostream> // std::cout
+#include <clocale>
 #include <algorithm>
 #include <cmath> // std::isfinite
 #include <filesystem>
@@ -38,6 +39,7 @@
 #include "visualiser/SettingParameter.h"
 #include "widgets/ColorSettings.h"
 #include "widgets/GridWorldMapping.h"
+#include "widgets/NumberFormatting.h"
 #include "widgets/SubstatesDockWidget.h"
 #include "widgets/CustomInteractorStyle.h"
 #include "data/PerformanceMetrics.h"
@@ -1599,7 +1601,12 @@ QString SceneWidget::cellValueAtThisPositionAsText() const
     std::string cellValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col);
     if (! cellValue.empty())
     {
-        tooltipText += QString("\nCell Value: %1").arg(QString::fromStdString(cellValue));
+        // "[1008.000000,0.000000]" -> "[1008, 0]". A list cannot be split reliably when the decimal
+        // separator is ',' (it is also the list separator), so only do it for '.'.
+        const bool decimalPointIsDot = *std::localeconv()->decimal_point == '.';
+        const std::string shownCellValue = decimalPointIsDot ? NumberFormatting::withoutZeroFractionsInList(cellValue)
+                                                              : cellValue;
+        tooltipText += QString("\nCell Value: %1").arg(QString::fromStdString(shownCellValue));
     }
 
     // Get individual substate values if available
@@ -1612,7 +1619,9 @@ QString SceneWidget::cellValueAtThisPositionAsText() const
             std::string fieldValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col, field.c_str());
             if (!fieldValue.empty())
             {
-                tooltipText += QString("\n\t%1: %2").arg(QString::fromStdString(field)).arg(QString::fromStdString(fieldValue));
+                // The model prints e.g. "1008.000000"; show "1008" when there is nothing after the separator
+                const std::string shownValue = NumberFormatting::withoutZeroFraction(fieldValue);
+                tooltipText += QString("\n\t%1: %2").arg(QString::fromStdString(field)).arg(QString::fromStdString(shownValue));
             }
         }
     }
