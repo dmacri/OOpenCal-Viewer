@@ -231,10 +231,26 @@ void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)
     renderWindow->Render();
 }
 
+void CustomInteractorStyle::UpdatePressedButton(ButtonBit button, bool pressed)
+{
+    const bool wasActive = m_pressedButtons != 0;
+
+    if (pressed)
+        m_pressedButtons |= button;
+    else
+        m_pressedButtons &= ~static_cast<unsigned>(button);
+
+    const bool isActive = m_pressedButtons != 0;
+    if (wasActive != isActive && m_interactionStateCallback)
+        m_interactionStateCallback(isActive);
+}
+
 void CustomInteractorStyle::OnLeftButtonDown()
 {
     if (!m_3dInteractionEnabled)
         return;
+
+    UpdatePressedButton(LeftButtonBit, true);
 
     // If Shift is pressed: start custom panning
     if (this->Interactor->GetShiftKey())
@@ -259,6 +275,8 @@ void CustomInteractorStyle::OnLeftButtonUp()
     if (!m_3dInteractionEnabled)
         return;
 
+    UpdatePressedButton(LeftButtonBit, false);
+
     if (m_isPanning)
     {
         m_isPanning = false;
@@ -274,26 +292,38 @@ void CustomInteractorStyle::OnLeftButtonUp()
 
 void CustomInteractorStyle::OnMiddleButtonDown()
 {
-    if (m_3dInteractionEnabled)
-        this->Superclass::OnMiddleButtonDown();
+    if (!m_3dInteractionEnabled)
+        return;
+
+    UpdatePressedButton(MiddleButtonBit, true);
+    this->Superclass::OnMiddleButtonDown();
 }
 
 void CustomInteractorStyle::OnMiddleButtonUp()
 {
-    if (m_3dInteractionEnabled)
-        this->Superclass::OnMiddleButtonUp();
+    if (!m_3dInteractionEnabled)
+        return;
+
+    UpdatePressedButton(MiddleButtonBit, false);
+    this->Superclass::OnMiddleButtonUp();
 }
 
 void CustomInteractorStyle::OnRightButtonDown()
 {
-    if (m_3dInteractionEnabled)
-        this->Superclass::OnRightButtonDown();
+    if (!m_3dInteractionEnabled)
+        return;
+
+    UpdatePressedButton(RightButtonBit, true);
+    this->Superclass::OnRightButtonDown();
 }
 
 void CustomInteractorStyle::OnRightButtonUp()
 {
-    if (m_3dInteractionEnabled)
-        this->Superclass::OnRightButtonUp();
+    if (!m_3dInteractionEnabled)
+        return;
+
+    UpdatePressedButton(RightButtonBit, false);
+    this->Superclass::OnRightButtonUp();
 }
 
 void CustomInteractorStyle::OnMouseMove()
