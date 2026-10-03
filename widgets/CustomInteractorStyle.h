@@ -8,6 +8,7 @@
 
 #include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkSmartPointer.h>
+#include <functional>
 
 class vtkCellPicker;
 
@@ -48,6 +49,17 @@ public:
         return m_3dInteractionEnabled;
     }
 
+    /** @brief Register a callback notified when a camera-manipulating mouse gesture starts/ends.
+     *
+     * The callback receives `true` when the first mouse button of a rotate/pan/dolly
+     * gesture is pressed and `false` when the last pressed button is released.
+     * It is NOT called in 2D mode (where rotation/pan are disabled).
+     * Used to pause the step-by-step playback while the camera is being moved. */
+    void SetInteractionStateCallback(std::function<void(bool)> callback)
+    {
+        m_interactionStateCallback = std::move(callback);
+    }
+
     /** @brief Handle mouse wheel forward event (zoom in).
      * 
      * Zooms in towards the cursor position. */
@@ -79,6 +91,16 @@ public:
     void OnMouseMove() override;
 
 private:
+    enum ButtonBit : unsigned
+    {
+        LeftButtonBit = 1u << 0,
+        MiddleButtonBit = 1u << 1,
+        RightButtonBit = 1u << 2,
+    };
+
+    /// @brief Track pressed buttons and fire the interaction-state callback on 0 <-> 1+ transitions.
+    void UpdatePressedButton(ButtonBit button, bool pressed);
+
     /** @brief Perform zoom towards cursor.
      *
      * @param zoomFactor Multiplicative factor (> 1.0 zooms in, < 1.0 zooms out) */
@@ -98,6 +120,12 @@ private:
 
     /// @brief False in 2D mode, where only cursor-centered wheel zoom is allowed.
     bool m_3dInteractionEnabled = true;
+
+    /// @brief Bit mask of mouse buttons currently held for a camera gesture
+    unsigned m_pressedButtons = 0;
+
+    /// @brief Notified when a camera gesture (rotate/pan/dolly) starts or ends
+    std::function<void(bool)> m_interactionStateCallback;
 
     /// @brief Picker used to find world position under cursor
     vtkSmartPointer<vtkCellPicker> m_picker;
