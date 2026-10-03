@@ -246,6 +246,18 @@ cmake "$VIEWER_ROOT" \
 log_step "Building (make)..."
 make -j"$(nproc)"
 
+# ================================================================
+# Precompiled header for building models (plugins) - optional, makes `visualizer.sh <model>` faster.
+# It is prepared with the same arguments visualizer.sh gives build_plugin.sh, so the first model does not pay for it.
+# ================================================================
+log_step "Preparing the precompiled header for model plugins (optional)..."
+if ! bash "$SCRIPT_DIR/build_plugin.sh" --prepare-precompiled-header \
+        -DOOPENCAL_DIR="$OOPENCAL_DIR" \
+        -DOOPENCALVIEWER_DIR="$VIEWER_ROOT" \
+        --includes "$OOPENCAL_DIR/OOpenCAL/base"; then
+    log_warn "The precompiled header could not be prepared; models will be built without it (just slower)."
+fi
+
 
 # ================================================================
 # Print result

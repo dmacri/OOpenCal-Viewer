@@ -70,6 +70,36 @@ Like the other paths for compilation (`OOPENCAL_DIR`, `OOPENCAL_VIEWER_ROOT`), i
 
 To switch it off, point it at a directory which does not exist. Windows (MSVC) is not supported.
 
+## Models built with `visualizer.sh` (plugins)
+
+`visualizer.sh <model>` (OOpenCAL) does not use the compilation described above. It builds the model as a plugin with
+`scripts/build_plugin.sh`, which configures the CMake project `examples/custom_model_plugin`. That build uses other flags
+(`-std=gnu++23`, the definitions of VTK) and g++ accepts a precompiled header only when flags and macros match, so plugins
+have their own precompiled header (`examples/custom_model_plugin/OOpenCalPluginPrecompiled.h`). It is built **by the same CMake
+project** (`-DOOPENCAL_PLUGIN_PCH_ONLY=ON`), therefore its flags are identical to the flags of the plugins by construction.
+
+- It is shared by all the models of one Viewer and lives in `<viewer>/build/plugin-precompiled-header/<key>/`. The key depends on
+  the OOpenCAL directories, the compiler and the other CMake arguments, so different setups never share one.
+- `visualizer.sh --build` (`scripts/prepare_and_build.sh`) prepares it right after building the Viewer, so even the first model uses it.
+  If it does not exist yet, the first `build_plugin.sh` creates it (about 8 s, once). `visualizer.sh` itself needs no change.
+- Every `build_plugin.sh` first runs `cmake --build` on it (0.3 s when it is up to date), so it is rebuilt when a header of the Viewer or of OOpenCAL changed.
+- It is best effort: when it cannot be prepared the plugin is built as before. `OOPENCAL_NO_PRECOMPILED_HEADER=1` switches it off.
+- Manually: `scripts/build_plugin.sh --prepare-precompiled-header -DOOPENCAL_DIR=<dir> -DOOPENCALVIEWER_DIR=<dir> --includes <OOpenCAL>/base`.
+
+Plugin build time (`SciddicaT`, 1 core, warm cache, median of 3, whole `build_plugin.sh` without the one-time preparation):
+g++-13 7.7 s → 5.8 s, clang++-18 6.5 s → 3.3 s. The header takes about 185 MB for g++ and much less for clang.
+
+Where the time goes with g++ (`SciddicaT`): compiling the plugin 6.4 s → 4.3 s, while the CMake configuration of the plugin
+(`find_package(VTK)`, 1.2–2 s) and linking (0.2 s) do not depend on the precompiled header. So the whole build gets about 25% faster, not 50%
+as the on-the-fly compilation with clang does; the rest is instantiation of the templates for the model, which cannot be precompiled.
+Checking that the header is up to date costs about 0.05 s.
+
+To measure it, compare the `Plugin built in ... (with/without precompiled header)` lines printed by `build_plugin.sh`
+(delete `lib*.so` of the model first, otherwise the plugin is not built again; `OOPENCAL_NO_PRECOMPILED_HEADER=1` switches the header off).
+Timing a whole `visualizer.sh <model>` run also includes starting the Viewer, which is several seconds and varies by about 0.5 s from run to run.
+To check that g++ really uses the header, look for `-include .../cmake_pch.hxx` in `<model>/build/CMakeFiles/<Cell>Plugin.dir/flags.make`
+and for warnings `not used because` in the output of the build.
+
 ## Notes for packaging
 
 Nothing may modify the headers inside the package after the precompiled header has been built: clang validates their
