@@ -1556,6 +1556,29 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
         tooltipText += QString("\n  To:   (x2=%1, y2=%2)")
                            .arg(static_cast<int>(std::lround(nearestLine->x2)))
                            .arg(static_cast<int>(std::lround(nearestLine->y2)));
+
+        // Also show pixel position when over a line
+        if (m_lastMousePickedGrid)
+        {
+            int displayX = 0;
+            int displayY = 0;
+            int displayZ = 0;
+            const QString nodeInfo = getNodeAtWorldPosition(m_lastWorldPos);
+            if (nodeInfo.isEmpty() || !convertWorldToDisplayCoordinates(m_lastWorldPos.data(), displayX, displayY, displayZ))
+            {
+                tooltipText += QString("\nPosition: (Outside the grid)");
+            }
+            else
+            {
+                tooltipText += QString("\nPosition: (x: %1, y: %2, z: %3)")
+                                  .arg(displayX)
+                                  .arg(displayY)
+                                  .arg(displayZ);
+
+                tooltipText += QString("\n%1").arg(nodeInfo);
+            }
+        }
+
         tooltipText += cellValueAtThisPositionAsText();
     }
     else if (m_lastMousePickedGrid)
