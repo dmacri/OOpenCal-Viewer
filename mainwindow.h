@@ -84,6 +84,8 @@ private slots: // menu actions
     void onCellRenderingToggled(bool checked);
     void syncCellRenderingCheckbox();
     void onPausePlaybackOnRotationToggled(bool checked);
+    void onToolTipToggled(bool checked);
+    void syncToolTipCheckbox();
 
     // Help submenu:
     void showAboutThisApplicationDialog();

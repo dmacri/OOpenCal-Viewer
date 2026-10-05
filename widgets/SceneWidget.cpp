@@ -1475,6 +1475,9 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
     if (! renderer || ! renderWindow())
         return;
 
+    if (! toolTipEnabled)
+        return;
+
     if (m_lastMousePickedGrid && isCrossSectionView() && isWorldPositionInGrid(m_lastWorldPos.data()))
     {
         int planeRow = 0;
@@ -2054,6 +2057,11 @@ void SceneWidget::setGridLinesVisible(bool visible)
 void SceneWidget::setLineDetectionEnabled(bool enabled)
 {
     lineDetectionEnabled = enabled;
+}
+
+void SceneWidget::setToolTipEnabled(bool enabled)
+{
+    toolTipEnabled = enabled;
 }
 
 void SceneWidget::setFlatSceneBackgroundVisible(bool visible)

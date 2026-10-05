@@ -809,6 +809,7 @@
     <addaction name="separator"/>
     <addaction name="actionCellRendering"/>
     <addaction name="actionPausePlaybackOnRotation"/>
+    <addaction name="actionShowToolTip"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuModel"/>
@@ -1025,6 +1026,20 @@
    </property>
    <property name="toolTip">
     <string>Show/hide flat background plane in 3D mode (disabled in 2D mode)</string>
+   </property>
+  </action>
+  <action name="actionShowToolTip">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Show Tooltip</string>
+   </property>
+   <property name="toolTip">
+    <string>Show/hide tooltip when hovering over the VTK widget</string>
    </property>
   </action>
   <action name="actionSilentMode">

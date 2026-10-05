@@ -687,6 +687,14 @@ void MainWindow::connectMenuActions()
         ui->actionPausePlaybackOnRotation->setChecked(pauseOnRotation);
     }
     connect(ui->actionPausePlaybackOnRotation, &QAction::toggled, this, &MainWindow::onPausePlaybackOnRotationToggled);
+
+    {
+        // Restore persisted state (enabled by default) before connecting, to avoid a needless save
+        const QSettings settings;
+        const bool showToolTip = settings.value("tooltip/enabled", true).toBool();
+        ui->actionShowToolTip->setChecked(showToolTip);
+    }
+    connect(ui->actionShowToolTip, &QAction::toggled, this, &MainWindow::onToolTipToggled);
     connect(ui->actionShow_reduction, &QAction::triggered, this, &MainWindow::onShowReductionRequested);
 
     // View mode actions
@@ -740,6 +748,11 @@ void MainWindow::initializeSceneWidget(const QString& configFileName)
     ui->sceneWidget->addVisualizer(configFileName.toStdString(), currentStep);
     ui->openConfigurationFileLabel->hide();
     ui->sceneWidget->setHidden(false);
+
+    // Apply tooltip setting from QSettings
+    const QSettings settings;
+    const bool showToolTip = settings.value("tooltip/enabled", true).toBool();
+    ui->sceneWidget->setToolTipEnabled(showToolTip);
 
     // Initialize substate dock widget
     if (ui->substatesDockWidget && ui->sceneWidget->getSettingParameter())
@@ -1051,6 +1064,24 @@ void MainWindow::onPausePlaybackOnRotationToggled(bool checked)
         // Don't leave playback paused if the option is switched off in the middle of a pause
         resumePlaybackAfterCameraInteraction();
     }
+}
+
+void MainWindow::onToolTipToggled(bool checked)
+{
+    QSettings settings;
+    settings.setValue("tooltip/enabled", checked);
+
+    if (ui->sceneWidget)
+    {
+        ui->sceneWidget->setToolTipEnabled(checked);
+    }
+}
+
+void MainWindow::syncToolTipCheckbox()
+{
+    // Synchronize the checkbox state with the actual tooltip enabled state
+    QSignalBlocker blocker(ui->actionShowToolTip);
+    ui->actionShowToolTip->setChecked(ui->sceneWidget->getToolTipEnabled());
 }
 
 void MainWindow::playingRequested(PlayingDirection direction)
@@ -1543,6 +1574,11 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
             // Reload with the new Header.txt
             ui->sceneWidget->loadNewConfiguration(configFileName.toStdString(), 0);
 
+            // Apply tooltip setting from QSettings
+            const QSettings settings;
+            const bool showToolTip = settings.value("tooltip/enabled", true).toBool();
+            ui->sceneWidget->setToolTipEnabled(showToolTip);
+
             // Update substate dock widget for the new simulation data
             updateSubstateDockeWidget();
         }
@@ -1564,6 +1600,9 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
 
         // Synchronize cell rendering checkbox with current setting
         syncCellRenderingCheckbox();
+
+        // Synchronize tooltip checkbox with current setting
+        syncToolTipCheckbox();
 
         // Update UI with the simulation directory that owns this Header.txt
         showInputDirectoryOnBarLabel(configFileName);
@@ -1954,6 +1993,9 @@ void MainWindow::on2DModeRequested()
     // Synchronize flat scene background checkbox (disabled in 2D mode)
     syncFlatSceneBackgroundCheckbox();
 
+    // Synchronize tooltip checkbox
+    syncToolTipCheckbox();
+
     std::cout << "[DEBUG] View Mode Changed: Switched to 2D mode.\nCamera is now in top-down view with rotation disabled." << std::endl;
 }
 
@@ -1986,6 +2028,9 @@ void MainWindow::on3DModeRequested()
 
     // Synchronize flat scene background checkbox (enabled in 3D mode)
     syncFlatSceneBackgroundCheckbox();
+
+    // Synchronize tooltip checkbox
+    syncToolTipCheckbox();
 
     std::cout << "[DEBUG] View Mode Changed: Switched to 3D mode.\nYou can now rotate the camera using mouse or the sliders below." << std::endl;
 }
@@ -2123,6 +2168,7 @@ void MainWindow::onCrossSectionControlsToggled(bool checked)
         }
         updateCameraControlsVisibility();
         syncFlatSceneBackgroundCheckbox();
+        syncToolTipCheckbox();
         return;
     }
 
@@ -2210,6 +2256,7 @@ void MainWindow::onSliceViewChanged(int viewIndex)
     ui->action3DMode->setChecked(false);
     updateCameraControlsVisibility();
     syncFlatSceneBackgroundCheckbox();
+    syncToolTipCheckbox();
 }
 
 void MainWindow::onSliceChanged(int fixedIndex)

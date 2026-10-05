@@ -127,6 +127,16 @@ public:
         return lineDetectionEnabled;
     }
 
+    /// @brief Enable or disable tooltip display
+    /// @param enabled If true, enables tooltip; if false, disables it
+    void setToolTipEnabled(bool enabled);
+
+    /// @brief Get the current tooltip enabled state
+    bool getToolTipEnabled() const
+    {
+        return toolTipEnabled;
+    }
+
     /// @brief Show or hide flat scene background in 3D mode
     /// @param visible If true, shows flat background; if false, hides it
     void setFlatSceneBackgroundVisible(bool visible);
@@ -606,6 +616,9 @@ protected:
 
     /// @brief Line detection in tooltip visibility state
     bool lineDetectionEnabled = true;
+
+    /// @brief Tooltip visibility state
+    bool toolTipEnabled = true;
 
     /// @brief Flat scene background visibility state (shown in 3D mode)
     bool flatSceneBackgroundVisible = true;
