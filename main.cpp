@@ -26,6 +26,7 @@
 #include <QFileInfo>
 #include <QStyleFactory>
 #include <QSurfaceFormat>
+#include <clocale>
 #include <filesystem>
 #include <iostream>
 #include <optional>
@@ -108,6 +109,11 @@ int main(int argc, char* argv[])
     QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
 
     QApplication a(argc, argv);
+
+    // On Unix Qt calls setlocale(LC_ALL, ""), so e.g. a Polish system would make the printf/strtod calls inside
+    // the model (Cell) classes print and parse "1008,5" instead of "1008.5". The application is in English, so
+    // keep numbers in the C format. Qt widgets format numbers through QLocale and are not affected.
+    std::setlocale(LC_NUMERIC, "C");
     QApplication::setStyle(QStyleFactory::create("Fusion"));
     QApplication::setApplicationName("OOpenCal-Visualiser");
 

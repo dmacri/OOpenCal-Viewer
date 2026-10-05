@@ -495,10 +495,20 @@ protected:
      * @return True if coordinates are within valid grid bounds, false otherwise */
     bool convertWorldToGridCoordinates(const double worldPos[3], int& outRow, int& outCol) const;
 
-    /** @brief Returns bounds of the rendered data grid actor, excluding ruler axes and helper props.
+    /** @brief Returns the world extent of the data grid, excluding ruler axes and helper props.
+     *
+     *  For flat views this is the bounding box of the grid actor. When a substate is shown as
+     *  3D height (see isHeightSurfaceDisplayed()) the X/Y extent is the logical extent of the
+     *  whole grid instead, because the surface mesh only covers cells whose height is inside
+     *  (Min, Max] and its bounding box is therefore smaller than the grid (issue #139).
+     *  The Z range is always taken from the actor.
      *  @param bounds Output VTK bounds array: xmin, xmax, ymin, ymax, zmin, zmax
      *  @return True if bounds are available and finite. */
     bool currentGridBounds(double bounds[6]) const;
+
+    /** @brief True when one or more substates are currently drawn as a 3D height surface
+     *         (2D model + "Use as 3D altitude", not in the cross-section view). */
+    bool isHeightSurfaceDisplayed() const;
 
     /** @brief Converts VTK world coordinates to display/pixel coordinates shown to users.
      *

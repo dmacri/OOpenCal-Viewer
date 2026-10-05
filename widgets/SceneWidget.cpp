@@ -2,6 +2,7 @@
  * @brief Implementation of the SceneWidget class for 3D visualization. */
 
 #include <iostream> // std::cout
+#include <clocale>
 #include <algorithm>
 #include <cmath> // std::isfinite
 #include <filesystem>
@@ -37,6 +38,8 @@
 #include "visualiser/Visualizer.hpp"
 #include "visualiser/SettingParameter.h"
 #include "widgets/ColorSettings.h"
+#include "widgets/GridWorldMapping.h"
+#include "widgets/NumberFormatting.h"
 #include "widgets/SubstatesDockWidget.h"
 #include "widgets/CustomInteractorStyle.h"
 #include "data/PerformanceMetrics.h"
@@ -1598,7 +1601,12 @@ QString SceneWidget::cellValueAtThisPositionAsText() const
     std::string cellValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col);
     if (! cellValue.empty())
     {
-        tooltipText += QString("\nCell Value: %1").arg(QString::fromStdString(cellValue));
+        // "[1008.000000,0.000000]" -> "[1008, 0]". A list cannot be split reliably when the decimal
+        // separator is ',' (it is also the list separator), so only do it for '.'.
+        const bool decimalPointIsDot = *std::localeconv()->decimal_point == '.';
+        const std::string shownCellValue = decimalPointIsDot ? NumberFormatting::withoutZeroFractionsInList(cellValue)
+                                                              : cellValue;
+        tooltipText += QString("\nCell Value: %1").arg(QString::fromStdString(shownCellValue));
     }
 
     // Get individual substate values if available
@@ -1611,7 +1619,9 @@ QString SceneWidget::cellValueAtThisPositionAsText() const
             std::string fieldValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col, field.c_str());
             if (!fieldValue.empty())
             {
-                tooltipText += QString("\n\t%1: %2").arg(QString::fromStdString(field)).arg(QString::fromStdString(fieldValue));
+                // The model prints e.g. "1008.000000"; show "1008" when there is nothing after the separator
+                const std::string shownValue = NumberFormatting::withoutZeroFraction(fieldValue);
+                tooltipText += QString("\n\t%1: %2").arg(QString::fromStdString(field)).arg(QString::fromStdString(shownValue));
             }
         }
     }
@@ -2224,25 +2234,19 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
     if (columnCount <= 0 || rowCount <= 0)
         return false;
 
-    const double cellWidth = sceneWidth / columnCount;
-    const double cellHeight = sceneHeight / rowCount;
+    // 3D height surface: a mesh over the cell vertices (x = col, y = nRows - 1 - row), so the cell
+    // under the cursor is the one with the nearest vertex. Independent of the (cropped) mesh bounds.
+    if (isHeightSurfaceDisplayed())
+    {
+        return GridWorldMapping::worldToNearestVertexCell(worldPos[0], worldPos[1],
+                                                          rowCount, columnCount, outRow, outCol);
+    }
 
-    // Convert world position to grid indices
-    // Points are positioned with Y inverted: (nRows - 1 - row)
-    // So we need to invert the row calculation to get the correct matrix index
-    int col = static_cast<int>((worldPos[0] - bounds[0]) / cellWidth);
-    int row = static_cast<int>((worldPos[1] - bounds[2]) / cellHeight);
-    
-    // Invert row to match the inverted Y coordinates used in visualization
-    row = rowCount - 1 - row;
-
-    // Clamp to valid range
-    col = std::max(0, std::min(col, columnCount - 1));
-    row = std::max(0, std::min(row, rowCount - 1));
-
-    outRow = row;
-    outCol = col;
-    return true;
+    // Flat view: points are positioned with Y inverted: (nRows - 1 - row), so the row index has
+    // to be inverted back.
+    const GridWorldMapping::Bounds2D gridExtent{bounds[0], bounds[1], bounds[2], bounds[3]};
+    return GridWorldMapping::worldToGridCell(worldPos[0], worldPos[1], gridExtent,
+                                             rowCount, columnCount, outRow, outCol);
 }
 
 bool SceneWidget::currentGridBounds(double bounds[6]) const
@@ -2252,9 +2256,34 @@ bool SceneWidget::currentGridBounds(double bounds[6]) const
 
     gridActor->GetBounds(bounds);
 
+    if (isHeightSurfaceDisplayed())
+    {
+        // The 3D surface contains quads only where the height substate lies in (Min, Max], so
+        // the actor's bounding box covers just a part of the grid (e.g. SciddicaT "z" with
+        // Min=490 leaves out the whole lowland). Using it to map the mouse position to a cell
+        // made the tooltip read cells far away from the cursor (issue #139), so for X/Y use the
+        // logical extent of the whole grid. Vertices of the surface lie exactly on it.
+        const auto extent = GridWorldMapping::pointGridBounds(settingParameter->numberOfRowsY,
+                                                              settingParameter->numberOfColumnX);
+        bounds[0] = extent.xMin;
+        bounds[1] = extent.xMax;
+        bounds[2] = extent.yMin;
+        bounds[3] = extent.yMax;
+    }
+
     return std::isfinite(bounds[0]) && std::isfinite(bounds[1]) &&
            std::isfinite(bounds[2]) && std::isfinite(bounds[3]) &&
            bounds[0] < bounds[1] && bounds[2] < bounds[3];
+}
+
+bool SceneWidget::isHeightSurfaceDisplayed() const
+{
+    // Mirrors the condition used in drawVisualizationWithOptional3DSubstate() to draw the
+    // height surface; cross-section (substateSliceEnabled) draws a profile instead.
+    return settingParameter &&
+           !substateSliceEnabled &&
+           !isNative3DModel() &&
+           !get3DSubstateInfosTopToBottom().empty();
 }
 
 bool SceneWidget::convertWorldToDisplayCoordinates(const double worldPos[3], int& outX, int& outY, int& outZ) const
