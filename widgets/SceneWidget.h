@@ -331,6 +331,16 @@ signals:
      * @param yaw Rotation around Z in degrees */
     void cameraOrientationChanged(double roll, double pitch, double yaw);
 
+    /** @brief Emitted when the user starts moving the camera with the mouse (3D mode only).
+     *
+     * Emitted once when the first mouse button of a rotate/pan/dolly gesture is pressed. */
+    void cameraInteractionStarted();
+
+    /** @brief Emitted when the user finishes moving the camera with the mouse (3D mode only).
+     *
+     * Emitted once when the last mouse button of the gesture is released. */
+    void cameraInteractionFinished();
+
 public slots:
     /** @brief Slot called when color settings need to be reloaded (at least one of them was changed)
      *

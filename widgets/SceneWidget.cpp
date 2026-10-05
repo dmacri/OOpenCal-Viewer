@@ -2348,6 +2348,13 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
     // Cost: ~5% overhead due to ray-plane calculations
     vtkNew<CustomInteractorStyle> style;
     style->Set3DInteractionEnabled(currentViewMode == ViewMode::Mode3D);
+    style->SetInteractionStateCallback([this](bool started)
+    {
+        if (started)
+            emit cameraInteractionStarted();
+        else
+            emit cameraInteractionFinished();
+    });
     interactor()->SetInteractorStyle(style);
     connectCameraCallback();
 }

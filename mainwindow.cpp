@@ -611,6 +611,7 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , playbackTimer{ this }
+    , cameraResumeTimer{ this }
     , currentStep{ FIRST_STEP_NUMBER }
 {
     ui->setupUi(this);
@@ -658,6 +659,11 @@ void MainWindow::setupConnections()
     connect(ui->sceneWidget, &SceneWidget::availableStepsReadFromConfigFile, this, &MainWindow::availableStepsLoadedFromConfigFile);
 
     connect(&playbackTimer, &QTimer::timeout, this, &MainWindow::onPlaybackTimerTick);
+
+    // Pausing playback while the camera is moved (keeps rotation smooth during playback)
+    cameraResumeTimer.setSingleShot(true);
+    cameraResumeTimer.setInterval(CAMERA_RESUME_DELAY_MS);
+    connect(&cameraResumeTimer, &QTimer::timeout, this, &MainWindow::resumePlaybackAfterCameraInteraction);
 }
 
 void MainWindow::connectMenuActions()
@@ -673,6 +679,14 @@ void MainWindow::connectMenuActions()
     connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
     connect(ui->actionPerformance_settings, &QAction::triggered, this, &MainWindow::onPerformanceSettingsRequested);
     connect(ui->actionCellRendering, &QAction::triggered, this, &MainWindow::onCellRenderingToggled);
+
+    {
+        // Restore persisted state (enabled by default) before connecting, to avoid a needless save
+        const QSettings settings;
+        const bool pauseOnRotation = settings.value("playback/pauseWhenRotating", true).toBool();
+        ui->actionPausePlaybackOnRotation->setChecked(pauseOnRotation);
+    }
+    connect(ui->actionPausePlaybackOnRotation, &QAction::toggled, this, &MainWindow::onPausePlaybackOnRotationToggled);
     connect(ui->actionShow_reduction, &QAction::triggered, this, &MainWindow::onShowReductionRequested);
 
     // View mode actions
@@ -811,6 +825,15 @@ void MainWindow::connectSliders()
     connect(ui->yawSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), ui->yawSlider, &QSlider::setValue);
     connect(ui->yawSlider, &QSlider::valueChanged, ui->yawSpinBox, &QSpinBox::setValue);
 
+    // Playback is paused while a camera slider is dragged (see "Pause playing when rotating camera")
+    connectCameraSliderInteraction(ui->rollSlider);
+    connectCameraSliderInteraction(ui->pitchSlider);
+    connectCameraSliderInteraction(ui->yawSlider);
+
+    // Playback is paused while the camera is rotated/panned with the mouse
+    connect(ui->sceneWidget, &SceneWidget::cameraInteractionStarted, this, &MainWindow::onCameraInteractionStarted);
+    connect(ui->sceneWidget, &SceneWidget::cameraInteractionFinished, this, &MainWindow::onCameraInteractionFinished);
+
     // Reset camera button
     connect(ui->resetCameraButton, &QPushButton::clicked, this, &MainWindow::onResetCameraRequested);
 
@@ -909,7 +932,7 @@ void MainWindow::recordVideoToFile(const QString& outputFilePath, int fps)
     // Save current state
     const auto originalStep = currentStep;
     const bool wasPlaying = playbackTimer.isActive();
-    playbackTimer.stop();
+    stopPlayback();
 
     // Create progress dialog
     QProgressDialog progress(tr("Exporting video..."), tr("Cancel"), 1, static_cast<int>(totalSteps()), this);
@@ -961,12 +984,85 @@ void MainWindow::recordVideoToFile(const QString& outputFilePath, int fps)
 
     progress.setValue(static_cast<int>(totalSteps()));
 }
+
+void MainWindow::stopPlayback()
+{
+    playbackPausedForCamera = false;
+    cameraResumeTimer.stop();
+    playbackTimer.stop();
+}
+
+void MainWindow::pausePlaybackForCameraInteraction()
+{
+    // Keep the debounce timer from resuming playback in the middle of a longer interaction
+    cameraResumeTimer.stop();
+
+    if (! ui->actionPausePlaybackOnRotation->isChecked() || ! playbackTimer.isActive())
+        return;
+
+    playbackTimer.stop(); // not stopPlayback(): we want to resume later
+    playbackPausedForCamera = true;
+}
+
+void MainWindow::resumePlaybackAfterCameraInteraction()
+{
+    cameraResumeTimer.stop();
+
+    if (! playbackPausedForCamera)
+        return;
+
+    playbackPausedForCamera = false;
+    playbackTimer.start(ui->sleepSpinBox->value());
+}
+
+void MainWindow::onCameraControlChanged(const QSlider* slider)
+{
+    pausePlaybackForCameraInteraction();
+
+    // A dragged slider reports its release; other changes (keyboard, spin box, mouse wheel)
+    // have no "end" event, so resume shortly after the last one.
+    if (playbackPausedForCamera && (slider == nullptr || ! slider->isSliderDown()))
+        cameraResumeTimer.start();
+}
+
+void MainWindow::connectCameraSliderInteraction(QSlider* slider)
+{
+    connect(slider, &QSlider::sliderPressed, this, &MainWindow::pausePlaybackForCameraInteraction);
+    connect(slider, &QSlider::sliderReleased, this, &MainWindow::resumePlaybackAfterCameraInteraction);
+}
+
+void MainWindow::onCameraInteractionStarted()
+{
+    pausePlaybackForCameraInteraction();
+}
+
+void MainWindow::onCameraInteractionFinished()
+{
+    resumePlaybackAfterCameraInteraction();
+}
+
+void MainWindow::onPausePlaybackOnRotationToggled(bool checked)
+{
+    QSettings settings;
+    settings.setValue("playback/pauseWhenRotating", checked);
+
+    if (! checked)
+    {
+        // Don't leave playback paused if the option is switched off in the middle of a pause
+        resumePlaybackAfterCameraInteraction();
+    }
+}
+
 void MainWindow::playingRequested(PlayingDirection direction)
 {
+    // Explicit user request overrides any pending automatic resume
+    playbackPausedForCamera = false;
+    cameraResumeTimer.stop();
+
     if (playbackTimer.isActive() && playbackDirection == direction)
     {
         // Already playing in this direction, stop it
-        playbackTimer.stop();
+        stopPlayback();
         return;
     }
 
@@ -995,7 +1091,7 @@ void MainWindow::onPlaybackTimerTick()
     if ((playbackDirection == PlayingDirection::Forward && clampedStep >= totalSteps())
         || (playbackDirection == PlayingDirection::Backward && clampedStep <= FIRST_STEP_NUMBER))
     {
-        playbackTimer.stop();
+        stopPlayback();
         
         // Exit application if autoPlay + exitAfterLastStep was requested
         if (shouldExitAfterPlayback)
@@ -1015,7 +1111,7 @@ void MainWindow::onPlaybackTimerTick()
         if ((playbackDirection == PlayingDirection::Forward && currentStep >= lastAvailableStep)
             || (playbackDirection == PlayingDirection::Backward && currentStep <= firstAvailableStep))
         {
-            playbackTimer.stop();
+            stopPlayback();
             
             // Exit application if autoPlay + exitAfterLastStep was requested
             if (shouldExitAfterPlayback)
@@ -1033,7 +1129,7 @@ void MainWindow::onPlaybackTimerTick()
         if (! handleMissingStepDuringPlayback(clampedStep, playbackDirection))
         {
             // No more available steps in this direction
-            playbackTimer.stop();
+            stopPlayback();
             
             // Exit application if autoPlay + exitAfterLastStep was requested
             if (shouldExitAfterPlayback)
@@ -1054,7 +1150,7 @@ void MainWindow::onPlaybackTimerTick()
         QSignalBlocker blockSlider(ui->updatePositionSlider);
         if (bool changingPositionSuccess = setPositionOnWidgets(currentStep); ! changingPositionSuccess)
         {
-            playbackTimer.stop();
+            stopPlayback();
             return;
         }
     }
@@ -1127,7 +1223,7 @@ void MainWindow::onPlayButtonClicked()
 {
     if (playbackTimer.isActive())
     {
-        playbackTimer.stop();
+        stopPlayback();
     }
     else
     {
@@ -1137,7 +1233,7 @@ void MainWindow::onPlayButtonClicked()
 
 void MainWindow::onStopButtonClicked()
 {
-    playbackTimer.stop();
+    stopPlayback();
     ui->playButton->setIcon(QCommonStyle().standardIcon(QStyle::SP_MediaPlay));
 }
 
@@ -1433,7 +1529,7 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         }
 
         // Stop any ongoing playback
-        playbackTimer.stop();
+        stopPlayback();
 
         // Clear active substates when opening a new simulation directory
         clearActiveSubstates();
@@ -2163,16 +2259,19 @@ void MainWindow::syncCameraSliders()
 
 void MainWindow::onRollChanged(int value)
 {
+    onCameraControlChanged(ui->rollSlider);
     ui->sceneWidget->setCameraRoll(value);
 }
 
 void MainWindow::onPitchChanged(int value)
 {
+    onCameraControlChanged(ui->pitchSlider);
     ui->sceneWidget->setCameraPitch(value);
 }
 
 void MainWindow::onYawChanged(int value)
 {
+    onCameraControlChanged(ui->yawSlider);
     ui->sceneWidget->setCameraYaw(value);
 }
 

@@ -15,6 +15,7 @@ class MainWindow;
 }
 
 class QPushButton;
+class QSlider;
 class QActionGroup;
 class ReductionManager;
 class Config;
@@ -82,6 +83,7 @@ private slots: // menu actions
     void onPerformanceSettingsRequested();
     void onCellRenderingToggled(bool checked);
     void syncCellRenderingCheckbox();
+    void onPausePlaybackOnRotationToggled(bool checked);
 
     // Help submenu:
     void showAboutThisApplicationDialog();
@@ -94,6 +96,8 @@ private slots: // menu actions
     void onYawChanged(int value);
     void onResetCameraRequested();
     void onCameraOrientationChanged(double roll, double pitch, double yaw);
+    void onCameraInteractionStarted();
+    void onCameraInteractionFinished();
     void syncCameraSliders();
     void onCrossSectionControlsToggled(bool checked);
     void onSliceViewChanged(int viewIndex);
@@ -127,6 +131,23 @@ private:
     };
 
     void playingRequested(PlayingDirection direction);
+
+    /// @brief Stop playback for good (user request, end of data, ...). Cancels any pending auto-resume.
+    void stopPlayback();
+
+    /// @brief Temporarily pause playback while the camera is being moved (if enabled in Settings).
+    /// Playback is resumed by resumePlaybackAfterCameraInteraction().
+    void pausePlaybackForCameraInteraction();
+
+    /// @brief Resume playback paused by pausePlaybackForCameraInteraction() (no-op otherwise).
+    void resumePlaybackAfterCameraInteraction();
+
+    /// @brief Called when a camera slider/spin box value changes; pauses playback during the change.
+    /// @param slider The camera slider related to the change. If it is being dragged, playback is
+    ///        resumed on release; otherwise (keyboard, spin box, wheel) after a short delay.
+    void onCameraControlChanged(const QSlider* slider);
+
+    void connectCameraSliderInteraction(QSlider* slider);
 
     void configureUIElements(const QString &configFileName);
     void setupConnections();
@@ -202,6 +223,13 @@ private:
     static constexpr int MAX_RECENT_DIRECTORIES = 10;
     Ui::MainWindow *ui;
     QTimer playbackTimer;
+
+    /// @brief Single-shot timer resuming playback shortly after the last camera slider/spin box change
+    QTimer cameraResumeTimer;
+
+    /// @brief true if playback was running and got paused only because the camera is being moved
+    bool playbackPausedForCamera = false;
+    static constexpr int CAMERA_RESUME_DELAY_MS = 300;
     QActionGroup *modelActionGroup = nullptr;
     std::unique_ptr<ReductionManager> reductionManager;
 

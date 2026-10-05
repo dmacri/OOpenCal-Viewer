@@ -808,6 +808,7 @@
     <addaction name="actionPerformance_settings"/>
     <addaction name="separator"/>
     <addaction name="actionCellRendering"/>
+    <addaction name="actionPausePlaybackOnRotation"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuModel"/>
@@ -1052,6 +1053,20 @@
    </property>
    <property name="toolTip">
     <string>Use cell-based rendering for better quality (slower for large grids). Uncheck for faster point-based rendering.</string>
+   </property>
+  </action>
+  <action name="actionPausePlaybackOnRotation">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Pause playing when rotating camera</string>
+   </property>
+   <property name="toolTip">
+    <string>Pause the step-by-step playback while the camera is being rotated (mouse or sliders) and resume it afterwards. Uncheck to keep playing during rotation (may be choppy).</string>
    </property>
   </action>
  </widget>
