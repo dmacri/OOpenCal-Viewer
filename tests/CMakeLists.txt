@@ -134,3 +134,20 @@ target_include_directories(NumberFormattingTests PRIVATE
 )
 
 add_test(NAME NumberFormattingTests COMMAND NumberFormattingTests)
+
+# ============================================
+# Add test executable for RulerLabelFit (header-only, no Qt/VTK)
+# ============================================
+add_executable(RulerLabelFitTests
+    RulerLabelFitTests.cpp
+)
+
+target_link_libraries(RulerLabelFitTests
+    GTest::gtest_main
+)
+
+target_include_directories(RulerLabelFitTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME RulerLabelFitTests COMMAND RulerLabelFitTests)

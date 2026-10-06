@@ -1014,6 +1014,10 @@ void SceneWidget::setup2DRulerAxes()
     // Adjust title position to move "Y" label to the right of the axis
     rulerAxisY->SetTitlePosition(1.2); // Move title further from axis (default is ~0.5)
 
+    // The tick labels shrink and thin out instead of overlapping when the scene is zoomed out;
+    // both axes share one label size so the numbers on X and Y look alike (issue #133).
+    rulerAxisX->LinkLabelSizeWith(rulerAxisY);
+
     // Add to renderer but keep hidden initially
     renderer->AddViewProp(rulerAxisX);
     renderer->AddViewProp(rulerAxisY);

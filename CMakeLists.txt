@@ -182,6 +182,7 @@ list(APPEND Sources
     widgets/SubstateDisplayWidget.cpp
     widgets/SubstatesDockWidget.cpp
     widgets/CustomInteractorStyle.cpp
+    widgets/RulerAxisActor2D.cpp
     widgets/CustomDirectoryDialog.cpp
     widgets/PerformanceSettingsDialog.cpp
     plugins/PluginLoader.cpp
