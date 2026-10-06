@@ -73,8 +73,29 @@ VISUALIZATION:
 
 ### VISUALIZATION Section
 - **substates**: Comma-separated list of substates to visualize
-- **mode**: Output format - `binary` or `text`
+- **mode**: Output format - `text`, `binary` or `compressed` (see [Output formats](#output-formats))
 - **reduction**: Comma-separated list of reduction operations
+
+## Output formats
+
+Every node of the simulation writes its own data file plus an index file `<output_file_name><node>_index.txt`
+(`step offset (columns-rows)`), which lets the Viewer seek straight to a step.
+
+| `mode`       | Data file                         | Content                                                        |
+| ------------ | --------------------------------- | -------------------------------------------------------------- |
+| `text`       | `<output_file_name><node>.txt`    | Readable cell values, one text line per row                    |
+| `binary`     | `<output_file_name><node>.bin`    | Raw `sizeof(Cell)` structs, row by row                         |
+| `compressed` | `<output_file_name><node>.blosc`  | The same bytes as `binary`, compressed per step with C-Blosc2  |
+
+In `compressed` mode every step is stored as `[16-byte header][Blosc2 chunk]`, and the index offset points at the
+header. The header holds two native-endian `uint64` values: the size before and after compression. After
+decompression the step is read exactly like a step of a `.bin` file, so the cell class of the loaded plugin must
+have the same size as the cell class the simulation was run with. Otherwise the Viewer reports the two sizes.
+
+Reading `compressed` data needs C-Blosc2. It is fetched and built automatically together with the Viewer
+(CMake option `VIEWER_WITH_BLOSC2`, default `ON`). Plugins built on the fly do not need it, because the
+decompression is part of the Viewer executable. A Viewer built with `-DVIEWER_WITH_BLOSC2=OFF` stops with an
+explanatory message when it meets `mode=compressed` data.
 
 ## Error Handling and Robustness
 

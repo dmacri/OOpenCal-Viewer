@@ -36,6 +36,7 @@ add_executable(ModelReaderTests
 # Link against GTest
 target_link_libraries(ModelReaderTests
     GTest::gtest_main
+    viewer_blosc2  # ModelReader.cpp contains the decompression of mode=compressed
 )
 
 # Include directories for the project

@@ -84,6 +84,8 @@ QString readFileModeFromConfig(Config& config)
                 return "b";
             else if (mode == "text")
                 return "t";
+            else if (mode == "compressed")
+                return "c";
             else
                 return mode.left(1); // Take first letter as fallback
         }
@@ -293,6 +295,7 @@ QVariant CustomDirectoryDialog::CustomFileSystemModel::headerData(int section, Q
                       "Processing mode<br/>"
                       "<b>b</b> - binary mode<br/>"
                       "<b>t</b> - text mode<br/>"
+                      "<b>c</b> - compressed mode<br/>"
                       "Extracted from Header.txt file<br/>"
                       "Only shown for directories with Header.txt</html>");
         }

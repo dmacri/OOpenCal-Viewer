@@ -10,14 +10,18 @@
 #include <algorithm> // std::ranges::sort
 #include <climits>   // INT_MAX
 #include <cmath>     // log10
+#include <cstddef>   // std::size_t
+#include <cstdint>   // std::uint64_t
 #include <cstring>   // std::memcpy
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <istream>
 #include <ranges>
 #include <regex>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -26,6 +30,14 @@
 #include "visualiser/SettingParameter.h"
 #include "plugins/CellConcept.hpp"
 #include "data/PerformanceMetrics.h"
+
+/** @brief How the data of one step is stored on disk (value of `mode` in Header.txt). */
+enum class ReadMode
+{
+    Text,      ///< `<name><node>.txt`: one text line per row of cells
+    Binary,    ///< `<name><node>.bin`: raw `sizeof(Cell)` structs, row by row
+    Compressed ///< `<name><node>.blosc`: the same bytes as Binary, compressed per step with C-Blosc2
+};
 
 /** @class ModelReader
  * @brief Template class for reading and processing model data from files.
@@ -146,26 +158,64 @@ private:
                                                                                const std::string& fileName,
                                                                                NodeIndex node,
                                                                                ColumnRowSlice& dimensions,
-                                                                               bool isBinary = false);
+                                                                               ReadMode mode = ReadMode::Text);
 
-    [[nodiscard]] ColumnRowSlice readDimensionsForStepFromFile(StepIndex step, const std::string& fileName, NodeIndex node, bool isBinary = false);
+    [[nodiscard]] ColumnRowSlice readDimensionsForStepFromFile(StepIndex step, const std::string& fileName, NodeIndex node, ReadMode mode = ReadMode::Text);
 
     std::vector<ColumnRowSlice> localDimensionsForAllNodes(StepIndex step,
                                                            NodeIndex nNodeX,
                                                            NodeIndex nNodeY,
                                                            NodeIndex nNodeZ,
                                                            const std::string& fileName,
-                                                           bool isBinary = false);
+                                                           ReadMode mode = ReadMode::Text);
 };
 
 /////////////////////////////
 namespace ReaderHelpers /// functions which are not templates
 {
-[[nodiscard]] inline std::string giveMeFileName(const std::string& fileName, NodeIndex node, bool isBinary = false)
+/** @brief Converts the `mode` value from Header.txt. Unknown values are read as text, as before. */
+[[nodiscard]] inline ReadMode parseReadMode(std::string_view mode)
 {
-    const auto extention = isBinary ? "bin" : "txt";
+    if (mode == "binary")
+        return ReadMode::Binary;
+    if (mode == "compressed")
+        return ReadMode::Compressed;
+    return ReadMode::Text;
+}
+
+[[nodiscard]] inline std::string giveMeFileName(const std::string& fileName, NodeIndex node, ReadMode mode = ReadMode::Text)
+{
+    const char* extention = "txt";
+    if (mode == ReadMode::Binary)
+        extention = "bin";
+    else if (mode == ReadMode::Compressed)
+        extention = "blosc";
     return std::format("{}{}.{}", fileName, node, extention);
 }
+
+[[nodiscard]] inline std::string giveMeFileName(const std::string& fileName, NodeIndex node, bool isBinary)
+{
+    return giveMeFileName(fileName, node, isBinary ? ReadMode::Binary : ReadMode::Text);
+}
+
+/** @brief Header in front of every step in a `.blosc` file (native byte order, written by OOpenCAL). */
+struct CompressedStepHeader
+{
+    std::uint64_t originalSize;   ///< bytes after decompression
+    std::uint64_t compressedSize; ///< bytes of the Blosc2 chunk that follows the header
+};
+static_assert(sizeof(CompressedStepHeader) == 16, "must match StepHeader in OOpenCAL (base/lib/BloscStepCodec.h)");
+
+/** @brief Reads one step stored as `[CompressedStepHeader][Blosc2 chunk]` and returns the decompressed bytes.
+ *
+ * The result has the same layout as one step of a `.bin` file: `width * height * slices` raw cells.
+ * Defined in ModelReader.cpp (not here), so that plugins built on the fly resolve it from the Viewer
+ * executable and do not need the Blosc2 headers or library.
+ *
+ * @param in            stream positioned at the beginning of the CompressedStepHeader
+ * @param expectedBytes size the step must have after decompression (cells * sizeof(Cell))
+ * @throws std::runtime_error when the data is truncated, corrupted or has an unexpected size */
+std::vector<char> readCompressedStep(std::istream& in, std::size_t expectedBytes);
 
 [[nodiscard]] inline std::string giveMeFileNameIndex(const std::string& fileName, NodeIndex node)
 {
@@ -187,10 +237,10 @@ ColumnRowSlice calculateXYZOffsetForNode(NodeIndex node,
 /////////////////////////////
 
 template<CellLike Cell>
-ColumnRowSlice ModelReader<Cell>::readDimensionsForStepFromFile(StepIndex step, const std::string& fileName, NodeIndex node, bool isBinary)
+ColumnRowSlice ModelReader<Cell>::readDimensionsForStepFromFile(StepIndex step, const std::string& fileName, NodeIndex node, ReadMode mode)
 {
     ColumnRowSlice dimensions;
-    std::ifstream file [[maybe_unused]] = readColumnAndRowForStepFromFileReturningStream(step, fileName, node, dimensions, isBinary);
+    std::ifstream file [[maybe_unused]] = readColumnAndRowForStepFromFileReturningStream(step, fileName, node, dimensions, mode);
     return dimensions;
 }
 
@@ -199,11 +249,11 @@ std::ifstream ModelReader<Cell>::readColumnAndRowForStepFromFileReturningStream(
                                                                                 const std::string& fileName,
                                                                                 NodeIndex node,
                                                                                 ColumnRowSlice& dimensions,
-                                                                                bool isBinary)
+                                                                                ReadMode mode)
 {
-    const auto fileNameTmp = ReaderHelpers::giveMeFileName(fileName, node, isBinary);
+    const auto fileNameTmp = ReaderHelpers::giveMeFileName(fileName, node, mode);
 
-    std::ifstream file(fileNameTmp, isBinary ? std::ios::binary : std::ios::in);
+    std::ifstream file(fileNameTmp, mode == ReadMode::Text ? std::ios::in : std::ios::binary);
     if (! file.is_open())
     {
         throw std::runtime_error(std::format("Can't read '{}' in {} function", fileNameTmp, __func__));
@@ -216,9 +266,9 @@ std::ifstream ModelReader<Cell>::readColumnAndRowForStepFromFileReturningStream(
         throw std::runtime_error(std::format("Seek failed in '{}' at position {}", fileNameTmp, fPos));
     }
 
-    if (isBinary)
+    if (mode != ReadMode::Text)
     {
-        // For binary mode, read dimensions from sceneSize in StepOffsetInfo
+        // For binary and compressed modes, read dimensions from sceneSize in StepOffsetInfo
         if (node >= nodeStepOffsets.size())
             throw std::runtime_error(std::format("Invalid node index {} in binary mode", node));
 
@@ -229,7 +279,7 @@ std::ifstream ModelReader<Cell>::readColumnAndRowForStepFromFileReturningStream(
         }
         else
         {
-            throw std::runtime_error(std::format("Binary mode requires sceneSize in step offset info for step {} node {}", step, node));
+            throw std::runtime_error(std::format("Binary and compressed modes require sceneSize in step offset info for step {} node {}", step, node));
         }
     }
     else
@@ -260,13 +310,13 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
     perfSession.setCategory(PerformanceMetrics::MetricsCategory::DataLoading);
 
     const auto totalNodes = sp->nNodeX * sp->nNodeY * sp->nNodeZ;
-    const bool isBinary = (sp->readMode == "binary");
+    const ReadMode mode = ReaderHelpers::parseReadMode(sp->readMode);
     const auto localDimensions = localDimensionsForAllNodes(sp->step,
                                                             sp->nNodeX,
                                                             sp->nNodeY,
                                                             sp->nNodeZ,
                                                             sp->outputFileName,
-                                                            isBinary);
+                                                            mode);
 
     size_t totalCellsForThisCall = 0;
     for (const auto& dimensions : localDimensions)
@@ -290,7 +340,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
                                                                           sp->outputFileName,
                                                                           node,
                                                                           dimensions,
-                                                                          isBinary);
+                                                                          mode);
         if (! fp)
             throw std::runtime_error("Cannot open file for node " + std::to_string(node));
 
@@ -327,7 +377,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
 
         bool localStartStepDone = false;
 
-        if (isBinary)
+        if (mode != ReadMode::Text)
         {
             const size_t cellCount = static_cast<size_t>(dimensions.column) *
                                      dimensions.row *
@@ -335,12 +385,21 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
             const size_t cellSize = sizeof(Cell);
             const size_t totalBytes = cellCount * cellSize;
 
-            std::vector<char> buffer(totalBytes);
-            fp.read(buffer.data(), totalBytes);
-
-            if (fp.gcount() != static_cast<std::streamsize>(totalBytes))
+            std::vector<char> buffer;
+            if (mode == ReadMode::Compressed)
             {
-                throw std::runtime_error(std::format("Failed to read {} bytes from binary file for node {}", totalBytes, node));
+                // Decompresses to exactly what one step of a `.bin` file contains.
+                buffer = ReaderHelpers::readCompressedStep(fp, totalBytes);
+            }
+            else
+            {
+                buffer.resize(totalBytes);
+                fp.read(buffer.data(), totalBytes);
+
+                if (fp.gcount() != static_cast<std::streamsize>(totalBytes))
+                {
+                    throw std::runtime_error(std::format("Failed to read {} bytes from binary file for node {}", totalBytes, node));
+                }
             }
 
             for (int slice = 0; slice < dimensions.slice; ++slice)
@@ -399,7 +458,7 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
                 {
                     if (! std::getline(fp, line))
                     {
-                        const auto fileNameTmp = ReaderHelpers::giveMeFileName(sp->outputFileName, node, isBinary);
+                        const auto fileNameTmp = ReaderHelpers::giveMeFileName(sp->outputFileName, node, mode);
                         throw std::runtime_error("Error reading entire line from " + fileNameTmp);
                     }
 
@@ -468,14 +527,14 @@ std::vector<ColumnRowSlice> ModelReader<Cell>::localDimensionsForAllNodes(StepIn
                                                                          NodeIndex nNodeY,
                                                                          NodeIndex nNodeZ,
                                                                          const std::string& fileName,
-                                                                         bool isBinary)
+                                                                         ReadMode mode)
 {
     const auto nodesCount = nNodeX * nNodeY * nNodeZ;
     std::vector<ColumnRowSlice> allDimensions(nodesCount);
 
     for (NodeIndex node = 0; node < nodesCount; node++)
     {
-        allDimensions[node] = readDimensionsForStepFromFile(step, fileName, node, isBinary);
+        allDimensions[node] = readDimensionsForStepFromFile(step, fileName, node, mode);
     }
     return allDimensions;
 }
