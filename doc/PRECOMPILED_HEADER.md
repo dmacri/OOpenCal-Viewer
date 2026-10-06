@@ -97,8 +97,20 @@ Checking that the header is up to date costs about 0.05 s.
 To measure it, compare the `Plugin built in ... (with/without precompiled header)` lines printed by `build_plugin.sh`
 (delete `lib*.so` of the model first, otherwise the plugin is not built again; `OOPENCAL_NO_PRECOMPILED_HEADER=1` switches the header off).
 Timing a whole `visualizer.sh <model>` run also includes starting the Viewer, which is several seconds and varies by about 0.5 s from run to run.
-To check that g++ really uses the header, look for `-include .../cmake_pch.hxx` in `<model>/build/CMakeFiles/<Cell>Plugin.dir/flags.make`
-and for warnings `not used because` in the output of the build.
+The line `Plugin built in ... (...)` tells the truth: when the compiler does not use the header it says
+`precompiled header NOT used by the compiler: <reason>` (g++ warns with `[-Winvalid-pch]`), and when clang cannot load it the build is repeated without it.
+
+To check by hand that g++ uses the header, run in `<model>/build`:
+
+```bash
+F=CMakeFiles/<Cell>Plugin.dir/flags.make
+grep CXX_FLAGS $F      # has to contain -include .../cmake_pch.hxx
+eval c++ $(sed -n 's/^CXX_DEFINES = //p' $F) $(sed -n 's/^CXX_INCLUDES = //p' $F) $(sed -n 's/^CXX_FLAGS = //p' $F) -H -fsyntax-only Plugin_FullTemplate.cpp 2>&1 | head -3
+```
+
+The first line of the output starting with `!` means the header is used, `x` that the compiler rejected it (`make 2>&1 | grep -i gch` shows the reason),
+and no such line at all (the list starts with `. .../iostream` and its children) that the build has no `-include`, i.e. no precompiled header.
+Note that the reasons g++ gives do not always contain `not used because` (e.g. `created and used with different settings of -fpic`).
 
 ## Notes for packaging
 

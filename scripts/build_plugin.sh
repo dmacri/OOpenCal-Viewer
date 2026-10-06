@@ -278,7 +278,8 @@ link_required_files() {
 # --------------------------------------------------------------
 # Run CMake and build
 # --------------------------------------------------------------
-run_cmake_build() {
+# Configures and builds the plugin once. The output of make is kept in $MAKE_LOG, so it can be checked afterwards.
+configure_and_build() {
     local cmake_cmd=("cmake" "." "${CMAKE_ARGS[@]}")
     if [[ -n "$EXTRA_INCLUDE_DIR" ]]; then
         cmake_cmd+=("-DEXTRA_INCLUDE_DIR=${EXTRA_INCLUDE_DIR}")
@@ -286,15 +287,36 @@ run_cmake_build() {
     # Always given (empty when there is no precompiled header), so a value cached by an earlier build cannot linger
     cmake_cmd+=("${PCH_CMAKE_ARGS[@]}")
 
+    MAKE_LOG="${BUILD_DIR}/make-output.log"
     info "Running CMake configuration..."
+    (
+        cd "$BUILD_DIR" || exit 1
+        "${cmake_cmd[@]}" || exit 1
+        info "Building plugin..."
+        make -j"$(nproc)" 2>&1 | tee "$MAKE_LOG"
+    )
+}
+
+run_cmake_build() {
     local started
     started="$(now_ms)"
-    (
-        cd "$BUILD_DIR"
-        "${cmake_cmd[@]}"
-        info "Building plugin..."
-        make -j"$(nproc)"
-    )
+
+    if ! configure_and_build; then
+        if [[ "$PCH_STATUS" != "with precompiled header" ]]; then
+            return 1
+        fi
+        # clang reports a precompiled header it cannot use as an error. It is only an optimization: build without it.
+        info "The build with the precompiled header failed, trying again without it..."
+        PCH_CMAKE_ARGS=("-DOOPENCAL_PRECOMPILED_HEADER_DIR=")
+        PCH_STATUS="without precompiled header (the compiler could not use it)"
+        configure_and_build
+    elif [[ "$PCH_STATUS" == "with precompiled header" ]] && grep -q "\[-Winvalid-pch\]" "$MAKE_LOG"; then
+        # g++ only warns and silently reads the headers as usual: say so instead of claiming a speedup
+        local reason
+        reason="$(grep -m1 "\[-Winvalid-pch\]" "$MAKE_LOG" | sed -e 's/^.*gch: //' -e 's/ \[-Winvalid-pch\]//')"
+        PCH_STATUS="precompiled header NOT used by the compiler: ${reason}"
+    fi
+
     info "Plugin built in $(format_duration_ms $(( $(now_ms) - started ))) (${PCH_STATUS})"
 }
 
