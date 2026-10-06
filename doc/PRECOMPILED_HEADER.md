@@ -54,7 +54,7 @@ If the compiler still rejects the file, the compilation is repeated without it (
 | Situation | What to do |
 |-----------|------------|
 | AppImage | Nothing. The release workflow runs `AppDir/AppRun --buildPrecompiledHeader` and `AppRun` exports `OOPENCAL_PRECOMPILED_HEADER_DIR`. |
-| Development build | `cmake --build . --target precompiled-header` (directory: `<build dir>/precompiled-header`, or `-DOOPENCAL_PRECOMPILED_HEADER_DIR=<dir>`) |
+| Development build | `cmake --build . --target precompiled-header` (directory: `<build dir>/precompiled-header`, or `-DOOPENCAL_PRECOMPILED_HEADER_DIR=<dir>`); `scripts/prepare_and_build.sh` (`visualizer.sh --build`) does it after building the Viewer, skipped with `OOPENCAL_NO_PRECOMPILED_HEADER=1` |
 | Manually | `OOpenCal-Viewer --buildPrecompiledHeader[=<dir>]` (no display needed; the directory defaults to the setting below) |
 
 Rebuild it after changing the headers of the Viewer, the OOpenCAL `Cell.h` or the compiler. The build finishes with a self-test,
@@ -68,7 +68,8 @@ Like the other paths for compilation (`OOPENCAL_DIR`, `OOPENCAL_VIEWER_ROOT`), i
 2. environment variable `OOPENCAL_PRECOMPILED_HEADER_DIR`,
 3. CMake variable `OOPENCAL_PRECOMPILED_HEADER_DIR` (default `<build dir>/precompiled-header`, empty disables).
 
-To switch it off, point it at a directory which does not exist. Windows (MSVC) is not supported.
+To switch it off, set `OOPENCAL_NO_PRECOMPILED_HEADER=1` (this also switches off the precompiled header of the plugins built by `build_plugin.sh`)
+or point the directory at one which does not exist. Windows (MSVC) is not supported.
 
 ## Models built with `visualizer.sh` (plugins)
 

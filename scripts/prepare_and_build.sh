@@ -258,6 +258,18 @@ if ! bash "$SCRIPT_DIR/build_plugin.sh" --prepare-precompiled-header \
     log_warn "The precompiled header could not be prepared; models will be built without it (just slower)."
 fi
 
+# ================================================================
+# Precompiled header for compiling models on the fly - optional. It is used when a model directory is opened in the
+# application and no plugin has been built for it (visualizer.sh builds plugins, this is the other way of opening a model).
+# It takes about 200 MB in the build directory and a few seconds. Skipped with OOPENCAL_NO_PRECOMPILED_HEADER=1.
+# ================================================================
+if [[ "${OOPENCAL_NO_PRECOMPILED_HEADER:-0}" != "1" ]]; then
+    log_step "Preparing the precompiled header for compiling models on the fly (optional)..."
+    if ! cmake --build "$BUILD_DIR" --target precompiled-header; then
+        log_warn "The precompiled header could not be prepared; models opened without a plugin will be compiled without it (just slower)."
+    fi
+fi
+
 
 # ================================================================
 # Print result
