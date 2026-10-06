@@ -10,15 +10,12 @@
 #include <algorithm> // std::ranges::sort
 #include <climits>   // INT_MAX
 #include <cmath>     // log10
-#include <cstddef>   // std::size_t
-#include <cstdint>   // std::uint64_t
 #include <cstring>   // std::memcpy
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <future>
 #include <iostream>
-#include <istream>
 #include <ranges>
 #include <regex>
 #include <string_view>
@@ -30,6 +27,7 @@
 #include "visualiser/SettingParameter.h"
 #include "plugins/CellConcept.hpp"
 #include "data/PerformanceMetrics.h"
+#include "data/CompressedStepReader.hpp"
 
 /** @brief How the data of one step is stored on disk (value of `mode` in Header.txt). */
 enum class ReadMode
@@ -197,25 +195,6 @@ namespace ReaderHelpers /// functions which are not templates
 {
     return giveMeFileName(fileName, node, isBinary ? ReadMode::Binary : ReadMode::Text);
 }
-
-/** @brief Header in front of every step in a `.blosc` file (native byte order, written by OOpenCAL). */
-struct CompressedStepHeader
-{
-    std::uint64_t originalSize;   ///< bytes after decompression
-    std::uint64_t compressedSize; ///< bytes of the Blosc2 chunk that follows the header
-};
-static_assert(sizeof(CompressedStepHeader) == 16, "must match StepHeader in OOpenCAL (base/lib/BloscStepCodec.h)");
-
-/** @brief Reads one step stored as `[CompressedStepHeader][Blosc2 chunk]` and returns the decompressed bytes.
- *
- * The result has the same layout as one step of a `.bin` file: `width * height * slices` raw cells.
- * Defined in ModelReader.cpp (not here), so that plugins built on the fly resolve it from the Viewer
- * executable and do not need the Blosc2 headers or library.
- *
- * @param in            stream positioned at the beginning of the CompressedStepHeader
- * @param expectedBytes size the step must have after decompression (cells * sizeof(Cell))
- * @throws std::runtime_error when the data is truncated, corrupted or has an unexpected size */
-std::vector<char> readCompressedStep(std::istream& in, std::size_t expectedBytes);
 
 [[nodiscard]] inline std::string giveMeFileNameIndex(const std::string& fileName, NodeIndex node)
 {

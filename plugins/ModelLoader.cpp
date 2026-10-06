@@ -54,6 +54,7 @@ bool isGeneratedModuleStale(const std::filesystem::path& moduleFile,
     const std::vector<fs::path> templateDependencies = {
         viewerRoot / "visualiserProxy/SceneWidgetVisualizerProxy.h",
         viewerRoot / "data/ModelReader.hpp",
+        viewerRoot / "data/CompressedStepReader.hpp",
         viewerRoot / "visualiser/Visualizer.hpp"
     };
 

@@ -27,20 +27,8 @@ else()
     message(WARNING "[Tests] OOPENCAL_DIR not set! Includes like <OOpenCAL/...> may not work.")
 endif()
 
-# Add test executable for ModelReader
-add_executable(ModelReaderTests
-    ModelReaderTests.cpp
-    ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
-)
-
-# Link against GTest
-target_link_libraries(ModelReaderTests
-    GTest::gtest_main
-    viewer_blosc2  # ModelReader.cpp contains the decompression of mode=compressed
-)
-
-# Include directories for the project
-target_include_directories(ModelReaderTests PRIVATE
+# Include directories shared by the ModelReader test executables
+set(MODEL_READER_TEST_INCLUDES
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/data
     ${CMAKE_SOURCE_DIR}/core
@@ -49,6 +37,23 @@ target_include_directories(ModelReaderTests PRIVATE
     ${OOPENCAL_DIR}/OOpenCAL
 )
 
+# Add test executable for ModelReader
+add_executable(ModelReaderTests
+    ModelReaderTests.cpp
+    ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
+    # ModelReader.hpp calls readCompressedStep (mode=compressed), so the definition has to be linked in
+    ${CMAKE_SOURCE_DIR}/data/CompressedStepReader.cpp
+)
+
+# Link against GTest
+target_link_libraries(ModelReaderTests
+    GTest::gtest_main
+    viewer_blosc2
+)
+
+# Include directories for the project
+target_include_directories(ModelReaderTests PRIVATE ${MODEL_READER_TEST_INCLUDES})
+
 # Define OOPENCAL_DIR for use in C++ code
 if(OOPENCAL_DIR)
     target_compile_definitions(ModelReaderTests PRIVATE OOPENCAL_DIR="${OOPENCAL_DIR}")
@@ -56,6 +61,26 @@ endif()
 
 # Register ModelReaderTests
 add_test(NAME ModelReaderTests COMMAND ModelReaderTests)
+
+# ============================================
+# Add test executable for reading mode=compressed (needs C-Blosc2 to create the test data)
+# ============================================
+if(VIEWER_WITH_BLOSC2)
+    add_executable(CompressedStepReaderTests
+        CompressedStepReaderTests.cpp
+        ${CMAKE_SOURCE_DIR}/data/CompressedStepReader.cpp
+        ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
+    )
+
+    target_link_libraries(CompressedStepReaderTests
+        GTest::gtest_main
+        viewer_blosc2
+    )
+
+    target_include_directories(CompressedStepReaderTests PRIVATE ${MODEL_READER_TEST_INCLUDES})
+
+    add_test(NAME CompressedStepReaderTests COMMAND CompressedStepReaderTests)
+endif()
 
 # ============================================
 # Add test executable for SettingParameter

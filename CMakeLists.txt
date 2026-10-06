@@ -192,6 +192,7 @@ list(APPEND Sources
     core/CommandLineParser.cpp
     data/ReductionManager.cpp
     data/ModelReader.cpp
+    data/CompressedStepReader.cpp
     widgets/WaitCursorGuard.cpp
 )
 file(GLOB Resources
@@ -509,7 +510,7 @@ endif()
 # ============================================
 # C-Blosc2 (FetchContent): reading `mode=compressed` output of OOpenCAL
 # ============================================
-# Only the Viewer executable needs it: the decompression lives in data/ModelReader.cpp and plugins built
+# Only the Viewer executable needs it: the decompression lives in data/CompressedStepReader.cpp and plugins built
 # on the fly resolve it from the executable (see -rdynamic below), so they need neither headers nor library.
 # Use -DVIEWER_WITH_BLOSC2=OFF to build without it; mode=compressed then fails with a clear message.
 option(VIEWER_WITH_BLOSC2 "Support OOpenCAL mode=compressed (C-Blosc2)" ON)
