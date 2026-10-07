@@ -54,7 +54,7 @@ If the compiler still rejects the file, the compilation is repeated without it (
 | Situation | What to do |
 |-----------|------------|
 | AppImage | Nothing. The release workflow runs `AppDir/AppRun --buildPrecompiledHeader` and `AppRun` exports `OOPENCAL_PRECOMPILED_HEADER_DIR`. |
-| Development build | `cmake --build . --target precompiled-header` (directory: `<build dir>/precompiled-header`, or `-DOOPENCAL_PRECOMPILED_HEADER_DIR=<dir>`); `scripts/prepare_and_build.sh` (`visualizer.sh --build`) does it after building the Viewer, skipped with `OOPENCAL_NO_PRECOMPILED_HEADER=1` |
+| Development build | `cmake --build . --target precompiled-header` (directory: `<build dir>/precompiled-header`, or `-DOOPENCAL_PRECOMPILED_HEADER_DIR=<dir>`); `visualizer.sh --build` (`scripts/prepare_and_build.sh`) builds it only with `OOPENCAL_PREPARE_ONTHEFLY_PCH=1` (about 200 MB with g++; `visualizer.sh` builds plugins, which have their own precompiled header, so it does not need this one) |
 | Manually | `OOpenCal-Viewer --buildPrecompiledHeader[=<dir>]` (no display needed; the directory defaults to the setting below) |
 
 Rebuild it after changing the headers of the Viewer, the OOpenCAL `Cell.h` or the compiler. The build finishes with a self-test,
@@ -88,7 +88,8 @@ project** (`-DOOPENCAL_PLUGIN_PCH_ONLY=ON`), therefore its flags are identical t
 - Manually: `scripts/build_plugin.sh --prepare-precompiled-header -DOOPENCAL_DIR=<dir> -DOOPENCALVIEWER_DIR=<dir> --includes <OOpenCAL>/base`.
 
 Plugin build time (`SciddicaT`, 1 core, warm cache, median of 3, whole `build_plugin.sh` without the one-time preparation):
-g++-13 7.7 s → 5.8 s, clang++-18 6.5 s → 3.3 s. The header takes about 185 MB for g++ and much less for clang.
+g++-13 7.7 s → 5.8 s, clang++-18 6.5 s → 3.3 s. The header takes about 185 MB for g++ and much less for clang. Every configuration (compiler, OOpenCAL directories, other CMake arguments) gets its own directory in `<viewer>/build/plugin-precompiled-header/`;
+it is safe to delete them, the next plugin build creates the header again.
 
 Where the time goes with g++ (`SciddicaT`): compiling the plugin 6.4 s → 4.3 s, while the CMake configuration of the plugin
 (`find_package(VTK)`, 1.2–2 s) and linking (0.2 s) do not depend on the precompiled header. So the whole build gets about 25% faster, not 50%
