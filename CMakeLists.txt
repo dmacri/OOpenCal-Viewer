@@ -191,6 +191,7 @@ list(APPEND Sources
     plugins/CompilationConfig.cpp
     plugins/PrecompiledHeader.cpp
     core/CommandLineParser.cpp
+    core/PrecompiledHeaderCommand.cpp
     data/ReductionManager.cpp
     data/ModelReader.cpp
     widgets/WaitCursorGuard.cpp
