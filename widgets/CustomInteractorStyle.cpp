@@ -247,45 +247,56 @@ void CustomInteractorStyle::UpdatePressedButton(ButtonBit button, bool pressed)
 
 void CustomInteractorStyle::OnLeftButtonDown()
 {
-    if (!m_3dInteractionEnabled)
-        return;
-
-    UpdatePressedButton(LeftButtonBit, true);
-
-    // If Shift is pressed: start custom panning
+    // If Shift is pressed: start custom panning (works in both 2D and 3D modes)
     if (this->Interactor->GetShiftKey())
     {
         m_isPanning = true;
         const int* pos = this->Interactor->GetEventPosition();
         m_lastMouseX = pos[0];
         m_lastMouseY = pos[1];
-        
+
+        // Only track button state in 3D mode
+        if (m_3dInteractionEnabled)
+        {
+            UpdatePressedButton(LeftButtonBit, true);
+        }
+
         // Create wait cursor guard for panning (persists until OnLeftButtonUp)
         WaitCursorGuard::changeIcon(/*waitingIcon=*/true);
     }
     else
     {
-        // No Shift - allow normal trackball rotation from parent class
+        // No Shift - only allow in 3D mode
+        if (!m_3dInteractionEnabled)
+            return;
+
+        UpdatePressedButton(LeftButtonBit, true);
+        // Allow normal trackball rotation from parent class
         this->Superclass::OnLeftButtonDown();
     }
 }
 
 void CustomInteractorStyle::OnLeftButtonUp()
 {
-    if (!m_3dInteractionEnabled)
-        return;
-
-    UpdatePressedButton(LeftButtonBit, false);
-
     if (m_isPanning)
     {
         m_isPanning = false;
-        
+
+        // Only track button state in 3D mode
+        if (m_3dInteractionEnabled)
+        {
+            UpdatePressedButton(LeftButtonBit, false);
+        }
+
         WaitCursorGuard::changeIcon(/*waitingIcon=*/false);
     }
     else
     {
-        // Normal click processing (trackball rotation)
+        // Normal click processing (trackball rotation) - only in 3D mode
+        if (!m_3dInteractionEnabled)
+            return;
+
+        UpdatePressedButton(LeftButtonBit, false);
         this->Superclass::OnLeftButtonUp();
     }
 }
@@ -328,17 +339,14 @@ void CustomInteractorStyle::OnRightButtonUp()
 
 void CustomInteractorStyle::OnMouseMove()
 {
-    if (!m_3dInteractionEnabled)
-        return;
-
     if (m_isPanning)
     {
-        // Custom panning when Shift+Left is held
+        // Custom panning when Shift+Left (3D mode) or Shift+Right (2D and 3D modes) is held
         PanCamera();
     }
-    else
+    else if (m_3dInteractionEnabled)
     {
-        // Allow parent class to handle trackball rotation
+        // Allow parent class to handle trackball rotation (only in 3D mode)
         this->Superclass::OnMouseMove();
     }
 }

@@ -13,20 +13,21 @@
 class vtkCellPicker;
 
 /** @brief Custom interactor style for cursor-based zoom and 3D rotation.
- * 
+ *
  * Extends vtkInteractorStyleTrackballCamera to provide enhanced interaction:
- * 
+ *
  * **Inherited from vtkInteractorStyleTrackballCamera:**
  * - Left mouse button: 3D trackball rotation (rotate around focal point)
  * - Right mouse button: Zoom (dolly - move camera closer/farther)
  * - Middle mouse button: Pan (move focal point in view plane)
- * 
+ *
  * **Custom enhancements:**
  * - Mouse wheel: Zoom towards cursor position (instead of screen center)
- * - Shift + Left drag: Pan (alternative to middle button)
+ * - Shift + Left drag: Pan (works in both 2D and 3D modes)
  * - Accumulated zoom: Multiple wheel events are batched for smooth zooming
- * 
- * This provides intuitive 3D navigation with cursor-aware zoom behavior. */
+ *
+ * This provides intuitive 3D navigation with cursor-aware zoom behavior,
+ * and enables panning in 2D mode via Shift + Left mouse button. */
 class CustomInteractorStyle : public vtkInteractorStyleTrackballCamera
 {
 public:
@@ -71,12 +72,12 @@ public:
     void OnMouseWheelBackward() override;
 
     /** @brief Handle left mouse button press event.
-     * 
-     * Starts panning when left button is pressed. */
+     *
+     * Starts panning when Shift is pressed (works in both 2D and 3D modes). */
     void OnLeftButtonDown() override;
 
     /** @brief Handle left mouse button release event.
-     * 
+     *
      * Stops panning when left button is released. */
     void OnLeftButtonUp() override;
 
@@ -86,8 +87,8 @@ public:
     void OnRightButtonUp() override;
 
     /** @brief Handle mouse move event during panning.
-     * 
-     * Pans the view when left button is held down. */
+     *
+     * Pans the view when Shift+Left or Shift+Right is held down. */
     void OnMouseMove() override;
 
 private:
