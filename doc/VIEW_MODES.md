@@ -14,6 +14,10 @@ The OOpenCal-Viewer now supports switching between **2D** and **3D** view modes,
 - **2D Ruler axes** - Frame around the scene showing:
   - **X axis ruler** - Horizontal scale with tick marks and labels
   - **Y axis ruler** - Vertical scale with tick marks and labels
+  - **Labels stay readable at any zoom** - When the scene is zoomed out the numbers never overlap:
+    their font shrinks (down to about half of its normal size), and if that is not enough only
+    every 2nd, 3rd, ... label is shown (the tick marks stay). Zooming in restores the full labels.
+    Both rulers always use the same label size
   - **Grid lines** - Optional grid overlay for precise measurements
   - Positioned on outer edges, doesn't obscure the scene
 - Best for analyzing 2D cellular automata simulations

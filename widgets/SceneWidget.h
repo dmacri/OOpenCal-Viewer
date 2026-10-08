@@ -10,7 +10,6 @@
 
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkAxesActor.h>
-#include <vtkAxisActor2D.h>
 #include <vtkDataSet.h>
 #include <vtkNamedColors.h>
 #include <vtkOrientationMarkerWidget.h>
@@ -21,6 +20,7 @@
 #include "core/types.h"
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+#include "widgets/RulerAxisActor2D.h"
 
 // Forward declarations
 class SubstatesDockWidget;
@@ -688,8 +688,8 @@ protected:
     vtkNew<vtkOrientationMarkerWidget> axesWidget;
 
     /// @brief 2D ruler axes for showing scale in 2D mode (X and Y axes)
-    vtkNew<vtkAxisActor2D> rulerAxisX;
-    vtkNew<vtkAxisActor2D> rulerAxisY;
+    vtkNew<RulerAxisActor2D> rulerAxisX;
+    vtkNew<RulerAxisActor2D> rulerAxisY;
 
     /** @brief Collection of line segments used for visualization.
      *
