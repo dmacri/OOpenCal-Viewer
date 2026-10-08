@@ -193,6 +193,7 @@ list(APPEND Sources
     core/CommandLineParser.cpp
     data/ReductionManager.cpp
     data/ModelReader.cpp
+    data/CompressedStepReader.cpp
     widgets/WaitCursorGuard.cpp
 )
 file(GLOB Resources
@@ -508,6 +509,48 @@ endif()
 
 
 # ============================================
+# C-Blosc2 (FetchContent): reading `mode=compressed` output of OOpenCAL
+# ============================================
+# Only the Viewer executable needs it: the decompression lives in data/CompressedStepReader.cpp and plugins built
+# on the fly resolve it from the executable (see -rdynamic below), so they need neither headers nor library.
+# Use -DVIEWER_WITH_BLOSC2=OFF to build without it; mode=compressed then fails with a clear message.
+option(VIEWER_WITH_BLOSC2 "Support OOpenCAL mode=compressed (C-Blosc2)" ON)
+
+add_library(viewer_blosc2 INTERFACE)
+
+if(VIEWER_WITH_BLOSC2)
+    # Function scope: c-blosc2 has options named BUILD_TESTS / BUILD_EXAMPLES like this project, so its
+    # settings are plain variables visible only to that sub-project, not cache entries.
+    function(viewer_fetch_blosc2)
+        set(BUILD_STATIC ON)
+        set(BUILD_SHARED OFF)
+        set(BUILD_TESTS OFF)
+        set(BUILD_BENCHMARKS OFF)
+        set(BUILD_EXAMPLES OFF)
+        set(BUILD_FUZZERS OFF)
+        set(BUILD_PLUGINS OFF)
+        set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+        FetchContent_Declare(
+            blosc2
+            GIT_REPOSITORY https://github.com/Blosc/c-blosc2.git
+            GIT_TAG        v3.3.5
+            ${_UPDATE_ARGS}
+        )
+        FetchContent_MakeAvailable(blosc2)
+    endfunction()
+
+    viewer_fetch_blosc2()
+
+    if(NOT TARGET blosc2_static)
+        message(FATAL_ERROR "C-Blosc2 target 'blosc2_static' not found. Ensure initial FetchContent download succeeded "
+                            "or configure with -DVIEWER_WITH_BLOSC2=OFF.")
+    endif()
+
+    target_link_libraries(viewer_blosc2 INTERFACE blosc2_static)
+    target_compile_definitions(viewer_blosc2 INTERFACE OOPENCAL_VIEWER_WITH_BLOSC2)
+endif()
+
+# ============================================
 # Linking
 # ============================================
 if(USE_QT6)
@@ -526,6 +569,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${VTK_LIBRARIES}
     # other:
     tiny-process-library
+    viewer_blosc2
 )
 
 # Export symbols for plugins to use (Unix-like systems only)

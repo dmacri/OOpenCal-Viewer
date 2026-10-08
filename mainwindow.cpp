@@ -524,7 +524,7 @@ SimulationDirectorySummary inspectSimulationDirectory(const QString& configFileP
         {
             addFileToGroup(summary.reductionFiles, fileInfo);
         }
-        else if (startsWithOutputPrefix && (lowerName.endsWith(".bin") || lowerName.endsWith(".txt")))
+        else if (startsWithOutputPrefix && (lowerName.endsWith(".bin") || lowerName.endsWith(".blosc") || lowerName.endsWith(".txt")))
         {
             addFileToGroup(summary.dataFiles, fileInfo);
         }

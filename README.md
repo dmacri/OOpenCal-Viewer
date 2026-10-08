@@ -23,6 +23,9 @@ The OOpenCal-Viewer is designed to:
 - **OOpenCAL** - Required for certain model types
   - The project uses headers from the OOpenCAL library
   - Set the `OOPENCAL_DIR` CMake variable to point to your OOpenCAL base directory
+- **C-Blosc2** - Needed to read simulations saved with `mode=compressed`
+  - Downloaded and built automatically by CMake (needs network access during the first configuration)
+  - Use `-DVIEWER_WITH_BLOSC2=OFF` to build without it; see [Output formats](doc/LOAD_MODEL_FROM_DIRECTORY.md#output-formats)
 
 ### OOpenCAL Setup
 
