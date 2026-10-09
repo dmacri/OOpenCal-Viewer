@@ -1453,56 +1453,17 @@ const Line* SceneWidget::findNearestLine(const std::array<double, 3>& worldPos, 
         return nullptr;
     }
 
-    // const auto& lines = sceneWidgetVisualizerProxy->getVisualizer().getLines();
-    if (lines.empty())
+    // The lines are kept with Y growing downwards and the scene has it growing upwards,
+    // the conversion is done by the helper (otherwise the mirror image of the line would be found)
+    const auto nearest = GridWorldMapping::findNearestLine(lines, worldPos[0], worldPos[1], settingParameter->numberOfRowsY);
+    if (! nearest)
     {
         return nullptr;
     }
 
-    constexpr double threshold = 2; // Threshold for line selection (in world coordinates)
-    constexpr double thresholdSq = threshold * threshold;
-
-    const Line* nearestLine = nullptr;
-    double minDistanceSq = std::numeric_limits<double>::max();
-    size_t foundIndex = 0;
-
-    for (size_t i = 0; i < lines.size(); ++i)
-    {
-        const auto& line = lines[i];
-
-        // Calculate squared distance from point to line segment
-        const double lineLengthSq = (line.x2 - line.x1) * (line.x2 - line.x1) +
-                                   (line.y2 - line.y1) * (line.y2 - line.y1);
-
-        if (lineLengthSq < 1e-10) // Skip zero-length lines
-            continue;
-
-        const double t = std::max(0.0, std::min(1.0,
-            ((worldPos[0] - line.x1) * (line.x2 - line.x1) +
-             (worldPos[1] - line.y1) * (line.y2 - line.y1)) / lineLengthSq));
-
-        const double projX = line.x1 + t * (line.x2 - line.x1);
-        const double projY = line.y1 + t * (line.y2 - line.y1);
-
-        const double dx = worldPos[0] - projX;
-        const double dy = worldPos[1] - projY;
-        const double distSq = dx * dx + dy * dy;
-
-        if (distSq < minDistanceSq && distSq <= thresholdSq)
-        {
-            minDistanceSq = distSq;
-            nearestLine = &line;
-            foundIndex = i;
-        }
-    }
-
-    if (nearestLine)
-    {
-        lineIndex = foundIndex;
-        distanceSquared = minDistanceSq;
-    }
-
-    return nearestLine;
+    lineIndex = nearest->index;
+    distanceSquared = nearest->distanceSquared;
+    return &lines[nearest->index];
 }
 
 void SceneWidget::updateToolTip(const QPoint& lastMousePos)

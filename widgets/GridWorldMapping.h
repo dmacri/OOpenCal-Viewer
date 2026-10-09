@@ -20,6 +20,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <optional>
+#include <vector>
+
+#include "visualiser/Line.h"
 
 namespace GridWorldMapping
 {
@@ -156,5 +161,69 @@ inline bool intersectRayWithHorizontalPlane(const Point3D& rayStart,
     outX = x;
     outY = y;
     return true;
+}
+
+/** @brief World Y of a Y coordinate of a Line.
+ *
+ *  The lines between the computational nodes (visualiser/Line.h) are kept in "cell corner" units with Y
+ *  growing *downwards*, like the rows of the grid: y = 0 is the top edge of the first row, y = nRows the
+ *  bottom edge of the last one. The flat view has world Y growing upwards, so the lines are drawn at
+ *  nRows - y. Whoever compares a world position with the lines has to use the same conversion. */
+constexpr double lineYToWorldY(double lineY, int nRows) noexcept
+{
+    return nRows - lineY;
+}
+
+/// Inverse of lineYToWorldY().
+constexpr double worldYToLineY(double worldY, int nRows) noexcept
+{
+    return nRows - worldY;
+}
+
+/// Result of findNearestLine().
+struct NearestLine
+{
+    std::size_t index{};      ///< index in the vector of lines
+    double distanceSquared{}; ///< squared distance of the position to the line, in world units
+};
+
+/** @brief Finds the line passing closest to a world position (the tool tip over a node boundary).
+ *
+ *  @param lines     lines between the computational nodes, in the units described at lineYToWorldY()
+ *  @param worldX    world X of the position
+ *  @param worldY    world Y of the position
+ *  @param nRows     number of grid rows
+ *  @param threshold the greatest distance, in world units, at which a line still counts as hit
+ *  @return the closest line within the threshold (the first one when two are equally close) or nothing */
+inline std::optional<NearestLine> findNearestLine(const std::vector<Line>& lines,
+                                                  double worldX,
+                                                  double worldY,
+                                                  int nRows,
+                                                  double threshold = 2.0)
+{
+    // X of a line and of the world have the same direction and unit, Y has to be converted
+    const double x = worldX;
+    const double y = worldYToLineY(worldY, nRows);
+    const double thresholdSq = threshold * threshold;
+
+    std::optional<NearestLine> nearest;
+    for (std::size_t i = 0; i < lines.size(); ++i)
+    {
+        const Line& line = lines[i];
+        const double dx = static_cast<double>(line.x2) - line.x1;
+        const double dy = static_cast<double>(line.y2) - line.y1;
+        const double lengthSq = dx * dx + dy * dy;
+        if (lengthSq < 1e-10) // zero-length line
+            continue;
+
+        const double t = std::clamp(((x - line.x1) * dx + (y - line.y1) * dy) / lengthSq, 0.0, 1.0);
+        const double offsetX = x - (line.x1 + t * dx);
+        const double offsetY = y - (line.y1 + t * dy);
+        const double distanceSq = offsetX * offsetX + offsetY * offsetY;
+
+        if (distanceSq <= thresholdSq && (! nearest || distanceSq < nearest->distanceSquared))
+            nearest = NearestLine{ i, distanceSq };
+    }
+    return nearest;
 }
 } // namespace GridWorldMapping

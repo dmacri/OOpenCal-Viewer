@@ -279,3 +279,111 @@ TEST(GridWorldMappingBasePlane, HitBesideTheGridIsOutsideOfTheLogicalExtent)
     ASSERT_TRUE(intersectRayWithHorizontalPlane(ray.start, ray.end, heightSurfaceBaseZ, x, y));
     EXPECT_LT(x, pointGridBounds(nRows, nCols).xMin);
 }
+
+/** Test Suite: GridWorldMappingLines
+ *
+ * The lines between the computational nodes (visualiser/Line.h) are kept with Y growing downwards, like the
+ * rows of the grid, while the flat view has Y growing upwards. The tool tip over a line compared the two
+ * without converting, so for a vertical line it described its mirror image: the segment of the bottom node row
+ * while the cursor was over the top one. */
+
+namespace
+{
+constexpr int kRows = 496; // SciddicaT: 610 x 496 cells split into 4 x 4 nodes
+
+std::vector<Line> nodeLines()
+{
+    const float xs[] = { 0, 153, 306, 458, 610 };
+    const float ys[] = { 0, 124, 248, 372, 496 };
+    std::vector<Line> lines;
+    for (const float x : xs)
+        for (int i = 0; i < 4; ++i)
+            lines.emplace_back(x, ys[i], x, ys[i + 1]); // vertical segments, from the top
+    for (const float y : ys)
+        for (int i = 0; i < 4; ++i)
+            lines.emplace_back(xs[i], y, xs[i + 1], y); // horizontal segments, from the left
+    return lines;
+}
+
+std::size_t indexOfLine(const std::vector<Line>& lines, float x1, float y1, float x2, float y2)
+{
+    for (std::size_t i = 0; i < lines.size(); ++i)
+        if (lines[i].x1 == x1 && lines[i].y1 == y1 && lines[i].x2 == x2 && lines[i].y2 == y2)
+            return i;
+    return lines.size();
+}
+} // namespace
+
+TEST(GridWorldMappingLines, LineYAndWorldYAreInverseOfEachOther)
+{
+    EXPECT_DOUBLE_EQ(lineYToWorldY(0.0, kRows), kRows); // top edge of the grid
+    EXPECT_DOUBLE_EQ(lineYToWorldY(kRows, kRows), 0.0); // bottom edge of the grid
+    for (const double y : { 0.0, 1.0, 42.0, 124.5, 372.0, 496.0 })
+        EXPECT_DOUBLE_EQ(worldYToLineY(lineYToWorldY(y, kRows), kRows), y);
+}
+
+TEST(GridWorldMappingLines, VerticalLineIsNotMistakenForItsMirrorImage)
+{
+    const auto lines = nodeLines();
+
+    // cursor on the line x = 153, in the top node row (row 42 of the grid)
+    const auto top = findNearestLine(lines, 153.0, lineYToWorldY(42.0, kRows), kRows);
+    ASSERT_TRUE(top.has_value());
+    EXPECT_EQ(top->index, indexOfLine(lines, 153, 0, 153, 124));
+    EXPECT_DOUBLE_EQ(top->distanceSquared, 0.0);
+
+    // and in the bottom node row (row 450)
+    const auto bottom = findNearestLine(lines, 153.0, lineYToWorldY(450.0, kRows), kRows);
+    ASSERT_TRUE(bottom.has_value());
+    EXPECT_EQ(bottom->index, indexOfLine(lines, 153, 372, 153, 496));
+}
+
+TEST(GridWorldMappingLines, HorizontalLineIsFoundAtItsOwnHeight)
+{
+    const auto lines = nodeLines();
+
+    // the line between the first and the second node row, over the first node column
+    const auto hit = findNearestLine(lines, 75.0, lineYToWorldY(124.0, kRows), kRows);
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_EQ(hit->index, indexOfLine(lines, 0, 124, 153, 124));
+}
+
+TEST(GridWorldMappingLines, ReportsTheSquaredDistanceToTheLine)
+{
+    const auto lines = nodeLines();
+    const auto hit = findNearestLine(lines, 154.0, lineYToWorldY(60.0, kRows), kRows);
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_EQ(hit->index, indexOfLine(lines, 153, 0, 153, 124));
+    EXPECT_DOUBLE_EQ(hit->distanceSquared, 1.0);
+}
+
+TEST(GridWorldMappingLines, NothingIsFoundAwayFromTheLines)
+{
+    const auto lines = nodeLines();
+
+    // middle of a node, further than the threshold from every boundary
+    EXPECT_FALSE(findNearestLine(lines, 76.0, lineYToWorldY(62.0, kRows), kRows).has_value());
+    // just outside of the default threshold of 2 units, but accepted with a greater one
+    EXPECT_FALSE(findNearestLine(lines, 156.5, lineYToWorldY(60.0, kRows), kRows).has_value());
+    EXPECT_TRUE(findNearestLine(lines, 156.5, lineYToWorldY(60.0, kRows), kRows, 4.0).has_value());
+    // no lines at all
+    EXPECT_FALSE(findNearestLine({}, 153.0, 100.0, kRows).has_value());
+    // a zero-length "line" is skipped
+    EXPECT_FALSE(findNearestLine({ Line(10, 10, 10, 10) }, 10.0, lineYToWorldY(10.0, kRows), kRows).has_value());
+}
+
+TEST(GridWorldMappingLines, WhenTwoLinesAreEquallyCloseTheFirstOneWins)
+{
+    const std::vector<Line> lines{ Line(100, 0, 100, 496), Line(104, 0, 104, 496) };
+    const auto hit = findNearestLine(lines, 102.0, lineYToWorldY(10.0, kRows), kRows);
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_EQ(hit->index, 0u);
+}
+
+TEST(GridWorldMappingLines, VerticalLineInTheThirdNodeRowIsFoundAtItsOwnHeight)
+{
+    const auto lines = nodeLines();
+    const auto hit = findNearestLine(lines, 306.0, lineYToWorldY(300.0, kRows), kRows);
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_EQ(hit->index, indexOfLine(lines, 306, 248, 306, 372));
+}
