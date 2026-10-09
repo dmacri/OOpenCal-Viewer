@@ -20,6 +20,7 @@
 #include "core/types.h"
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+#include "widgets/GridWorldMapping.h"
 #include "widgets/RulerAxisActor2D.h"
 
 // Forward declarations
@@ -546,6 +547,12 @@ protected:
      *  Z is left out when it carries no information: in the flat 2D view every cell lies on one plane, and
      *  over the base plane under a 3D height surface the cursor is not above any point of the surface. */
     QString positionAsText(int x, int y, int z) const;
+
+    /** @brief World extent of the flat (2D) scene, to which the lines between the nodes are fitted.
+     *
+     *  The grid is drawn with one quad per cell (useCellRendering) or with one point per cell; the second
+     *  one ends one unit earlier on the right and at the top (see GridWorldMapping::pointGridBounds()). */
+    GridWorldMapping::Bounds2D flatSceneBounds() const;
 
     /** @brief Converts VTK world coordinates to display/pixel coordinates shown to users.
      *

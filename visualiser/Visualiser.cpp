@@ -2,6 +2,7 @@
 #include "Line.h"
 #include "visualiser/Visualizer.hpp"
 #include "widgets/ColorSettings.h" // ColorSettings
+#include "widgets/GridWorldMapping.h"
 
 
 namespace
@@ -15,11 +16,12 @@ vtkColor3d toVtkColor(QColor color)
 
 void Visualizer::buildLoadBalanceLine(const std::vector<Line>& lines,
                                       int nRows,
+                                      const GridWorldMapping::Bounds2D& sceneBounds,
                                       vtkSmartPointer<vtkRenderer> renderer,
                                       vtkSmartPointer<vtkActor2D> actorBuildLine)
 {
     // 1. Build line geometry data
-    auto grid = createLinePolyData(lines, nRows);
+    auto grid = createLinePolyData(lines, nRows, sceneBounds);
 
     // 2. Setup coordinate system
     vtkNew<vtkCoordinate> normCoords;
@@ -43,57 +45,22 @@ void Visualizer::buildLoadBalanceLine(const std::vector<Line>& lines,
     renderer->AddViewProp(actorBuildLine);
 }
 
-vtkSmartPointer<vtkPolyData> Visualizer::createLinePolyData(const std::vector<Line>& lines, int nRows)
+vtkSmartPointer<vtkPolyData> Visualizer::createLinePolyData(const std::vector<Line>& lines,
+                                                            int nRows,
+                                                            const GridWorldMapping::Bounds2D& sceneBounds)
 {
     vtkNew<vtkPoints> pts;
     vtkNew<vtkCellArray> cellLines;
 
-    // Small offset to move grid lines slightly outside the scene to avoid obscuring data at corners
-    // This offset is in world coordinates (typically pixels)
-    constexpr double GRID_LINE_OFFSET = 0.5;
-
-    // Find the bounds of all lines to determine scene extent
-    double minX = std::numeric_limits<double>::max();
-    double maxX = std::numeric_limits<double>::lowest();
-    double minY = std::numeric_limits<double>::max();
-    double maxY = std::numeric_limits<double>::lowest();
-
-    for (const auto& line : lines)
-    {
-        minX = std::min(minX, static_cast<double>(line.x1));
-        minX = std::min(minX, static_cast<double>(line.x2));
-        maxX = std::max(maxX, static_cast<double>(line.x1));
-        maxX = std::max(maxX, static_cast<double>(line.x2));
-        minY = std::min(minY, static_cast<double>(line.y1));
-        minY = std::min(minY, static_cast<double>(line.y2));
-        maxY = std::max(maxY, static_cast<double>(line.y1));
-        maxY = std::max(maxY, static_cast<double>(line.y2));
-    }
-
+    // The lines are not moved away from the scene: a constant shift in world units (it used to be 0.5) grows with
+    // the zoom, and when zoomed in the outer lines floated next to the scene instead of lying on its edges (issue #120)
     for (size_t i = 0; i < lines.size(); ++i)
     {
-        double x1 = lines[i].x1;
-        double y1 = nRows - 1 - lines[i].y1;
-        double x2 = lines[i].x2;
-        double y2 = nRows - 1 - lines[i].y2;
+        const auto start = GridWorldMapping::lineToWorld(lines[i].x1, lines[i].y1, nRows, sceneBounds);
+        const auto end = GridWorldMapping::lineToWorld(lines[i].x2, lines[i].y2, nRows, sceneBounds);
 
-        // Apply offset based on which edge the line is on
-        // Left edge (x == minX)
-        if (x1 == minX && x2 == minX)
-            x1 = x2 = minX - GRID_LINE_OFFSET;
-        // Right edge (x == maxX)
-        else if (x1 == maxX && x2 == maxX)
-            x1 = x2 = maxX + GRID_LINE_OFFSET;
-
-        // Bottom edge in VTK coords (y == nRows - 1 - maxY) - move down (minus)
-        if (y1 == (nRows - 1 - maxY) && y2 == (nRows - 1 - maxY))
-            y1 = y2 = (nRows - 1 - maxY) - GRID_LINE_OFFSET;
-        // Top edge in VTK coords (y == nRows - 1 - minY) - move up (plus)
-        else if (y1 == (nRows - 1 - minY) && y2 == (nRows - 1 - minY))
-            y1 = y2 = (nRows - 1 - minY) + GRID_LINE_OFFSET;
-
-        pts->InsertNextPoint(x1, y1, 0.0);
-        pts->InsertNextPoint(x2, y2, 0.0);
+        pts->InsertNextPoint(start.x, start.y, 0.0);
+        pts->InsertNextPoint(end.x, end.y, 0.0);
         cellLines->InsertNextCell(2);
         cellLines->InsertCellPoint(i * 2);
         cellLines->InsertCellPoint(i * 2 + 1);
@@ -105,13 +72,16 @@ vtkSmartPointer<vtkPolyData> Visualizer::createLinePolyData(const std::vector<Li
     return polyData;
 }
 
-void Visualizer::refreshBuildLoadBalanceLine(const std::vector<Line>& lines, int nRows, vtkActor2D* lineActor)
+void Visualizer::refreshBuildLoadBalanceLine(const std::vector<Line>& lines,
+                                             int nRows,
+                                             const GridWorldMapping::Bounds2D& sceneBounds,
+                                             vtkActor2D* lineActor)
 {
     if (! lineActor)
         return;
 
     // 1. Rebuild geometry
-    auto grid = createLinePolyData(lines, nRows);
+    auto grid = createLinePolyData(lines, nRows, sceneBounds);
 
     // 2. Get existing mapper (assumes it’s a vtkPolyDataMapper2D)
     auto* mapper = vtkPolyDataMapper2D::SafeDownCast(lineActor->GetMapper());

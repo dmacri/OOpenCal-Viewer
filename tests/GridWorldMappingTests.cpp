@@ -387,3 +387,77 @@ TEST(GridWorldMappingLines, VerticalLineInTheThirdNodeRowIsFoundAtItsOwnHeight)
     ASSERT_TRUE(hit.has_value());
     EXPECT_EQ(hit->index, indexOfLine(lines, 306, 248, 306, 372));
 }
+
+/** Test Suite: GridWorldMappingFlatLines
+ *
+ * Regression for issue #120 ("when zooming edge lines are somewhere far"). The lines between the nodes were moved
+ * 0.5 unit away from the scene by a constant, and the flat view drawn with one point per cell ends one unit before
+ * the lines on the right and at the top, so these two outer lines floated 1.5 unit away from the scene. Such a gap
+ * is made of world units, so it grows with the zoom. The outer lines have to lie exactly on the edges of the scene. */
+
+TEST(GridWorldMappingFlatLines, CellGridBoundsCoverEveryQuad)
+{
+    const Bounds2D scene = cellGridBounds(kRows, 610);
+    EXPECT_DOUBLE_EQ(scene.xMin, 0.0);
+    EXPECT_DOUBLE_EQ(scene.xMax, 610.0);
+    EXPECT_DOUBLE_EQ(scene.yMin, 0.0);
+    EXPECT_DOUBLE_EQ(scene.yMax, kRows);
+}
+
+TEST(GridWorldMappingFlatLines, OuterLinesLieOnTheEdgesOfTheSceneDrawnWithOnePointPerCell)
+{
+    const Bounds2D scene = pointGridBounds(kRows, 610);                    // [0, 609] x [0, 495]
+    EXPECT_DOUBLE_EQ(lineToWorld(0, 200, kRows, scene).x, scene.xMin);     // left
+    EXPECT_DOUBLE_EQ(lineToWorld(610, 200, kRows, scene).x, scene.xMax);   // right
+    EXPECT_DOUBLE_EQ(lineToWorld(300, 0, kRows, scene).y, scene.yMax);     // top
+    EXPECT_DOUBLE_EQ(lineToWorld(300, kRows, kRows, scene).y, scene.yMin); // bottom
+}
+
+TEST(GridWorldMappingFlatLines, OuterLinesLieOnTheEdgesOfTheSceneDrawnWithOneQuadPerCell)
+{
+    const Bounds2D scene = cellGridBounds(kRows, 610); // [0, 610] x [0, 496]
+    EXPECT_DOUBLE_EQ(lineToWorld(0, 200, kRows, scene).x, 0.0);
+    EXPECT_DOUBLE_EQ(lineToWorld(610, 200, kRows, scene).x, 610.0);
+    EXPECT_DOUBLE_EQ(lineToWorld(300, 0, kRows, scene).y, 496.0);
+    EXPECT_DOUBLE_EQ(lineToWorld(300, kRows, kRows, scene).y, 0.0);
+}
+
+TEST(GridWorldMappingFlatLines, LinesInsideTheSceneAreNotMoved)
+{
+    for (const Bounds2D scene : { pointGridBounds(kRows, 610), cellGridBounds(kRows, 610) })
+    {
+        const Point2D p = lineToWorld(153, 124, kRows, scene);
+        EXPECT_DOUBLE_EQ(p.x, 153.0);
+        EXPECT_DOUBLE_EQ(p.y, 372.0); // 496 - 124
+    }
+}
+
+TEST(GridWorldMappingFlatLines, NoLineLeavesTheScene)
+{
+    for (const Bounds2D scene : { pointGridBounds(kRows, 610), cellGridBounds(kRows, 610) })
+    {
+        for (int x = 0; x <= 610; x += 7)
+        {
+            for (int y = 0; y <= kRows; y += 7)
+            {
+                const Point2D p = lineToWorld(x, y, kRows, scene);
+                ASSERT_TRUE(p.x >= scene.xMin && p.x <= scene.xMax && p.y >= scene.yMin && p.y <= scene.yMax)
+                    << "line point (" << x << ", " << y << ")";
+            }
+        }
+    }
+}
+
+TEST(GridWorldMappingFlatLines, OuterLineDrawnOnTheEdgeIsStillFoundByTheToolTip)
+{
+    // One point per cell: the right frame (x = 610) is drawn at 609 and the top one (y = 0) at 495
+    const auto lines = nodeLines();
+
+    const auto right = findNearestLine(lines, 609.0, lineYToWorldY(60.0, kRows), kRows);
+    ASSERT_TRUE(right.has_value());
+    EXPECT_EQ(right->index, indexOfLine(lines, 610, 0, 610, 124));
+
+    const auto top = findNearestLine(lines, 250.0, 495.0, kRows);
+    ASSERT_TRUE(top.has_value());
+    EXPECT_EQ(top->index, indexOfLine(lines, 153, 0, 306, 0));
+}

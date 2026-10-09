@@ -226,4 +226,36 @@ inline std::optional<NearestLine> findNearestLine(const std::vector<Line>& lines
     }
     return nearest;
 }
+
+/** @brief Extent of the flat (2D) view when the grid is drawn with one quad per cell
+ *         (SceneWidget::useCellRendering). The corners of the quads lie at integer positions,
+ *         so the scene spans [0, nCols] x [0, nRows]. Compare pointGridBounds(). */
+constexpr Bounds2D cellGridBounds(int nRows, int nCols) noexcept
+{
+    return Bounds2D{ 0.0, static_cast<double>(nCols), 0.0, static_cast<double>(nRows) };
+}
+
+/// Point in world X/Y coordinates.
+struct Point2D
+{
+    double x{};
+    double y{};
+};
+
+/** @brief Where a point of a Line is drawn in the flat view.
+ *
+ *  A line is given in "cell corner" units (see lineYToWorldY()). In the view drawn with one quad per
+ *  cell (cellGridBounds()) that is exactly the place of the scene it describes. With one point per
+ *  cell (pointGridBounds()) the scene is one unit smaller on the right and at the top, so the outer
+ *  lines are pulled onto its edge by the clamping; the lines inside the scene are not moved.
+ *
+ *  The lines must not be shifted away from the scene by a constant (they used to be, by 0.5): such
+ *  a gap is made of world units, so it grows with the zoom and the outer lines float next to the
+ *  scene when zoomed in (issue #120).
+ *
+ *  @param scene extent of the drawn scene */
+inline Point2D lineToWorld(double lineX, double lineY, int nRows, const Bounds2D& scene) noexcept
+{
+    return Point2D{ std::clamp(lineX, scene.xMin, scene.xMax), std::clamp(lineYToWorldY(lineY, nRows), scene.yMin, scene.yMax) };
+}
 } // namespace GridWorldMapping

@@ -446,7 +446,8 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 
         // Update load balancing lines if we have any
         sceneWidgetVisualizerProxy->getVisualizer().refreshBuildLoadBalanceLine(lines,
-                                                                                settingParameter->numberOfRowsY + 1,
+                                                                                settingParameter->numberOfRowsY,
+                                                                                flatSceneBounds(),
                                                                                 actorBuildLine);
     }
 
@@ -1350,7 +1351,8 @@ void SceneWidget::renderVtkScene()
     drawVisualizationWithOptional3DSubstate();
 
     sceneWidgetVisualizerProxy->getVisualizer().buildLoadBalanceLine(lines,
-                                                                     settingParameter->numberOfRowsY + 1,
+                                                                     settingParameter->numberOfRowsY,
+                                                                     flatSceneBounds(),
                                                                      renderer,
                                                                      actorBuildLine);
 
@@ -1876,7 +1878,8 @@ void SceneWidget::setViewMode2D()
         !isNative3DModel() && !substateSliceEnabled)
     {
         sceneWidgetVisualizerProxy->getVisualizer().buildLoadBalanceLine(lines,
-                                                                         settingParameter->numberOfRowsY + 1,
+                                                                         settingParameter->numberOfRowsY,
+                                                                         flatSceneBounds(),
                                                                          renderer,
                                                                          actorBuildLine);
         // Apply grid lines visibility and semi-transparency settings
@@ -2307,6 +2310,13 @@ bool SceneWidget::isHeightSurfaceDisplayed() const
            !get3DSubstateInfosTopToBottom().empty();
 }
 
+GridWorldMapping::Bounds2D SceneWidget::flatSceneBounds() const
+{
+    const int rows = settingParameter->numberOfRowsY;
+    const int columns = settingParameter->numberOfColumnX;
+    return useCellRendering ? GridWorldMapping::cellGridBounds(rows, columns) : GridWorldMapping::pointGridBounds(rows, columns);
+}
+
 bool SceneWidget::pickBasePlane(int displayX, int displayY, std::array<double, 3>& outWorldPos) const
 {
     if (! renderer || ! isHeightSurfaceDisplayed())
@@ -2501,7 +2511,8 @@ void SceneWidget::initializeAndDraw3DSubstateVisualization()
     if (settingParameter->numberOfLines > 0)
     {
         sceneWidgetVisualizerProxy->getVisualizer().refreshBuildLoadBalanceLine(lines,
-                                                                                settingParameter->numberOfRowsY + 1,
+                                                                                settingParameter->numberOfRowsY,
+                                                                                flatSceneBounds(),
                                                                                 actorBuildLine);
     }
 
