@@ -100,4 +100,61 @@ inline bool worldToNearestVertexCell(double worldX, double worldY,
     outRow = std::clamp(nRows - 1 - rowFromBottom, 0, nRows - 1);
     return true;
 }
+
+/// World Z of the flat plane (the "chessboard") under the 3D height surface. Heights are never negative,
+/// so the surface lies on or above this plane (see Visualizer::drawFlatSceneBackground).
+inline constexpr double heightSurfaceBaseZ = 0.0;
+
+/// Point in world coordinates.
+struct Point3D
+{
+    double x{};
+    double y{};
+    double z{};
+};
+
+/** @brief Intersects a view ray with the horizontal plane z = planeZ.
+ *
+ *  The 3D height surface has quads only where its substate is inside (Min, Max], so a picker
+ *  restricted to it misses everywhere else, although the cursor can still be above the grid: above
+ *  the flat base plane under the surface (issue #135). There the position has to come from the ray.
+ *
+ *  The ray is given by two points under the cursor: on the near and on the far clipping plane
+ *  (vtkRenderer::DisplayToWorld with display Z = 0 and 1). The line through them is the view ray
+ *  for perspective and for parallel projection alike.
+ *
+ *  @param rayStart point under the cursor on the near clipping plane
+ *  @param rayEnd   another point of the ray, further from the camera
+ *  @param planeZ   world Z of the plane
+ *  @param outX     world X of the intersection (written only on success)
+ *  @param outY     world Y of the intersection (written only on success)
+ *  @return false if the ray is parallel to the plane or the plane lies behind rayStart, true otherwise */
+inline bool intersectRayWithHorizontalPlane(const Point3D& rayStart,
+                                            const Point3D& rayEnd,
+                                            double planeZ,
+                                            double& outX,
+                                            double& outY) noexcept
+{
+    const double dx = rayEnd.x - rayStart.x;
+    const double dy = rayEnd.y - rayStart.y;
+    const double dz = rayEnd.z - rayStart.z;
+
+    // A ray that is (almost) parallel to the plane never reaches it, or only very far away
+    const double rayLength = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (! (rayLength > 0.0) || std::abs(dz) < 1e-9 * rayLength)
+        return false;
+
+    const double t = (planeZ - rayStart.z) / dz;
+    if (t < 0.0) // the plane is behind the point the ray starts from
+        return false;
+
+    const double x = rayStart.x + t * dx;
+    const double y = rayStart.y + t * dy;
+    if (! std::isfinite(x) || ! std::isfinite(y))
+        return false;
+
+    outX = x;
+    outY = y;
+    return true;
+}
 } // namespace GridWorldMapping

@@ -530,6 +530,23 @@ protected:
      *         (2D model + "Use as 3D altitude", not in the cross-section view). */
     bool isHeightSurfaceDisplayed() const;
 
+    /** @brief Finds where the view ray under the cursor meets the flat base plane under the 3D height surface.
+     *
+     *  The height surface has no quads where its substate is outside (Min, Max], so the picker misses there
+     *  although the cursor is above the grid (the "chessboard"). The base plane gives such a position (issue #135).
+     *
+     *  @param displayX X of the cursor in VTK display coordinates (origin: bottom-left)
+     *  @param displayY Y of the cursor in VTK display coordinates (origin: bottom-left)
+     *  @param outWorldPos Output: world position on the plane (Z = GridWorldMapping::heightSurfaceBaseZ)
+     *  @return True if a height surface is displayed and the ray meets the plane inside the grid. */
+    bool pickBasePlane(int displayX, int displayY, std::array<double, 3>& outWorldPos) const;
+
+    /** @brief Position under the cursor as shown in the tooltip: "(x: .., y: ..)" or "(x: .., y: .., z: ..)".
+     *
+     *  Z is left out when it carries no information: in the flat 2D view every cell lies on one plane, and
+     *  over the base plane under a 3D height surface the cursor is not above any point of the surface. */
+    QString positionAsText(int x, int y, int z) const;
+
     /** @brief Converts VTK world coordinates to display/pixel coordinates shown to users.
      *
      *  X grows from left to right. Y grows from top to bottom, matching image/pixel
@@ -654,6 +671,10 @@ protected:
 
     /** @brief Whether the last mouse move picked the rendered data grid actor. */
     bool m_lastMousePickedGrid = false;
+
+    /** @brief Whether m_lastWorldPos lies on the flat base plane under the 3D height surface (the "chessboard"):
+     *         the cursor was above the grid but not above the surface. Reset together with m_lastMousePickedGrid. */
+    bool m_lastMouseOnBasePlane = false;
 
     /// @brief VTK renderer for the scene: This renderer is responsible for rendering the 3D scene.
     vtkNew<vtkRenderer> renderer;

@@ -157,6 +157,21 @@ vtkColor3d toVtkColor(QColor color)
     };
 }
 
+/** @brief Converts a display point to world coordinates.
+ *  @return false if the transformation is degenerate (w == 0) */
+bool unprojectDisplayPoint(vtkRenderer* renderer, int displayX, int displayY, double displayZ, GridWorldMapping::Point3D& outWorld)
+{
+    renderer->SetDisplayPoint(displayX, displayY, displayZ);
+    renderer->DisplayToWorld();
+    double worldPt[4];
+    renderer->GetWorldPoint(worldPt);
+    if (worldPt[3] == 0.0)
+        return false;
+
+    outWorld = { worldPt[0] / worldPt[3], worldPt[1] / worldPt[3], worldPt[2] / worldPt[3] };
+    return true;
+}
+
 struct CameraEulerAngles
 {
     double roll = 0.0;  // X
@@ -1249,6 +1264,7 @@ void SceneWidget::mouseCallbackFunction(vtkObject* caller, long unsigned int eve
     const auto lastMousePos = QPoint(vtkX, qtY);
 
     self->m_lastMousePickedGrid = false;
+    self->m_lastMouseOnBasePlane = false;
 
     // 3) Use a picker restricted to the data grid actor. Picking any visible prop
     // would also hit ruler axes or load-balancing helper lines, which can make a
@@ -1265,6 +1281,21 @@ void SceneWidget::mouseCallbackFunction(vtkObject* caller, long unsigned int eve
             picker->GetPickPosition(pickPos);
             self->m_lastWorldPos = { pickPos[0], pickPos[1], pickPos[2] };
             self->m_lastMousePickedGrid = true;
+            picked = true;
+        }
+    }
+
+    // 3b) The 3D height surface has quads only where its substate is inside (Min, Max], so the picker
+    // misses over the rest of the grid although the cursor is still above it (the "chessboard").
+    // Take the position from the view ray meeting the base plane under the surface (issue #135).
+    if (! picked)
+    {
+        std::array<double, 3> basePlanePos;
+        if (self->pickBasePlane(vtkX, vtkY, basePlanePos))
+        {
+            self->m_lastWorldPos = basePlanePos;
+            self->m_lastMousePickedGrid = true;
+            self->m_lastMouseOnBasePlane = true;
             picked = true;
         }
     }
@@ -1574,10 +1605,7 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
             }
             else
             {
-                tooltipText += QString("\nPosition: (x: %1, y: %2, z: %3)")
-                                  .arg(displayX)
-                                  .arg(displayY)
-                                  .arg(displayZ);
+                tooltipText += QString("\nPosition: %1").arg(positionAsText(displayX, displayY, displayZ));
 
                 tooltipText += QString("\n%1").arg(nodeInfo);
             }
@@ -1597,10 +1625,7 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
         }
         else
         {
-            tooltipText = QString("Pixel Position: (x: %1, y: %2, z: %3)")
-                              .arg(displayX)
-                              .arg(displayY)
-                              .arg(displayZ);
+            tooltipText = QString("Pixel Position: %1").arg(positionAsText(displayX, displayY, displayZ));
 
             tooltipText += QString("\n%1").arg(nodeInfo);
 
@@ -2319,6 +2344,42 @@ bool SceneWidget::isHeightSurfaceDisplayed() const
            !substateSliceEnabled &&
            !isNative3DModel() &&
            !get3DSubstateInfosTopToBottom().empty();
+}
+
+bool SceneWidget::pickBasePlane(int displayX, int displayY, std::array<double, 3>& outWorldPos) const
+{
+    if (! renderer || ! isHeightSurfaceDisplayed())
+        return false;
+
+    // Two points under the cursor, on the near and on the far clipping plane, define the view ray
+    GridWorldMapping::Point3D onNearPlane;
+    GridWorldMapping::Point3D onFarPlane;
+    if (! unprojectDisplayPoint(renderer, displayX, displayY, 0.0, onNearPlane)
+        || ! unprojectDisplayPoint(renderer, displayX, displayY, 1.0, onFarPlane))
+    {
+        return false;
+    }
+
+    std::array<double, 3> position{ 0.0, 0.0, GridWorldMapping::heightSurfaceBaseZ };
+    if (! GridWorldMapping::intersectRayWithHorizontalPlane(onNearPlane, onFarPlane, position[2], position[0], position[1]))
+        return false;
+
+    if (! isWorldPositionInGrid(position.data()))
+        return false;
+
+    outWorldPos = position;
+    return true;
+}
+
+QString SceneWidget::positionAsText(int x, int y, int z) const
+{
+    // In the flat 2D view all cells lie on one plane, and over the base plane under the 3D height surface
+    // there is no surface point under the cursor, so Z would only be a constant there.
+    const bool heightIsMeaningful = isNative3DModel() || (isHeightSurfaceDisplayed() && ! m_lastMouseOnBasePlane);
+    if (! heightIsMeaningful)
+        return QString("(x: %1, y: %2)").arg(x).arg(y);
+
+    return QString("(x: %1, y: %2, z: %3)").arg(x).arg(y).arg(z);
 }
 
 bool SceneWidget::convertWorldToDisplayCoordinates(const double worldPos[3], int& outX, int& outY, int& outZ) const

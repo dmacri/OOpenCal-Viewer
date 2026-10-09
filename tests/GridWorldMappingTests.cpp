@@ -160,3 +160,122 @@ TEST(GridWorldMappingFlatView, RejectsDegenerateInput)
     EXPECT_FALSE(worldToGridCell(1.0, 1.0, Bounds2D{0, 10, 0, 0}, 10, 10, r, c));
     EXPECT_FALSE(worldToGridCell(1.0, 1.0, Bounds2D{0, 10, 0, 10}, 0, 10, r, c));
 }
+
+/** Test Suite: GridWorldMappingBasePlane
+ *
+ * Regression for issue #135: with a substate shown as 3D height the surface has quads only where
+ * the substate is inside (Min, Max], so the picker misses over the rest of the grid (the flat
+ * "chessboard") and the tooltip said "(Outside the grid)". There the world position comes from
+ * the view ray meeting the base plane under the surface. */
+
+namespace
+{
+// Two points of the view ray through `ground`: one close to the camera (near clipping plane)
+// and one behind the plane (far clipping plane), as vtkRenderer::DisplayToWorld gives them.
+struct Ray
+{
+    Point3D start, end;
+};
+Ray rayThroughGroundPoint(const Point3D& camera, const Point3D& ground, double nearT = 0.02, double farT = 3.0)
+{
+    const auto at = [&](double t)
+    {
+        return Point3D{ camera.x + t * (ground.x - camera.x),
+                        camera.y + t * (ground.y - camera.y),
+                        camera.z + t * (ground.z - camera.z) };
+    };
+    return { at(nearT), at(farT) };
+}
+} // namespace
+
+TEST(GridWorldMappingBasePlane, VerticalRayHitsThePointRightBelowTheCursor)
+{
+    double x = 0.0, y = 0.0;
+    ASSERT_TRUE(intersectRayWithHorizontalPlane({ 12.5, 7.25, 100.0 }, { 12.5, 7.25, -100.0 }, heightSurfaceBaseZ, x, y));
+    EXPECT_DOUBLE_EQ(x, 12.5);
+    EXPECT_DOUBLE_EQ(y, 7.25);
+}
+
+TEST(GridWorldMappingBasePlane, ObliqueRayIsShiftedAlongItsDirection)
+{
+    double x = 0.0, y = 0.0;
+    ASSERT_TRUE(intersectRayWithHorizontalPlane({ 0.0, 0.0, 10.0 }, { 20.0, 10.0, 0.0 }, 0.0, x, y));
+    EXPECT_DOUBLE_EQ(x, 20.0);
+    EXPECT_DOUBLE_EQ(y, 10.0);
+
+    // the same line, the second point taken further along it
+    ASSERT_TRUE(intersectRayWithHorizontalPlane({ 0.0, 0.0, 10.0 }, { 60.0, 30.0, -20.0 }, 0.0, x, y));
+    EXPECT_DOUBLE_EQ(x, 20.0);
+    EXPECT_DOUBLE_EQ(y, 10.0);
+}
+
+TEST(GridWorldMappingBasePlane, FindsTheGroundPointSeenThroughAPerspectiveCamera)
+{
+    // Camera in front of the grid, looking across it (like a tilted 3D view)
+    const Point3D camera{ -40.0, -90.0, 260.0 };
+    const Point3D ground{ 123.0, 45.0, heightSurfaceBaseZ };
+    const Ray ray = rayThroughGroundPoint(camera, ground);
+
+    double x = 0.0, y = 0.0;
+    ASSERT_TRUE(intersectRayWithHorizontalPlane(ray.start, ray.end, heightSurfaceBaseZ, x, y));
+    EXPECT_NEAR(x, ground.x, 1e-9);
+    EXPECT_NEAR(y, ground.y, 1e-9);
+}
+
+TEST(GridWorldMappingBasePlane, RayParallelToThePlaneNeverHitsIt)
+{
+    double x = -1.0, y = -1.0;
+    EXPECT_FALSE(intersectRayWithHorizontalPlane({ 0.0, 0.0, 5.0 }, { 10.0, 0.0, 5.0 }, 0.0, x, y));
+    EXPECT_DOUBLE_EQ(x, -1.0); // untouched on failure
+    EXPECT_DOUBLE_EQ(y, -1.0);
+}
+
+TEST(GridWorldMappingBasePlane, PlaneBehindTheRayStartIsNotHit)
+{
+    double x = 0.0, y = 0.0;
+    // the ray climbs away from the plane
+    EXPECT_FALSE(intersectRayWithHorizontalPlane({ 0.0, 0.0, 5.0 }, { 10.0, 0.0, 10.0 }, 0.0, x, y));
+    // the ray starts below the plane and goes further down
+    EXPECT_FALSE(intersectRayWithHorizontalPlane({ 0.0, 0.0, -5.0 }, { 10.0, 0.0, -10.0 }, 0.0, x, y));
+}
+
+TEST(GridWorldMappingBasePlane, DegenerateRayIsRejected)
+{
+    double x = 0.0, y = 0.0;
+    EXPECT_FALSE(intersectRayWithHorizontalPlane({ 1.0, 2.0, 3.0 }, { 1.0, 2.0, 3.0 }, 0.0, x, y));
+}
+
+TEST(GridWorldMappingBasePlane, HitAboveAGapOfTheSurfaceMapsToTheCellUnderTheCursor)
+{
+    // SciddicaT: 496 rows x 610 columns. Cell (row 300, col 120) lies outside of the lava flow,
+    // so the surface has no quad there and the picker misses it.
+    constexpr int nRows = 496;
+    constexpr int nCols = 610;
+    const World cell = vertexOf(300, 120, nRows);
+    const Point3D camera{ cell.x - 80.0, cell.y - 250.0, 400.0 };
+    const Ray ray = rayThroughGroundPoint(camera, { cell.x + 0.2, cell.y - 0.3, heightSurfaceBaseZ });
+
+    double x = 0.0, y = 0.0;
+    ASSERT_TRUE(intersectRayWithHorizontalPlane(ray.start, ray.end, heightSurfaceBaseZ, x, y));
+
+    const Bounds2D grid = pointGridBounds(nRows, nCols);
+    EXPECT_TRUE(x >= grid.xMin && x <= grid.xMax && y >= grid.yMin && y <= grid.yMax);
+
+    int row = -1, col = -1;
+    ASSERT_TRUE(worldToNearestVertexCell(x, y, nRows, nCols, row, col));
+    EXPECT_EQ(row, 300);
+    EXPECT_EQ(col, 120);
+}
+
+TEST(GridWorldMappingBasePlane, HitBesideTheGridIsOutsideOfTheLogicalExtent)
+{
+    constexpr int nRows = 496;
+    constexpr int nCols = 610;
+    const Point3D camera{ 300.0, -300.0, 500.0 };
+    // a point of the plane left of the grid
+    const Ray ray = rayThroughGroundPoint(camera, { -60.0, 200.0, heightSurfaceBaseZ });
+
+    double x = 0.0, y = 0.0;
+    ASSERT_TRUE(intersectRayWithHorizontalPlane(ray.start, ray.end, heightSurfaceBaseZ, x, y));
+    EXPECT_LT(x, pointGridBounds(nRows, nCols).xMin);
+}
