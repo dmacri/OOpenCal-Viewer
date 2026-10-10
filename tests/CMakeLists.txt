@@ -151,3 +151,20 @@ target_include_directories(RulerLabelFitTests PRIVATE
 )
 
 add_test(NAME RulerLabelFitTests COMMAND RulerLabelFitTests)
+
+# ============================================
+# Add test executable for CameraPivotMath (header-only, no Qt/VTK)
+# ============================================
+add_executable(CameraPivotMathTests
+    CameraPivotMathTests.cpp
+)
+
+target_link_libraries(CameraPivotMathTests
+    GTest::gtest_main
+)
+
+target_include_directories(CameraPivotMathTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME CameraPivotMathTests COMMAND CameraPivotMathTests)

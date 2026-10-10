@@ -3,6 +3,8 @@
 
 #include "CustomInteractorStyle.h"
 #include "widgets/WaitCursorGuard.h"
+#include "widgets/CameraPivotMath.h"
+#include "widgets/VtkCameraPose.h"
 #include <vtkCamera.h>
 #include <vtkCellPicker.h>
 #include <vtkRenderWindowInteractor.h>
@@ -346,9 +348,41 @@ void CustomInteractorStyle::OnMouseMove()
     }
     else if (m_3dInteractionEnabled)
     {
-        // Allow parent class to handle trackball rotation (only in 3D mode)
-        this->Superclass::OnMouseMove();
+        // Trackball rotation (only in 3D mode), but around the rotation pivot
+        RotateAroundPivot();
     }
+}
+
+void CustomInteractorStyle::RotateAroundPivot()
+{
+    vtkRenderer* renderer = this->CurrentRenderer;
+    if (!m_rotationPivotProvider || !renderer || !renderer->GetActiveCamera())
+    {
+        this->Superclass::OnMouseMove();
+        return;
+    }
+
+    vtkCamera* camera = renderer->GetActiveCamera();
+    const CameraPivotMath::CameraPose before = VtkCameraPose::read(*camera);
+
+    // VTK applies its trackball step around the focal point: rotation, spin, pan or dolly.
+    this->Superclass::OnMouseMove();
+
+    const CameraPivotMath::CameraPose after = VtkCameraPose::read(*camera);
+    const auto frameBefore = CameraPivotMath::cameraFrameOf(before);
+    const auto frameAfter = CameraPivotMath::cameraFrameOf(after);
+    if (!frameBefore || !frameAfter)
+        return;
+
+    // Orientation change made by VTK. For pan and dolly it is the identity, so nothing is moved.
+    const CameraPivotMath::Mat3 rotation = CameraPivotMath::rotationBetween(*frameBefore, *frameAfter);
+    const CameraPivotMath::Vec3 pivot = m_rotationPivotProvider();
+    const CameraPivotMath::Vec3 correction = CameraPivotMath::pivotCompensation(rotation, before.focalPoint, pivot);
+    if (CameraPivotMath::length(correction) < 1e-9)
+        return;
+
+    VtkCameraPose::write(*camera, CameraPivotMath::compensatePivot(after, rotation, before.focalPoint, pivot));
+    this->Interactor->Render();
 }
 
 void CustomInteractorStyle::PanCamera()

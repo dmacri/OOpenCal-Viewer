@@ -42,6 +42,8 @@
 #include "widgets/NumberFormatting.h"
 #include "widgets/SubstatesDockWidget.h"
 #include "widgets/CustomInteractorStyle.h"
+#include "widgets/CameraPivotMath.h"
+#include "widgets/VtkCameraPose.h"
 #include "data/PerformanceMetrics.h"
 
 
@@ -349,10 +351,6 @@ void SceneWidget::applyCameraAnglesPreservingZoom()
     if (! camera)
         return;
 
-    double distance = camera->GetDistance();
-    if (distance < 1e-3)
-        distance = 1.0;
-
     bool oldWarningState = vtkObject::GetGlobalWarningDisplay();
     vtkObject::GlobalWarningDisplayOff();
 
@@ -362,12 +360,26 @@ void SceneWidget::applyCameraAnglesPreservingZoom()
         .yaw = cameraYaw
     });
 
-    camera->SetPosition(cameraPivot[0] + distance * basis.backward[0],
-                        cameraPivot[1] + distance * basis.backward[1],
-                        cameraPivot[2] + distance * basis.backward[2]);
-    camera->SetFocalPoint(cameraPivot.data());
-    camera->SetViewUp(basis.up.data());
-    camera->OrthogonalizeViewUp();
+    // Rotate the current camera rigidly around the scene pivot. Re-centring the view on the pivot
+    // would undo a zoom towards the cursor, so the distance and the zoomed-in view are kept, and the
+    // pivot keeps its position on screen.
+    const CameraPivotMath::CameraPose current = VtkCameraPose::read(*camera);
+    if (const auto currentFrame = CameraPivotMath::cameraFrameOf(current))
+    {
+        const CameraPivotMath::CameraFrame target{ basis.right, basis.up, basis.backward };
+        const CameraPivotMath::Mat3 rotation = CameraPivotMath::rotationBetween(*currentFrame, target);
+        VtkCameraPose::write(*camera, CameraPivotMath::rotateAroundPivot(current, cameraPivot, rotation));
+    }
+    else
+    {
+        // Degenerate camera (position on the focal point): place it on the pivot at unit distance.
+        camera->SetPosition(cameraPivot[0] + basis.backward[0],
+                            cameraPivot[1] + basis.backward[1],
+                            cameraPivot[2] + basis.backward[2]);
+        camera->SetFocalPoint(cameraPivot.data());
+        camera->SetViewUp(basis.up.data());
+        camera->OrthogonalizeViewUp();
+    }
 
     renderer->ResetCameraClippingRange();
     triggerRenderUpdate();
@@ -1208,15 +1220,14 @@ void SceneWidget::cameraCallbackFunction(vtkObject* caller, long unsigned int ev
         if (camera)
         {
             const CameraEulerAngles angles = cameraEulerFromVtk(*camera);
-            double focalPoint[3];
-            camera->GetFocalPoint(focalPoint);
 
+            // cameraPivot is not updated here: it stays the scene centre, because zoom and
+            // pan move the focal point.
             // Store the actual VTK orientation. The Qt side blocks slider signals
             // while displaying these values, so this cannot feed back into VTK.
             self->cameraRoll = angles.roll;
             self->cameraPitch = angles.pitch;
             self->cameraYaw = angles.yaw;
-            self->cameraPivot = { focalPoint[0], focalPoint[1], focalPoint[2] };
 
             emit self->cameraOrientationChanged(angles.roll, angles.pitch, angles.yaw);
         }
@@ -2383,6 +2394,8 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
     // Cost: ~5% overhead due to ray-plane calculations
     vtkNew<CustomInteractorStyle> style;
     style->Set3DInteractionEnabled(currentViewMode == ViewMode::Mode3D);
+    // Rotations orbit the scene centre (cameraPivot), not the focal point that zoom moves
+    style->SetRotationPivotProvider([this]() { return cameraPivot; });
     style->SetInteractionStateCallback([this](bool started)
     {
         if (started)
