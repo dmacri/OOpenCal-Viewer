@@ -480,10 +480,12 @@ protected:
     /** @brief Fit the camera and apply the stored Roll/Pitch/Yaw orientation. */
     void applyCameraAngles();
 
-    /// @brief Apply stored Roll/Pitch/Yaw while preserving camera distance.
+    /// @brief Rotate the camera around the scene pivot to the stored Roll/Pitch/Yaw orientation.
+    /// Distance (zoom) and the zoomed-in view are preserved; the view is not re-centred.
     void applyCameraAnglesPreservingZoom();
 
-    /// @brief Update cached camera pivot using current visible bounds
+    /// @brief Set the rotation pivot to the centre of the visible bounds (the scene centre).
+    /// Mouse and slider rotations orbit this point; zoom and pan do not move it.
     void updateCameraPivotFromBounds();
 
     /** @brief Load and update visualization data for the current step.
@@ -678,7 +680,8 @@ protected:
     /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number in the scene.
     vtkNew<vtkTextMapper> singleLineTextStep;
 
-    /// @brief Pivot point used for GUI-controlled camera rotations in 3D mode
+    /// @brief Rotation pivot in world coordinates: the scene centre (see updateCameraPivotFromBounds()).
+    /// The focal point moves on zoom and pan; the pivot does not.
     std::array<double, 3> cameraPivot{ 0.0, 0.0, 0.0 };
 
     /// @brief Axes actor for showing coordinate system orientation
