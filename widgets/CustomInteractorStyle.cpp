@@ -156,24 +156,47 @@ void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)
         };
         vtkMath::Normalize(viewNormal);
 
-        double numer = vtkMath::Dot(focal, viewNormal) - vtkMath::Dot(world0, viewNormal);
-        double denom = vtkMath::Dot(rayDir, viewNormal);
+        const double denom = vtkMath::Dot(rayDir, viewNormal);
 
-        if (std::abs(denom) > 1e-12)
+        // Point where the cursor ray meets the plane through `planePoint` perpendicular to the view
+        const auto intersectPlane = [&](const double planePoint[3], bool mustBeInFront)
         {
-            double t = numer / denom;
+            if (std::abs(denom) <= 1e-12)
+                return false;
+
+            const double t = (vtkMath::Dot(planePoint, viewNormal) - vtkMath::Dot(world0, viewNormal)) / denom;
+            if (mustBeInFront && t <= 0.0)
+                return false;
+
             pickWorld[0] = world0[0] + t * rayDir[0];
             pickWorld[1] = world0[1] + t * rayDir[1];
             pickWorld[2] = world0[2] + t * rayDir[2];
-            havePick = true;
+            return true;
+        };
+
+        // That plane has to stay where it is relative to the scene, so it goes through the middle of the scene.
+        // The focal point is no good for it: it travels with the camera on every step, so the camera would cover
+        // a constant part of the focal distance each time instead of a constant fraction of its distance to the plane.
+        // With the cursor outside of the scene (nothing picked) it went through the scene after about ten steps:
+        // the scene disappeared, and what is drawn over it in world coordinates (lines, rulers) showed up mirrored.
+        double sceneBounds[6];
+        renderer->ComputeVisiblePropBounds(sceneBounds);
+        const double sceneCenter[3] = { 0.5 * (sceneBounds[0] + sceneBounds[1]),
+                                        0.5 * (sceneBounds[2] + sceneBounds[3]),
+                                        0.5 * (sceneBounds[4] + sceneBounds[5]) };
+
+        bool onPlane = vtkMath::AreBoundsInitialized(sceneBounds) && intersectPlane(sceneCenter, true);
+        if (! onPlane)
+        {
+            onPlane = intersectPlane(focal, false);
         }
-        else
+        if (! onPlane)
         {
             pickWorld[0] = focal[0];
             pickWorld[1] = focal[1];
             pickWorld[2] = focal[2];
-            havePick = true;
         }
+        havePick = true;
     }
 
     if (!havePick)
