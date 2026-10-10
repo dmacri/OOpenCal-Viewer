@@ -43,11 +43,7 @@
 #include "OOpenCAL/base/Cell.h" // Color
 #include "visualiser/SettingParameter.h" // SubstateInfo
 #include "visualiser/Line.h"
-
-namespace GridWorldMapping
-{
-struct Bounds2D; // widgets/GridWorldMapping.h
-}
+#include "widgets/GridWorldMapping.h"
 
 
 /** @brief Converts a color channel value to a normalized range [0, 1].
@@ -340,7 +336,7 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
             for (int col = 0; col <= nCols; col++)
             {
                 // Insert points with Y inverted to match buidColor() indexing
-                points->InsertNextPoint(/*x=*/col, /*y=*/nRows - row, /*z=*/1); /// z is not used
+                points->InsertNextPoint(/*x=*/col, /*y=*/nRows - row, /*z=*/GridWorldMapping::flatSceneZ);
             }
         }
 
@@ -391,7 +387,7 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
             {
                 // Insert points with Y inverted to match buidColor() indexing
                 // buidColor() uses (nRows - 1 - row) so points must be positioned accordingly
-                points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/1); /// z is not used
+                points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/GridWorldMapping::flatSceneZ);
             }
         }
 

@@ -53,14 +53,15 @@ vtkSmartPointer<vtkPolyData> Visualizer::createLinePolyData(const std::vector<Li
     vtkNew<vtkCellArray> cellLines;
 
     // The lines are not moved away from the scene: a constant shift in world units (it used to be 0.5) grows with
-    // the zoom, and when zoomed in the outer lines floated next to the scene instead of lying on its edges (issue #120)
+    // the zoom, and when zoomed in the outer lines floated next to the scene instead of lying on its edges (issue #120).
+    // They also lie at the depth of the scene, otherwise the perspective would shift them against it when zoomed in
     for (size_t i = 0; i < lines.size(); ++i)
     {
         const auto start = GridWorldMapping::lineToWorld(lines[i].x1, lines[i].y1, nRows, sceneBounds);
         const auto end = GridWorldMapping::lineToWorld(lines[i].x2, lines[i].y2, nRows, sceneBounds);
 
-        pts->InsertNextPoint(start.x, start.y, 0.0);
-        pts->InsertNextPoint(end.x, end.y, 0.0);
+        pts->InsertNextPoint(start.x, start.y, GridWorldMapping::flatSceneZ);
+        pts->InsertNextPoint(end.x, end.y, GridWorldMapping::flatSceneZ);
         cellLines->InsertNextCell(2);
         cellLines->InsertCellPoint(i * 2);
         cellLines->InsertCellPoint(i * 2 + 1);

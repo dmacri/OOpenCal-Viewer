@@ -235,6 +235,14 @@ constexpr Bounds2D cellGridBounds(int nRows, int nCols) noexcept
     return Bounds2D{ 0.0, static_cast<double>(nCols), 0.0, static_cast<double>(nRows) };
 }
 
+/** @brief World Z of the data grid in the flat (2D) view, drawn with a quad or with a point per cell
+ *         (Visualizer::drawWithVTK).
+ *
+ *  Whatever is drawn over the grid in world coordinates, like the lines between the nodes, has to lie at the
+ *  same depth. The camera is a perspective one: things at different depths shift against each other when zoomed in
+ *  (the closer the camera, the more), so lines one unit behind the grid slid into it (issue #120). */
+inline constexpr double flatSceneZ = 1.0;
+
 /// Point in world X/Y coordinates.
 struct Point2D
 {
