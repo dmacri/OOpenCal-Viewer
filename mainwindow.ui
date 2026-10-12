@@ -789,6 +789,9 @@
     <property name="title">
      <string>View</string>
     </property>
+    <property name="toolTipsVisible">
+     <bool>true</bool>
+    </property>
     <addaction name="action2DMode"/>
     <addaction name="action3DMode"/>
     <addaction name="separator"/>

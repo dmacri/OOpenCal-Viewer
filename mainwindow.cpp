@@ -2114,8 +2114,13 @@ void MainWindow::updateSliceControls(bool resetSelection)
     {
         QSignalBlocker blocker(ui->actionCrossSectionControls);
         ui->actionCrossSectionControls->setChecked(false);
+        ui->actionCrossSectionControls->setToolTip(
+            tr("Cross-section controls are only available for 3D models with a substate used as altitude"));
         return;
     }
+
+    ui->actionCrossSectionControls->setToolTip(
+        tr("Show controls for axis-aligned cross-sections"));
 
     if (!resetSelection)
         return;
