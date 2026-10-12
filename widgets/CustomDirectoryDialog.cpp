@@ -27,6 +27,7 @@
 #include "config/ConfigCategory.h"
 #include "config/ConfigParameter.h"
 #include "config/ConfigConstants.h"
+#include "core/AppImagePaths.h"
 #include "core/directoryConstants.h"
 #include "plugins/ModelLoader.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
@@ -730,49 +731,26 @@ void CustomDirectoryDialog::setStartDirectory(const QString &path)
 {
     QString targetPath = path;
 
-    // If path doesn't exist or is empty, try to find a valid prefix or fall back to application directory
+    // A directory inside the mounted AppImage (bundled compiler, headers...) exists, but is useless to the user
+    if (viz::appimage::isInsideMountedImage(targetPath))
+    {
+        targetPath.clear();
+    }
+
+    // If path doesn't exist or is empty, try to find a valid prefix or fall back to a sensible default
     if (targetPath.isEmpty() || !QDir(targetPath).exists())
     {
         // Try to find the longest valid prefix
         PathValidationResult validation = validateAndSplitPath(targetPath);
-        if (!validation.validPrefix.isEmpty() && QDir(validation.validPrefix).exists())
+        if (!validation.validPrefix.isEmpty() && QDir(validation.validPrefix).exists()
+            && !viz::appimage::isInsideMountedImage(validation.validPrefix))
         {
             targetPath = validation.validPrefix;
         }
         else
         {
-            // Fall back to the directory containing the executable (e.g., AppImage file location)
-            // This is especially useful for AppImage deployments where currentPath() is inside the mounted image
-            QString appFilePath;
-
-            // Check if running as AppImage (APPIMAGE environment variable points to real AppImage file)
-            QByteArray appImageEnv = qgetenv("APPIMAGE");
-            std::cout << "[DEBUG] APPIMAGE env: " << (appImageEnv.isEmpty() ? "(empty)" : appImageEnv.constData()) << std::endl;
-
-            if (!appImageEnv.isEmpty())
-            {
-                appFilePath = QString::fromUtf8(appImageEnv);
-                std::cout << "[DEBUG] Using APPIMAGE path: " << appFilePath.toStdString() << std::endl;
-            }
-            else
-            {
-                // Not running as AppImage, use standard application path
-                appFilePath = QCoreApplication::applicationFilePath();
-                std::cout << "[DEBUG] Using QCoreApplication::applicationFilePath(): " << appFilePath.toStdString() << std::endl;
-            }
-
-            QFileInfo appFileInfo(appFilePath);
-            if (appFileInfo.exists() && appFileInfo.isFile())
-            {
-                targetPath = appFileInfo.absolutePath();
-                std::cout << "[DEBUG] Final target path: " << targetPath.toStdString() << std::endl;
-            }
-            else
-            {
-                // Final fallback to current working directory
-                targetPath = QDir::currentPath();
-                std::cout << "[DEBUG] Fallback to currentPath: " << targetPath.toStdString() << std::endl;
-            }
+            // Directory the application was started from (never the AppImage mount point), then home
+            targetPath = viz::appimage::defaultStartDirectory();
         }
     }
 

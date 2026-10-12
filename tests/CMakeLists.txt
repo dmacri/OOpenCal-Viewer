@@ -168,3 +168,21 @@ target_include_directories(CameraPivotMathTests PRIVATE
 )
 
 add_test(NAME CameraPivotMathTests COMMAND CameraPivotMathTests)
+
+# ============================================
+# Add test executable for AppImagePaths (header-only, Qt Core only)
+# ============================================
+add_executable(AppImagePathsTests
+    AppImagePathsTests.cpp
+)
+
+target_link_libraries(AppImagePathsTests
+    GTest::gtest_main
+    ${QT_TARGET_PREFIX}::Core
+)
+
+target_include_directories(AppImagePathsTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME AppImagePathsTests COMMAND AppImagePathsTests)
