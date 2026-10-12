@@ -701,6 +701,7 @@ void MainWindow::connectMenuActions()
     connect(ui->action2DMode, &QAction::triggered, this, &MainWindow::on2DModeRequested);
     connect(ui->action3DMode, &QAction::triggered, this, &MainWindow::on3DModeRequested);
     connect(ui->actionCrossSectionControls, &QAction::toggled, this, &MainWindow::onCrossSectionControlsToggled);
+    connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::onResetCameraRequested);
     connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
     connect(ui->actionLineDetection, &QAction::triggered, this, &MainWindow::onLineDetectionToggled);
     connect(ui->actionFlatSceneBackground, &QAction::triggered, this, &MainWindow::onFlatSceneBackgroundToggled);
