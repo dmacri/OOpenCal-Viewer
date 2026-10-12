@@ -729,8 +729,8 @@ void CustomDirectoryDialog::loadAvailableModels()
 void CustomDirectoryDialog::setStartDirectory(const QString &path)
 {
     QString targetPath = path;
-    
-    // If path doesn't exist or is empty, try to find a valid prefix or fall back to current working directory
+
+    // If path doesn't exist or is empty, try to find a valid prefix or fall back to application directory
     if (targetPath.isEmpty() || !QDir(targetPath).exists())
     {
         // Try to find the longest valid prefix
@@ -741,11 +741,22 @@ void CustomDirectoryDialog::setStartDirectory(const QString &path)
         }
         else
         {
-            // Fall back to current working directory (useful for AppImage deployments)
-            targetPath = QDir::currentPath();
+            // Fall back to the directory containing the executable (e.g., AppImage file location)
+            // This is especially useful for AppImage deployments where currentPath() is inside the mounted image
+            QString appFilePath = QCoreApplication::applicationFilePath();
+            QFileInfo appFileInfo(appFilePath);
+            if (appFileInfo.exists() && appFileInfo.isFile())
+            {
+                targetPath = appFileInfo.absolutePath();
+            }
+            else
+            {
+                // Final fallback to current working directory
+                targetPath = QDir::currentPath();
+            }
         }
     }
-    
+
     QModelIndex sourceIndex = m_fileSystemModel->index(targetPath);
     QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
     if (proxyIndex.isValid())
