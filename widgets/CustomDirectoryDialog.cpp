@@ -747,25 +747,31 @@ void CustomDirectoryDialog::setStartDirectory(const QString &path)
 
             // Check if running as AppImage (APPIMAGE environment variable points to real AppImage file)
             QByteArray appImageEnv = qgetenv("APPIMAGE");
+            std::cout << "[DEBUG] APPIMAGE env: " << (appImageEnv.isEmpty() ? "(empty)" : appImageEnv.constData()) << std::endl;
+
             if (!appImageEnv.isEmpty())
             {
                 appFilePath = QString::fromUtf8(appImageEnv);
+                std::cout << "[DEBUG] Using APPIMAGE path: " << appFilePath.toStdString() << std::endl;
             }
             else
             {
                 // Not running as AppImage, use standard application path
                 appFilePath = QCoreApplication::applicationFilePath();
+                std::cout << "[DEBUG] Using QCoreApplication::applicationFilePath(): " << appFilePath.toStdString() << std::endl;
             }
 
             QFileInfo appFileInfo(appFilePath);
             if (appFileInfo.exists() && appFileInfo.isFile())
             {
                 targetPath = appFileInfo.absolutePath();
+                std::cout << "[DEBUG] Final target path: " << targetPath.toStdString() << std::endl;
             }
             else
             {
                 // Final fallback to current working directory
                 targetPath = QDir::currentPath();
+                std::cout << "[DEBUG] Fallback to currentPath: " << targetPath.toStdString() << std::endl;
             }
         }
     }
