@@ -2,7 +2,6 @@
  * @brief Implementation of the SceneWidget class for 3D visualization. */
 
 #include <iostream> // std::cout
-#include <clocale>
 #include <algorithm>
 #include <cmath> // std::isfinite
 #include <filesystem>
@@ -1630,11 +1629,7 @@ QString SceneWidget::cellValueAtThisPositionAsText() const
     std::string cellValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col);
     if (! cellValue.empty())
     {
-        // "[1008.000000,0.000000]" -> "[1008, 0]". A list cannot be split reliably when the decimal
-        // separator is ',' (it is also the list separator), so only do it for '.'.
-        const bool decimalPointIsDot = *std::localeconv()->decimal_point == '.';
-        const std::string shownCellValue = decimalPointIsDot ? NumberFormatting::withoutZeroFractionsInList(cellValue)
-                                                              : cellValue;
+        const std::string shownCellValue = NumberFormatting::withoutZeroFractionsInListIfNeeded(cellValue);
         tooltipText += QString("\nCell Value: %1").arg(QString::fromStdString(shownCellValue));
     }
 
