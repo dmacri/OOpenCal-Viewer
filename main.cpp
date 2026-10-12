@@ -25,6 +25,7 @@
 #include <QFileInfo>
 #include <QStyleFactory>
 #include <QSurfaceFormat>
+#include <clocale>
 #include <filesystem>
 
 #include <QVTKOpenGLNativeWidget.h>
@@ -34,6 +35,7 @@
 #include "core/CommandLineParser.h"
 #include "plugins/PluginLoader.h"
 #include "data/PerformanceMetrics.h"
+#include "core/PrecompiledHeaderCommand.h"
 
 
 void applyStyleSheet(MainWindow& mainWindow);
@@ -41,11 +43,20 @@ void applyStyleSheet(MainWindow& mainWindow);
 
 int main(int argc, char* argv[])
 {
+    // Helper mode without any GUI (and without a display): builds the precompiled header and exits
+    if (const auto exitCode = viz::cli::runBuildPrecompiledHeaderCommand(argc, argv))
+        return *exitCode;
+
     // vtkObject::GlobalWarningDisplayOff();
 
     QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
 
     QApplication a(argc, argv);
+
+    // On Unix Qt calls setlocale(LC_ALL, ""), so e.g. a Polish system would make the printf/strtod calls inside
+    // the model (Cell) classes print and parse "1008,5" instead of "1008.5". The application is in English, so
+    // keep numbers in the C format. Qt widgets format numbers through QLocale and are not affected.
+    std::setlocale(LC_NUMERIC, "C");
     QApplication::setStyle(QStyleFactory::create("Fusion"));
     QApplication::setApplicationName("OOpenCal-Visualiser");
 

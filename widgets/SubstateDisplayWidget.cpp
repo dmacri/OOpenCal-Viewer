@@ -18,6 +18,7 @@
 #include <QLineEdit>
 #include <QLocale>
 #include <QMimeData>
+#include "NumberFormatting.h"
 #include "SubstateDisplayWidget.h"
 #include "ui_SubstateDisplayWidget.h"
 
@@ -174,7 +175,10 @@ void SubstateDisplayWidget::setCellValue(const std::string& value)
                     if (std::isdigit(precChar))
                         precision = precChar - '0';
                 }
-                ui->valueLabel->setText(QString::number(numValue, 'f', precision));
+                // Even with an explicit format do not show a fractional part that is all zeros
+                // ("16.00" -> "16"); "16.50" stays as it is
+                const std::string formatted = QString::number(numValue, 'f', precision).toStdString();
+                ui->valueLabel->setText(QString::fromStdString(NumberFormatting::withoutZeroFraction(formatted)));
             }
             else if (isInteger)
             {
@@ -195,8 +199,9 @@ void SubstateDisplayWidget::setCellValue(const std::string& value)
     }
     else
     {
-        // No format specified, show value as-is
-        ui->valueLabel->setText(QString::fromStdString(value));
+        // No format specified: show the model's text, but without a fractional part that is all
+        // zeros ("1049.000000" -> "1049"), same as in the scene tooltip
+        ui->valueLabel->setText(QString::fromStdString(NumberFormatting::withoutZeroFraction(value)));
     }
 }
 

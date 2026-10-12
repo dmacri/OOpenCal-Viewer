@@ -9,7 +9,7 @@
  * The singleton manages:
  * - Base compilation flags (-shared, -fPIC)
  * - VTK compilation flags
- * - Environment variables (OOPENCAL_DIR, OOPENCAL_VIEWER_ROOT)
+ * - Environment variables (OOPENCAL_DIR, OOPENCAL_VIEWER_ROOT, OOPENCAL_PRECOMPILED_HEADER_DIR)
  * - Include paths that depend on environment variables
  * - Compiler settings and paths
  *
@@ -131,6 +131,21 @@ public:
     /** @brief Reset OOpenCal-Viewer root directory to defaults */
     void resetViewerRootDir();
 
+    /** @brief Get directory with the precompiled header used to speed up compilation of models (with overrides applied)
+     * @return Directory path, empty if the precompiled header is not configured */
+    std::string getPrecompiledHeaderDir() const;
+
+    /** @brief Get default precompiled header directory (OOPENCAL_PRECOMPILED_HEADER_DIR environment variable, then CMake define)
+     * @return Default directory path; it may not exist yet (it is created by --buildPrecompiledHeader) */
+    std::string getDefaultPrecompiledHeaderDir() const;
+
+    /** @brief Set precompiled header directory override
+     * @param path Custom directory, or empty to use defaults. A directory which does not exist disables the precompiled header */
+    void setPrecompiledHeaderDir(const std::string& path);
+
+    /** @brief Reset precompiled header directory to defaults */
+    void resetPrecompiledHeaderDir();
+
     /** @brief Get all include paths based on current configuration
      * @return Vector of include path strings */
     std::vector<std::string> getIncludePaths() const;
@@ -217,6 +232,7 @@ private:
         std::optional<std::string> vtkFlagsOverride;
         std::optional<std::string> oopencalDirOverride;
         std::optional<std::string> viewerRootDirOverride;
+        std::optional<std::string> precompiledHeaderDirOverride;
     };
 
     ConfigState m_state;
@@ -234,6 +250,10 @@ private:
     /** @brief Get default viewer root directory from environment/CMake
      * @return Default viewer root directory path */
     std::string getDefaultViewerRootDirImpl() const;
+
+    /** @brief Get default precompiled header directory from environment/CMake
+     * @return Default precompiled header directory path */
+    std::string getDefaultPrecompiledHeaderDirImpl() const;
 
     /** @brief Get default VTK compilation flags implementation */
     std::string getDefaultVtkFlagsImpl() const;

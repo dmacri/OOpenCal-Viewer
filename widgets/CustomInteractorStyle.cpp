@@ -3,6 +3,8 @@
 
 #include "CustomInteractorStyle.h"
 #include "widgets/WaitCursorGuard.h"
+#include "widgets/CameraPivotMath.h"
+#include "widgets/VtkCameraPose.h"
 #include <vtkCamera.h>
 #include <vtkCellPicker.h>
 #include <vtkRenderWindowInteractor.h>
@@ -156,24 +158,47 @@ void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)
         };
         vtkMath::Normalize(viewNormal);
 
-        double numer = vtkMath::Dot(focal, viewNormal) - vtkMath::Dot(world0, viewNormal);
-        double denom = vtkMath::Dot(rayDir, viewNormal);
+        const double denom = vtkMath::Dot(rayDir, viewNormal);
 
-        if (std::abs(denom) > 1e-12)
+        // Point where the cursor ray meets the plane through `planePoint` perpendicular to the view
+        const auto intersectPlane = [&](const double planePoint[3], bool mustBeInFront)
         {
-            double t = numer / denom;
+            if (std::abs(denom) <= 1e-12)
+                return false;
+
+            const double t = (vtkMath::Dot(planePoint, viewNormal) - vtkMath::Dot(world0, viewNormal)) / denom;
+            if (mustBeInFront && t <= 0.0)
+                return false;
+
             pickWorld[0] = world0[0] + t * rayDir[0];
             pickWorld[1] = world0[1] + t * rayDir[1];
             pickWorld[2] = world0[2] + t * rayDir[2];
-            havePick = true;
+            return true;
+        };
+
+        // That plane has to stay where it is relative to the scene, so it goes through the middle of the scene.
+        // The focal point is no good for it: it travels with the camera on every step, so the camera would cover
+        // a constant part of the focal distance each time instead of a constant fraction of its distance to the plane.
+        // With the cursor outside of the scene (nothing picked) it went through the scene after about ten steps:
+        // the scene disappeared, and what is drawn over it in world coordinates (lines, rulers) showed up mirrored.
+        double sceneBounds[6];
+        renderer->ComputeVisiblePropBounds(sceneBounds);
+        const double sceneCenter[3] = { 0.5 * (sceneBounds[0] + sceneBounds[1]),
+                                        0.5 * (sceneBounds[2] + sceneBounds[3]),
+                                        0.5 * (sceneBounds[4] + sceneBounds[5]) };
+
+        bool onPlane = vtkMath::AreBoundsInitialized(sceneBounds) && intersectPlane(sceneCenter, true);
+        if (! onPlane)
+        {
+            onPlane = intersectPlane(focal, false);
         }
-        else
+        if (! onPlane)
         {
             pickWorld[0] = focal[0];
             pickWorld[1] = focal[1];
             pickWorld[2] = focal[2];
-            havePick = true;
         }
+        havePick = true;
     }
 
     if (!havePick)
@@ -231,86 +256,156 @@ void CustomInteractorStyle::ZoomTowardsCursor(double zoomFactor)
     renderWindow->Render();
 }
 
+void CustomInteractorStyle::UpdatePressedButton(ButtonBit button, bool pressed)
+{
+    const bool wasActive = m_pressedButtons != 0;
+
+    if (pressed)
+        m_pressedButtons |= button;
+    else
+        m_pressedButtons &= ~static_cast<unsigned>(button);
+
+    const bool isActive = m_pressedButtons != 0;
+    if (wasActive != isActive && m_interactionStateCallback)
+        m_interactionStateCallback(isActive);
+}
+
 void CustomInteractorStyle::OnLeftButtonDown()
 {
-    if (!m_3dInteractionEnabled)
-        return;
-
-    // If Shift is pressed: start custom panning
+    // If Shift is pressed: start custom panning (works in both 2D and 3D modes)
     if (this->Interactor->GetShiftKey())
     {
         m_isPanning = true;
         const int* pos = this->Interactor->GetEventPosition();
         m_lastMouseX = pos[0];
         m_lastMouseY = pos[1];
-        
+
+        // Only track button state in 3D mode
+        if (m_3dInteractionEnabled)
+        {
+            UpdatePressedButton(LeftButtonBit, true);
+        }
+
         // Create wait cursor guard for panning (persists until OnLeftButtonUp)
         WaitCursorGuard::changeIcon(/*waitingIcon=*/true);
     }
     else
     {
-        // No Shift - allow normal trackball rotation from parent class
+        // No Shift - only allow in 3D mode
+        if (!m_3dInteractionEnabled)
+            return;
+
+        UpdatePressedButton(LeftButtonBit, true);
+        // Allow normal trackball rotation from parent class
         this->Superclass::OnLeftButtonDown();
     }
 }
 
 void CustomInteractorStyle::OnLeftButtonUp()
 {
-    if (!m_3dInteractionEnabled)
-        return;
-
     if (m_isPanning)
     {
         m_isPanning = false;
-        
+
+        // Only track button state in 3D mode
+        if (m_3dInteractionEnabled)
+        {
+            UpdatePressedButton(LeftButtonBit, false);
+        }
+
         WaitCursorGuard::changeIcon(/*waitingIcon=*/false);
     }
     else
     {
-        // Normal click processing (trackball rotation)
+        // Normal click processing (trackball rotation) - only in 3D mode
+        if (!m_3dInteractionEnabled)
+            return;
+
+        UpdatePressedButton(LeftButtonBit, false);
         this->Superclass::OnLeftButtonUp();
     }
 }
 
 void CustomInteractorStyle::OnMiddleButtonDown()
 {
-    if (m_3dInteractionEnabled)
-        this->Superclass::OnMiddleButtonDown();
+    if (!m_3dInteractionEnabled)
+        return;
+
+    UpdatePressedButton(MiddleButtonBit, true);
+    this->Superclass::OnMiddleButtonDown();
 }
 
 void CustomInteractorStyle::OnMiddleButtonUp()
 {
-    if (m_3dInteractionEnabled)
-        this->Superclass::OnMiddleButtonUp();
+    if (!m_3dInteractionEnabled)
+        return;
+
+    UpdatePressedButton(MiddleButtonBit, false);
+    this->Superclass::OnMiddleButtonUp();
 }
 
 void CustomInteractorStyle::OnRightButtonDown()
 {
-    if (m_3dInteractionEnabled)
-        this->Superclass::OnRightButtonDown();
+    if (!m_3dInteractionEnabled)
+        return;
+
+    UpdatePressedButton(RightButtonBit, true);
+    this->Superclass::OnRightButtonDown();
 }
 
 void CustomInteractorStyle::OnRightButtonUp()
 {
-    if (m_3dInteractionEnabled)
-        this->Superclass::OnRightButtonUp();
+    if (!m_3dInteractionEnabled)
+        return;
+
+    UpdatePressedButton(RightButtonBit, false);
+    this->Superclass::OnRightButtonUp();
 }
 
 void CustomInteractorStyle::OnMouseMove()
 {
-    if (!m_3dInteractionEnabled)
-        return;
-
     if (m_isPanning)
     {
-        // Custom panning when Shift+Left is held
+        // Custom panning when Shift+Left (3D mode) or Shift+Right (2D and 3D modes) is held
         PanCamera();
     }
-    else
+    else if (m_3dInteractionEnabled)
     {
-        // Allow parent class to handle trackball rotation
-        this->Superclass::OnMouseMove();
+        // Trackball rotation (only in 3D mode), but around the rotation pivot
+        RotateAroundPivot();
     }
+}
+
+void CustomInteractorStyle::RotateAroundPivot()
+{
+    vtkRenderer* renderer = this->CurrentRenderer;
+    if (!m_rotationPivotProvider || !renderer || !renderer->GetActiveCamera())
+    {
+        this->Superclass::OnMouseMove();
+        return;
+    }
+
+    vtkCamera* camera = renderer->GetActiveCamera();
+    const CameraPivotMath::CameraPose before = VtkCameraPose::read(*camera);
+
+    // VTK applies its trackball step around the focal point: rotation, spin, pan or dolly.
+    this->Superclass::OnMouseMove();
+
+    const CameraPivotMath::CameraPose after = VtkCameraPose::read(*camera);
+    const auto frameBefore = CameraPivotMath::cameraFrameOf(before);
+    const auto frameAfter = CameraPivotMath::cameraFrameOf(after);
+    if (!frameBefore || !frameAfter)
+        return;
+
+    // Orientation change made by VTK. For pan and dolly it is the identity, so nothing is moved.
+    const CameraPivotMath::Mat3 rotation = CameraPivotMath::rotationBetween(*frameBefore, *frameAfter);
+    const CameraPivotMath::Vec3 pivot = m_rotationPivotProvider();
+    const CameraPivotMath::Vec3 correction = CameraPivotMath::pivotCompensation(rotation, before.focalPoint, pivot);
+    if (CameraPivotMath::length(correction) < 1e-9)
+        return;
+
+    VtkCameraPose::write(*camera, CameraPivotMath::compensatePivot(after, rotation, before.focalPoint, pivot));
+    this->Interactor->Render();
 }
 
 void CustomInteractorStyle::PanCamera()

@@ -74,6 +74,12 @@ Exit the application after processing the last step. This is particularly useful
 ./OOpenCal-Viewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep
 ```
 
+### `--buildPrecompiledHeader[=<DIR>]`
+
+Builds the precompiled header which speeds up on-the-fly compilation of models and exits. It does not start the GUI and needs
+no display. `<DIR>` defaults to the `OOPENCAL_PRECOMPILED_HEADER_DIR` setting. Exit code: 0 on success, 1 if building failed,
+2 if no directory is known. See [PRECOMPILED_HEADER.md](PRECOMPILED_HEADER.md).
+
 ## Examples
 
 ### Example 1: Load configuration and start with specific model

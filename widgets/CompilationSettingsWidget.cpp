@@ -23,6 +23,7 @@
 #include "ui_CompilationSettingsWidget.h"
 #include "plugins/CppModuleBuilder.h"
 #include "plugins/CompilationConfig.h"
+#include "plugins/PrecompiledHeader.h"
 
 
 CompilationSettingsWidget::CompilationSettingsWidget(QWidget* parent)
@@ -171,6 +172,21 @@ void CompilationSettingsWidget::setupConfigTable(QTableWidget* table)
     table->setItem(ConfigRow::VTK_INCLUDES_ROW, 3, vtkItem);
     validatePath(vtkConfig.currentValue, vtkItem, "VTK_INCLUDES");
     
+    // Row 3: OOPENCAL_PRECOMPILED_HEADER_DIR (optional: directory with the precompiled header, see doc/PRECOMPILED_HEADER.md)
+    auto pchConfig = getPrecompiledHeaderDirConfig();
+    table->setItem(ConfigRow::PRECOMPILED_HEADER_DIR_ROW, 0, new QTableWidgetItem("OOPENCAL_PRECOMPILED_HEADER_DIR"));
+    auto* pchCmakeItem = new QTableWidgetItem(pchConfig.cmakeValue);
+    table->setItem(ConfigRow::PRECOMPILED_HEADER_DIR_ROW, 1, pchCmakeItem);
+    validatePath(pchConfig.cmakeValue, pchCmakeItem, "OOPENCAL_PRECOMPILED_HEADER_DIR");
+
+    auto* pchEnvItem = new QTableWidgetItem(pchConfig.envValue);
+    table->setItem(ConfigRow::PRECOMPILED_HEADER_DIR_ROW, 2, pchEnvItem);
+    validatePath(pchConfig.envValue, pchEnvItem, "OOPENCAL_PRECOMPILED_HEADER_DIR");
+
+    auto* pchItem = new QTableWidgetItem(pchConfig.currentValue);
+    table->setItem(ConfigRow::PRECOMPILED_HEADER_DIR_ROW, 3, pchItem);
+    validatePath(pchConfig.currentValue, pchItem, "OOPENCAL_PRECOMPILED_HEADER_DIR");
+
     // Make first three columns read-only, but allow editing in Current Value column
     for (int row = 0; row < ConfigRow::CONFIG_ROWS_COUNT; ++row)
     {
@@ -263,6 +279,10 @@ void CompilationSettingsWidget::updateConfigValue(const QString& variableName, c
     else if (variableName == "VTK_INCLUDES")
     {
         config.setVtkFlags(value.toStdString());
+    }
+    else if (variableName == "OOPENCAL_PRECOMPILED_HEADER_DIR")
+    {
+        config.setPrecompiledHeaderDir(value.toStdString());
     }
     
     // Update only the additional paths and example command - don't reload the whole table
@@ -394,6 +414,13 @@ QString CompilationSettingsWidget::generateExampleCommand()
         command += " " + vtkFlags;
     }
 
+    // Precompiled header: shown only when one has been built for the selected compiler
+    {
+        const auto compilerIdentity = viz::plugins::pch::identifyCompiler(compiler.toStdString());
+        command += QString::fromStdString(viz::plugins::pch::previewUsageFlags(
+            config.getPrecompiledHeaderDir(), compilerIdentity.family, viz::plugins::pch::relocationRootFromEnvironment()));
+    }
+
     command += " \"<source_file>\" -o \"<output_file>\"";
 
     return command;
@@ -409,6 +436,7 @@ void CompilationSettingsWidget::loadEnvironmentVariables()
         "OOPENCAL_DIR",
         "OOPENCAL_VIEWER_ROOT", 
         "OOPENCAL_COMPILER",
+        "OOPENCAL_PRECOMPILED_HEADER_DIR",
         "PATH",
         "CPLUS_INCLUDE_PATH",
         "C_INCLUDE_PATH",
@@ -691,6 +719,30 @@ CompilationSettingsWidget::ConfigValues CompilationSettingsWidget::getVtkFlagsCo
     // Get current value (with overrides) - show clean paths without -I
     values.currentValue = QString::fromStdString(config.getVtkIncludePaths());
     
+    return values;
+}
+
+CompilationSettingsWidget::ConfigValues CompilationSettingsWidget::getPrecompiledHeaderDirConfig()
+{
+    ConfigValues values;
+    auto& config = viz::plugins::CompilationConfig::getInstance();
+
+    // Get CMake value (compile-time)
+#ifdef OOPENCAL_PRECOMPILED_HEADER_DIR
+    values.cmakeValue = OOPENCAL_PRECOMPILED_HEADER_DIR;
+#else
+    values.cmakeValue = "";
+#endif
+
+    // Get environment value
+    if (const char* envPath = std::getenv("OOPENCAL_PRECOMPILED_HEADER_DIR"))
+    {
+        values.envValue = envPath;
+    }
+
+    // Get current value (with overrides)
+    values.currentValue = QString::fromStdString(config.getPrecompiledHeaderDir());
+
     return values;
 }
 

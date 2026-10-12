@@ -64,6 +64,12 @@ bool CommandLineParser::parse(int argc, char* argv[])
             .help("Automatically start playback when simulation data loads (useful for performance testing)")
             .flag();
 
+        // Handled by main() before the GUI is created; registered here so that it is listed in --help
+        program.add_argument(ARG_BUILD_PRECOMPILED_HEADER)
+            .help("Build the precompiled header which speeds up compilation of models and exit "
+                  "(directory defaults to OOPENCAL_PRECOMPILED_HEADER_DIR)")
+            .metavar("DIR");
+
         try
         {
             program.parse_args(argc, argv);
@@ -168,6 +174,7 @@ void CommandLineParser::printHelp() const
               << std::format("  {: <{}} Suppress error dialogs and messages (default)\n", ARG_SILENT, WIDTH)
               << std::format("  {: <{}} Enable performance metrics (default)\n", ARG_METRICS, WIDTH)
               << std::format("  {: <{}} Disable performance metrics reporting\n", ARG_DISABLE_METRICS, WIDTH)
+              << std::format("  {: <{}} Build the precompiled header for model compilation and exit\n", ARG_BUILD_PRECOMPILED_HEADER, WIDTH)
               << std::format("  {: <{}} Show this help message\n\n", "-h, --help", WIDTH)
               << "Examples:\n"
               << std::format("  {} /path/to/model/directory\n", appName)

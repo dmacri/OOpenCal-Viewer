@@ -78,3 +78,93 @@ target_include_directories(SettingParameterTests PRIVATE
 
 # Register SettingParameterTests
 add_test(NAME SettingParameterTests COMMAND SettingParameterTests)
+
+# ============================================
+# Add test executable for PrecompiledHeader helpers
+# ============================================
+add_executable(PrecompiledHeaderTests
+    PrecompiledHeaderTests.cpp
+    ${CMAKE_SOURCE_DIR}/plugins/PrecompiledHeader.cpp
+)
+
+# Link against GTest
+target_link_libraries(PrecompiledHeaderTests
+    GTest::gtest_main
+)
+
+# Include directories for the project
+target_include_directories(PrecompiledHeaderTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/plugins
+)
+
+# Register PrecompiledHeaderTests
+add_test(NAME PrecompiledHeaderTests COMMAND PrecompiledHeaderTests)
+
+# ============================================
+# Add test executable for GridWorldMapping (header-only, no Qt/VTK)
+# ============================================
+add_executable(GridWorldMappingTests
+    GridWorldMappingTests.cpp
+)
+
+target_link_libraries(GridWorldMappingTests
+    GTest::gtest_main
+)
+
+target_include_directories(GridWorldMappingTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME GridWorldMappingTests COMMAND GridWorldMappingTests)
+
+# ============================================
+# Add test executable for NumberFormatting (header-only, no Qt/VTK)
+# ============================================
+add_executable(NumberFormattingTests
+    NumberFormattingTests.cpp
+)
+
+target_link_libraries(NumberFormattingTests
+    GTest::gtest_main
+)
+
+target_include_directories(NumberFormattingTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME NumberFormattingTests COMMAND NumberFormattingTests)
+
+# ============================================
+# Add test executable for RulerLabelFit (header-only, no Qt/VTK)
+# ============================================
+add_executable(RulerLabelFitTests
+    RulerLabelFitTests.cpp
+)
+
+target_link_libraries(RulerLabelFitTests
+    GTest::gtest_main
+)
+
+target_include_directories(RulerLabelFitTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME RulerLabelFitTests COMMAND RulerLabelFitTests)
+
+# ============================================
+# Add test executable for CameraPivotMath (header-only, no Qt/VTK)
+# ============================================
+add_executable(CameraPivotMathTests
+    CameraPivotMathTests.cpp
+)
+
+target_link_libraries(CameraPivotMathTests
+    GTest::gtest_main
+)
+
+target_include_directories(CameraPivotMathTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME CameraPivotMathTests COMMAND CameraPivotMathTests)

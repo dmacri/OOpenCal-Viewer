@@ -43,6 +43,7 @@
 #include "OOpenCAL/base/Cell.h" // Color
 #include "visualiser/SettingParameter.h" // SubstateInfo
 #include "visualiser/Line.h"
+#include "widgets/GridWorldMapping.h"
 
 
 /** @brief Converts a color channel value to a normalized range [0, 1].
@@ -203,8 +204,18 @@ public:
                                      const std::vector<Line>& lines,
                                      vtkSmartPointer<vtkActor> gridLinesActor);
 
-    void buildLoadBalanceLine(const std::vector<Line>& lines, int nRows, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor2D> actorBuildLine);
-    void refreshBuildLoadBalanceLine(const std::vector<Line> &lines, int nRows, vtkActor2D* lineActor);
+    /** @brief Builds the lines between the computational nodes in the flat view.
+     *  @param nRows Number of grid rows
+     *  @param sceneBounds World extent of the drawn scene; the outer lines are drawn exactly on its edges */
+    void buildLoadBalanceLine(const std::vector<Line>& lines,
+                              int nRows,
+                              const GridWorldMapping::Bounds2D& sceneBounds,
+                              vtkSmartPointer<vtkRenderer> renderer,
+                              vtkSmartPointer<vtkActor2D> actorBuildLine);
+    void refreshBuildLoadBalanceLine(const std::vector<Line>& lines,
+                                     int nRows,
+                                     const GridWorldMapping::Bounds2D& sceneBounds,
+                                     vtkActor2D* lineActor);
     vtkTextProperty* buildStepLine(StepIndex step, vtkSmartPointer<vtkTextMapper> singleLineTextB);
     vtkNew<vtkActor2D> buildStepText(StepIndex step, int font_size, vtkSmartPointer<vtkTextMapper> stepLineTextMapper, vtkSmartPointer<vtkRenderer> renderer);
 
@@ -271,10 +282,13 @@ private:
                                                                        const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop);
 
     /** @brief Creates a vtkPolyData representing a set of 2D lines.
-      * @param lines Vector of Line objects (each defines a line segment)
+      * @param lines Vector of Line objects (each defines a line segment, see GridWorldMapping::lineYToWorldY())
       * @param nRows Number of grid rows (used to invert Y coordinates)
+      * @param sceneBounds World extent of the drawn scene; the outer lines are drawn exactly on its edges
       * @return vtkSmartPointer<vtkPolyData> with points and lines set */
-    vtkSmartPointer<vtkPolyData> createLinePolyData(const std::vector<Line>& lines, int nRows);
+    vtkSmartPointer<vtkPolyData> createLinePolyData(const std::vector<Line>& lines,
+                                                    int nRows,
+                                                    const GridWorldMapping::Bounds2D& sceneBounds);
 
     vtkSmartPointer<vtkPolyData> create3DVolumeGridLinePolyData(int nRows,
                                                                 int nCols,
@@ -322,7 +336,7 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
             for (int col = 0; col <= nCols; col++)
             {
                 // Insert points with Y inverted to match buidColor() indexing
-                points->InsertNextPoint(/*x=*/col, /*y=*/nRows - row, /*z=*/1); /// z is not used
+                points->InsertNextPoint(/*x=*/col, /*y=*/nRows - row, /*z=*/GridWorldMapping::flatSceneZ);
             }
         }
 
@@ -373,7 +387,7 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
             {
                 // Insert points with Y inverted to match buidColor() indexing
                 // buidColor() uses (nRows - 1 - row) so points must be positioned accordingly
-                points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/1); /// z is not used
+                points->InsertNextPoint(/*x=*/col, /*y=*/nRows - 1 - row, /*z=*/GridWorldMapping::flatSceneZ);
             }
         }
 

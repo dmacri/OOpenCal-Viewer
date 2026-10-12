@@ -2,6 +2,7 @@
  * @brief Implementation of the SceneWidget class for 3D visualization. */
 
 #include <iostream> // std::cout
+#include <clocale>
 #include <algorithm>
 #include <cmath> // std::isfinite
 #include <filesystem>
@@ -37,8 +38,12 @@
 #include "visualiser/Visualizer.hpp"
 #include "visualiser/SettingParameter.h"
 #include "widgets/ColorSettings.h"
+#include "widgets/GridWorldMapping.h"
+#include "widgets/NumberFormatting.h"
 #include "widgets/SubstatesDockWidget.h"
 #include "widgets/CustomInteractorStyle.h"
+#include "widgets/CameraPivotMath.h"
+#include "widgets/VtkCameraPose.h"
 #include "data/PerformanceMetrics.h"
 
 
@@ -152,6 +157,21 @@ vtkColor3d toVtkColor(QColor color)
         color.greenF(),
         color.blueF()
     };
+}
+
+/** @brief Converts a display point to world coordinates.
+ *  @return false if the transformation is degenerate (w == 0) */
+bool unprojectDisplayPoint(vtkRenderer* renderer, int displayX, int displayY, double displayZ, GridWorldMapping::Point3D& outWorld)
+{
+    renderer->SetDisplayPoint(displayX, displayY, displayZ);
+    renderer->DisplayToWorld();
+    double worldPt[4];
+    renderer->GetWorldPoint(worldPt);
+    if (worldPt[3] == 0.0)
+        return false;
+
+    outWorld = { worldPt[0] / worldPt[3], worldPt[1] / worldPt[3], worldPt[2] / worldPt[3] };
+    return true;
 }
 
 struct CameraEulerAngles
@@ -346,10 +366,6 @@ void SceneWidget::applyCameraAnglesPreservingZoom()
     if (! camera)
         return;
 
-    double distance = camera->GetDistance();
-    if (distance < 1e-3)
-        distance = 1.0;
-
     bool oldWarningState = vtkObject::GetGlobalWarningDisplay();
     vtkObject::GlobalWarningDisplayOff();
 
@@ -359,12 +375,26 @@ void SceneWidget::applyCameraAnglesPreservingZoom()
         .yaw = cameraYaw
     });
 
-    camera->SetPosition(cameraPivot[0] + distance * basis.backward[0],
-                        cameraPivot[1] + distance * basis.backward[1],
-                        cameraPivot[2] + distance * basis.backward[2]);
-    camera->SetFocalPoint(cameraPivot.data());
-    camera->SetViewUp(basis.up.data());
-    camera->OrthogonalizeViewUp();
+    // Rotate the current camera rigidly around the scene pivot. Re-centring the view on the pivot
+    // would undo a zoom towards the cursor, so the distance and the zoomed-in view are kept, and the
+    // pivot keeps its position on screen.
+    const CameraPivotMath::CameraPose current = VtkCameraPose::read(*camera);
+    if (const auto currentFrame = CameraPivotMath::cameraFrameOf(current))
+    {
+        const CameraPivotMath::CameraFrame target{ basis.right, basis.up, basis.backward };
+        const CameraPivotMath::Mat3 rotation = CameraPivotMath::rotationBetween(*currentFrame, target);
+        VtkCameraPose::write(*camera, CameraPivotMath::rotateAroundPivot(current, cameraPivot, rotation));
+    }
+    else
+    {
+        // Degenerate camera (position on the focal point): place it on the pivot at unit distance.
+        camera->SetPosition(cameraPivot[0] + basis.backward[0],
+                            cameraPivot[1] + basis.backward[1],
+                            cameraPivot[2] + basis.backward[2]);
+        camera->SetFocalPoint(cameraPivot.data());
+        camera->SetViewUp(basis.up.data());
+        camera->OrthogonalizeViewUp();
+    }
 
     renderer->ResetCameraClippingRange();
     triggerRenderUpdate();
@@ -428,7 +458,8 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 
         // Update load balancing lines if we have any
         sceneWidgetVisualizerProxy->getVisualizer().refreshBuildLoadBalanceLine(lines,
-                                                                                settingParameter->numberOfRowsY + 1,
+                                                                                settingParameter->numberOfRowsY,
+                                                                                flatSceneBounds(),
                                                                                 actorBuildLine);
     }
 
@@ -1011,6 +1042,10 @@ void SceneWidget::setup2DRulerAxes()
     // Adjust title position to move "Y" label to the right of the axis
     rulerAxisY->SetTitlePosition(1.2); // Move title further from axis (default is ~0.5)
 
+    // The tick labels shrink and thin out instead of overlapping when the scene is zoomed out;
+    // both axes share one label size so the numbers on X and Y look alike (issue #133).
+    rulerAxisX->LinkLabelSizeWith(rulerAxisY);
+
     // Add to renderer but keep hidden initially
     renderer->AddViewProp(rulerAxisX);
     renderer->AddViewProp(rulerAxisY);
@@ -1201,15 +1236,14 @@ void SceneWidget::cameraCallbackFunction(vtkObject* caller, long unsigned int ev
         if (camera)
         {
             const CameraEulerAngles angles = cameraEulerFromVtk(*camera);
-            double focalPoint[3];
-            camera->GetFocalPoint(focalPoint);
 
+            // cameraPivot is not updated here: it stays the scene centre, because zoom and
+            // pan move the focal point.
             // Store the actual VTK orientation. The Qt side blocks slider signals
             // while displaying these values, so this cannot feed back into VTK.
             self->cameraRoll = angles.roll;
             self->cameraPitch = angles.pitch;
             self->cameraYaw = angles.yaw;
-            self->cameraPivot = { focalPoint[0], focalPoint[1], focalPoint[2] };
 
             emit self->cameraOrientationChanged(angles.roll, angles.pitch, angles.yaw);
         }
@@ -1242,6 +1276,7 @@ void SceneWidget::mouseCallbackFunction(vtkObject* caller, long unsigned int eve
     const auto lastMousePos = QPoint(vtkX, qtY);
 
     self->m_lastMousePickedGrid = false;
+    self->m_lastMouseOnBasePlane = false;
 
     // 3) Use a picker restricted to the data grid actor. Picking any visible prop
     // would also hit ruler axes or load-balancing helper lines, which can make a
@@ -1258,6 +1293,21 @@ void SceneWidget::mouseCallbackFunction(vtkObject* caller, long unsigned int eve
             picker->GetPickPosition(pickPos);
             self->m_lastWorldPos = { pickPos[0], pickPos[1], pickPos[2] };
             self->m_lastMousePickedGrid = true;
+            picked = true;
+        }
+    }
+
+    // 3b) The 3D height surface has quads only where its substate is inside (Min, Max], so the picker
+    // misses over the rest of the grid although the cursor is still above it (the "chessboard").
+    // Take the position from the view ray meeting the base plane under the surface (issue #135).
+    if (! picked)
+    {
+        std::array<double, 3> basePlanePos;
+        if (self->pickBasePlane(vtkX, vtkY, basePlanePos))
+        {
+            self->m_lastWorldPos = basePlanePos;
+            self->m_lastMousePickedGrid = true;
+            self->m_lastMouseOnBasePlane = true;
             picked = true;
         }
     }
@@ -1312,7 +1362,8 @@ void SceneWidget::renderVtkScene()
     drawVisualizationWithOptional3DSubstate();
 
     sceneWidgetVisualizerProxy->getVisualizer().buildLoadBalanceLine(lines,
-                                                                     settingParameter->numberOfRowsY + 1,
+                                                                     settingParameter->numberOfRowsY,
+                                                                     flatSceneBounds(),
                                                                      renderer,
                                                                      actorBuildLine);
 
@@ -1415,61 +1466,25 @@ const Line* SceneWidget::findNearestLine(const std::array<double, 3>& worldPos, 
         return nullptr;
     }
 
-    // const auto& lines = sceneWidgetVisualizerProxy->getVisualizer().getLines();
-    if (lines.empty())
+    // The lines are kept with Y growing downwards and the scene has it growing upwards,
+    // the conversion is done by the helper (otherwise the mirror image of the line would be found)
+    const auto nearest = GridWorldMapping::findNearestLine(lines, worldPos[0], worldPos[1], settingParameter->numberOfRowsY);
+    if (! nearest)
     {
         return nullptr;
     }
 
-    constexpr double threshold = 2; // Threshold for line selection (in world coordinates)
-    constexpr double thresholdSq = threshold * threshold;
-
-    const Line* nearestLine = nullptr;
-    double minDistanceSq = std::numeric_limits<double>::max();
-    size_t foundIndex = 0;
-
-    for (size_t i = 0; i < lines.size(); ++i)
-    {
-        const auto& line = lines[i];
-
-        // Calculate squared distance from point to line segment
-        const double lineLengthSq = (line.x2 - line.x1) * (line.x2 - line.x1) +
-                                   (line.y2 - line.y1) * (line.y2 - line.y1);
-
-        if (lineLengthSq < 1e-10) // Skip zero-length lines
-            continue;
-
-        const double t = std::max(0.0, std::min(1.0,
-            ((worldPos[0] - line.x1) * (line.x2 - line.x1) +
-             (worldPos[1] - line.y1) * (line.y2 - line.y1)) / lineLengthSq));
-
-        const double projX = line.x1 + t * (line.x2 - line.x1);
-        const double projY = line.y1 + t * (line.y2 - line.y1);
-
-        const double dx = worldPos[0] - projX;
-        const double dy = worldPos[1] - projY;
-        const double distSq = dx * dx + dy * dy;
-
-        if (distSq < minDistanceSq && distSq <= thresholdSq)
-        {
-            minDistanceSq = distSq;
-            nearestLine = &line;
-            foundIndex = i;
-        }
-    }
-
-    if (nearestLine)
-    {
-        lineIndex = foundIndex;
-        distanceSquared = minDistanceSq;
-    }
-
-    return nearestLine;
+    lineIndex = nearest->index;
+    distanceSquared = nearest->distanceSquared;
+    return &lines[nearest->index];
 }
 
 void SceneWidget::updateToolTip(const QPoint& lastMousePos)
 {
     if (! renderer || ! renderWindow())
+        return;
+
+    if (! toolTipEnabled)
         return;
 
     if (m_lastMousePickedGrid && isCrossSectionView() && isWorldPositionInGrid(m_lastWorldPos.data()))
@@ -1550,6 +1565,26 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
         tooltipText += QString("\n  To:   (x2=%1, y2=%2)")
                            .arg(static_cast<int>(std::lround(nearestLine->x2)))
                            .arg(static_cast<int>(std::lround(nearestLine->y2)));
+
+        // Also show pixel position when over a line
+        if (m_lastMousePickedGrid)
+        {
+            int displayX = 0;
+            int displayY = 0;
+            int displayZ = 0;
+            const QString nodeInfo = getNodeAtWorldPosition(m_lastWorldPos);
+            if (nodeInfo.isEmpty() || !convertWorldToDisplayCoordinates(m_lastWorldPos.data(), displayX, displayY, displayZ))
+            {
+                tooltipText += QString("\nPosition: (Outside the grid)");
+            }
+            else
+            {
+                tooltipText += QString("\nPosition: %1").arg(positionAsText(displayX, displayY, displayZ));
+
+                tooltipText += QString("\n%1").arg(nodeInfo);
+            }
+        }
+
         tooltipText += cellValueAtThisPositionAsText();
     }
     else if (m_lastMousePickedGrid)
@@ -1564,10 +1599,7 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
         }
         else
         {
-            tooltipText = QString("Pixel Position: (x: %1, y: %2, z: %3)")
-                              .arg(displayX)
-                              .arg(displayY)
-                              .arg(displayZ);
+            tooltipText = QString("Pixel Position: %1").arg(positionAsText(displayX, displayY, displayZ));
 
             tooltipText += QString("\n%1").arg(nodeInfo);
 
@@ -1598,7 +1630,12 @@ QString SceneWidget::cellValueAtThisPositionAsText() const
     std::string cellValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col);
     if (! cellValue.empty())
     {
-        tooltipText += QString("\nCell Value: %1").arg(QString::fromStdString(cellValue));
+        // "[1008.000000,0.000000]" -> "[1008, 0]". A list cannot be split reliably when the decimal
+        // separator is ',' (it is also the list separator), so only do it for '.'.
+        const bool decimalPointIsDot = *std::localeconv()->decimal_point == '.';
+        const std::string shownCellValue = decimalPointIsDot ? NumberFormatting::withoutZeroFractionsInList(cellValue)
+                                                              : cellValue;
+        tooltipText += QString("\nCell Value: %1").arg(QString::fromStdString(shownCellValue));
     }
 
     // Get individual substate values if available
@@ -1611,7 +1648,9 @@ QString SceneWidget::cellValueAtThisPositionAsText() const
             std::string fieldValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col, field.c_str());
             if (!fieldValue.empty())
             {
-                tooltipText += QString("\n\t%1: %2").arg(QString::fromStdString(field)).arg(QString::fromStdString(fieldValue));
+                // The model prints e.g. "1008.000000"; show "1008" when there is nothing after the separator
+                const std::string shownValue = NumberFormatting::withoutZeroFraction(fieldValue);
+                tooltipText += QString("\n\t%1: %2").arg(QString::fromStdString(field)).arg(QString::fromStdString(shownValue));
             }
         }
     }
@@ -1850,7 +1889,8 @@ void SceneWidget::setViewMode2D()
         !isNative3DModel() && !substateSliceEnabled)
     {
         sceneWidgetVisualizerProxy->getVisualizer().buildLoadBalanceLine(lines,
-                                                                         settingParameter->numberOfRowsY + 1,
+                                                                         settingParameter->numberOfRowsY,
+                                                                         flatSceneBounds(),
                                                                          renderer,
                                                                          actorBuildLine);
         // Apply grid lines visibility and semi-transparency settings
@@ -2046,6 +2086,11 @@ void SceneWidget::setLineDetectionEnabled(bool enabled)
     lineDetectionEnabled = enabled;
 }
 
+void SceneWidget::setToolTipEnabled(bool enabled)
+{
+    toolTipEnabled = enabled;
+}
+
 void SceneWidget::setFlatSceneBackgroundVisible(bool visible)
 {
     flatSceneBackgroundVisible = visible;
@@ -2224,25 +2269,19 @@ bool SceneWidget::convertWorldToGridCoordinates(const double worldPos[3], int& o
     if (columnCount <= 0 || rowCount <= 0)
         return false;
 
-    const double cellWidth = sceneWidth / columnCount;
-    const double cellHeight = sceneHeight / rowCount;
+    // 3D height surface: a mesh over the cell vertices (x = col, y = nRows - 1 - row), so the cell
+    // under the cursor is the one with the nearest vertex. Independent of the (cropped) mesh bounds.
+    if (isHeightSurfaceDisplayed())
+    {
+        return GridWorldMapping::worldToNearestVertexCell(worldPos[0], worldPos[1],
+                                                          rowCount, columnCount, outRow, outCol);
+    }
 
-    // Convert world position to grid indices
-    // Points are positioned with Y inverted: (nRows - 1 - row)
-    // So we need to invert the row calculation to get the correct matrix index
-    int col = static_cast<int>((worldPos[0] - bounds[0]) / cellWidth);
-    int row = static_cast<int>((worldPos[1] - bounds[2]) / cellHeight);
-    
-    // Invert row to match the inverted Y coordinates used in visualization
-    row = rowCount - 1 - row;
-
-    // Clamp to valid range
-    col = std::max(0, std::min(col, columnCount - 1));
-    row = std::max(0, std::min(row, rowCount - 1));
-
-    outRow = row;
-    outCol = col;
-    return true;
+    // Flat view: points are positioned with Y inverted: (nRows - 1 - row), so the row index has
+    // to be inverted back.
+    const GridWorldMapping::Bounds2D gridExtent{bounds[0], bounds[1], bounds[2], bounds[3]};
+    return GridWorldMapping::worldToGridCell(worldPos[0], worldPos[1], gridExtent,
+                                             rowCount, columnCount, outRow, outCol);
 }
 
 bool SceneWidget::currentGridBounds(double bounds[6]) const
@@ -2252,9 +2291,77 @@ bool SceneWidget::currentGridBounds(double bounds[6]) const
 
     gridActor->GetBounds(bounds);
 
+    if (isHeightSurfaceDisplayed())
+    {
+        // The 3D surface contains quads only where the height substate lies in (Min, Max], so
+        // the actor's bounding box covers just a part of the grid (e.g. SciddicaT "z" with
+        // Min=490 leaves out the whole lowland). Using it to map the mouse position to a cell
+        // made the tooltip read cells far away from the cursor (issue #139), so for X/Y use the
+        // logical extent of the whole grid. Vertices of the surface lie exactly on it.
+        const auto extent = GridWorldMapping::pointGridBounds(settingParameter->numberOfRowsY,
+                                                              settingParameter->numberOfColumnX);
+        bounds[0] = extent.xMin;
+        bounds[1] = extent.xMax;
+        bounds[2] = extent.yMin;
+        bounds[3] = extent.yMax;
+    }
+
     return std::isfinite(bounds[0]) && std::isfinite(bounds[1]) &&
            std::isfinite(bounds[2]) && std::isfinite(bounds[3]) &&
            bounds[0] < bounds[1] && bounds[2] < bounds[3];
+}
+
+bool SceneWidget::isHeightSurfaceDisplayed() const
+{
+    // Mirrors the condition used in drawVisualizationWithOptional3DSubstate() to draw the
+    // height surface; cross-section (substateSliceEnabled) draws a profile instead.
+    return settingParameter &&
+           !substateSliceEnabled &&
+           !isNative3DModel() &&
+           !get3DSubstateInfosTopToBottom().empty();
+}
+
+GridWorldMapping::Bounds2D SceneWidget::flatSceneBounds() const
+{
+    const int rows = settingParameter->numberOfRowsY;
+    const int columns = settingParameter->numberOfColumnX;
+    return useCellRendering ? GridWorldMapping::cellGridBounds(rows, columns) : GridWorldMapping::pointGridBounds(rows, columns);
+}
+
+bool SceneWidget::pickBasePlane(int displayX, int displayY, std::array<double, 3>& outWorldPos) const
+{
+    if (! renderer || ! isHeightSurfaceDisplayed())
+        return false;
+
+    // Two points under the cursor, on the near and on the far clipping plane, define the view ray
+    GridWorldMapping::Point3D onNearPlane;
+    GridWorldMapping::Point3D onFarPlane;
+    if (! unprojectDisplayPoint(renderer, displayX, displayY, 0.0, onNearPlane)
+        || ! unprojectDisplayPoint(renderer, displayX, displayY, 1.0, onFarPlane))
+    {
+        return false;
+    }
+
+    std::array<double, 3> position{ 0.0, 0.0, GridWorldMapping::heightSurfaceBaseZ };
+    if (! GridWorldMapping::intersectRayWithHorizontalPlane(onNearPlane, onFarPlane, position[2], position[0], position[1]))
+        return false;
+
+    if (! isWorldPositionInGrid(position.data()))
+        return false;
+
+    outWorldPos = position;
+    return true;
+}
+
+QString SceneWidget::positionAsText(int x, int y, int z) const
+{
+    // In the flat 2D view all cells lie on one plane, and over the base plane under the 3D height surface
+    // there is no surface point under the cursor, so Z would only be a constant there.
+    const bool heightIsMeaningful = isNative3DModel() || (isHeightSurfaceDisplayed() && ! m_lastMouseOnBasePlane);
+    if (! heightIsMeaningful)
+        return QString("(x: %1, y: %2)").arg(x).arg(y);
+
+    return QString("(x: %1, y: %2, z: %3)").arg(x).arg(y).arg(z);
 }
 
 bool SceneWidget::convertWorldToDisplayCoordinates(const double worldPos[3], int& outX, int& outY, int& outZ) const
@@ -2319,6 +2426,15 @@ void SceneWidget::setupInteractorStyleWithWaitCursor()
     // Cost: ~5% overhead due to ray-plane calculations
     vtkNew<CustomInteractorStyle> style;
     style->Set3DInteractionEnabled(currentViewMode == ViewMode::Mode3D);
+    // Rotations orbit the scene centre (cameraPivot), not the focal point that zoom moves
+    style->SetRotationPivotProvider([this]() { return cameraPivot; });
+    style->SetInteractionStateCallback([this](bool started)
+    {
+        if (started)
+            emit cameraInteractionStarted();
+        else
+            emit cameraInteractionFinished();
+    });
     interactor()->SetInteractorStyle(style);
     connectCameraCallback();
 }
@@ -2408,7 +2524,8 @@ void SceneWidget::initializeAndDraw3DSubstateVisualization()
     if (settingParameter->numberOfLines > 0)
     {
         sceneWidgetVisualizerProxy->getVisualizer().refreshBuildLoadBalanceLine(lines,
-                                                                                settingParameter->numberOfRowsY + 1,
+                                                                                settingParameter->numberOfRowsY,
+                                                                                flatSceneBounds(),
                                                                                 actorBuildLine);
     }
 
