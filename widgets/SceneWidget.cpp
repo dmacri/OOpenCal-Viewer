@@ -157,6 +157,21 @@ vtkColor3d toVtkColor(QColor color)
     };
 }
 
+/** @brief Converts a display point to world coordinates.
+ *  @return false if the transformation is degenerate (w == 0) */
+bool unprojectDisplayPoint(vtkRenderer* renderer, int displayX, int displayY, double displayZ, GridWorldMapping::Point3D& outWorld)
+{
+    renderer->SetDisplayPoint(displayX, displayY, displayZ);
+    renderer->DisplayToWorld();
+    double worldPt[4];
+    renderer->GetWorldPoint(worldPt);
+    if (worldPt[3] == 0.0)
+        return false;
+
+    outWorld = { worldPt[0] / worldPt[3], worldPt[1] / worldPt[3], worldPt[2] / worldPt[3] };
+    return true;
+}
+
 struct CameraEulerAngles
 {
     double roll = 0.0;  // X
@@ -431,7 +446,8 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
 
         // Update load balancing lines if we have any
         sceneWidgetVisualizerProxy->getVisualizer().refreshBuildLoadBalanceLine(lines,
-                                                                                settingParameter->numberOfRowsY + 1,
+                                                                                settingParameter->numberOfRowsY,
+                                                                                flatSceneBounds(),
                                                                                 actorBuildLine);
     }
 
@@ -1249,6 +1265,7 @@ void SceneWidget::mouseCallbackFunction(vtkObject* caller, long unsigned int eve
     const auto lastMousePos = QPoint(vtkX, qtY);
 
     self->m_lastMousePickedGrid = false;
+    self->m_lastMouseOnBasePlane = false;
 
     // 3) Use a picker restricted to the data grid actor. Picking any visible prop
     // would also hit ruler axes or load-balancing helper lines, which can make a
@@ -1265,6 +1282,21 @@ void SceneWidget::mouseCallbackFunction(vtkObject* caller, long unsigned int eve
             picker->GetPickPosition(pickPos);
             self->m_lastWorldPos = { pickPos[0], pickPos[1], pickPos[2] };
             self->m_lastMousePickedGrid = true;
+            picked = true;
+        }
+    }
+
+    // 3b) The 3D height surface has quads only where its substate is inside (Min, Max], so the picker
+    // misses over the rest of the grid although the cursor is still above it (the "chessboard").
+    // Take the position from the view ray meeting the base plane under the surface (issue #135).
+    if (! picked)
+    {
+        std::array<double, 3> basePlanePos;
+        if (self->pickBasePlane(vtkX, vtkY, basePlanePos))
+        {
+            self->m_lastWorldPos = basePlanePos;
+            self->m_lastMousePickedGrid = true;
+            self->m_lastMouseOnBasePlane = true;
             picked = true;
         }
     }
@@ -1319,7 +1351,8 @@ void SceneWidget::renderVtkScene()
     drawVisualizationWithOptional3DSubstate();
 
     sceneWidgetVisualizerProxy->getVisualizer().buildLoadBalanceLine(lines,
-                                                                     settingParameter->numberOfRowsY + 1,
+                                                                     settingParameter->numberOfRowsY,
+                                                                     flatSceneBounds(),
                                                                      renderer,
                                                                      actorBuildLine);
 
@@ -1422,56 +1455,17 @@ const Line* SceneWidget::findNearestLine(const std::array<double, 3>& worldPos, 
         return nullptr;
     }
 
-    // const auto& lines = sceneWidgetVisualizerProxy->getVisualizer().getLines();
-    if (lines.empty())
+    // The lines are kept with Y growing downwards and the scene has it growing upwards,
+    // the conversion is done by the helper (otherwise the mirror image of the line would be found)
+    const auto nearest = GridWorldMapping::findNearestLine(lines, worldPos[0], worldPos[1], settingParameter->numberOfRowsY);
+    if (! nearest)
     {
         return nullptr;
     }
 
-    constexpr double threshold = 2; // Threshold for line selection (in world coordinates)
-    constexpr double thresholdSq = threshold * threshold;
-
-    const Line* nearestLine = nullptr;
-    double minDistanceSq = std::numeric_limits<double>::max();
-    size_t foundIndex = 0;
-
-    for (size_t i = 0; i < lines.size(); ++i)
-    {
-        const auto& line = lines[i];
-
-        // Calculate squared distance from point to line segment
-        const double lineLengthSq = (line.x2 - line.x1) * (line.x2 - line.x1) +
-                                   (line.y2 - line.y1) * (line.y2 - line.y1);
-
-        if (lineLengthSq < 1e-10) // Skip zero-length lines
-            continue;
-
-        const double t = std::max(0.0, std::min(1.0,
-            ((worldPos[0] - line.x1) * (line.x2 - line.x1) +
-             (worldPos[1] - line.y1) * (line.y2 - line.y1)) / lineLengthSq));
-
-        const double projX = line.x1 + t * (line.x2 - line.x1);
-        const double projY = line.y1 + t * (line.y2 - line.y1);
-
-        const double dx = worldPos[0] - projX;
-        const double dy = worldPos[1] - projY;
-        const double distSq = dx * dx + dy * dy;
-
-        if (distSq < minDistanceSq && distSq <= thresholdSq)
-        {
-            minDistanceSq = distSq;
-            nearestLine = &line;
-            foundIndex = i;
-        }
-    }
-
-    if (nearestLine)
-    {
-        lineIndex = foundIndex;
-        distanceSquared = minDistanceSq;
-    }
-
-    return nearestLine;
+    lineIndex = nearest->index;
+    distanceSquared = nearest->distanceSquared;
+    return &lines[nearest->index];
 }
 
 void SceneWidget::updateToolTip(const QPoint& lastMousePos)
@@ -1574,10 +1568,7 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
             }
             else
             {
-                tooltipText += QString("\nPosition: (x: %1, y: %2, z: %3)")
-                                  .arg(displayX)
-                                  .arg(displayY)
-                                  .arg(displayZ);
+                tooltipText += QString("\nPosition: %1").arg(positionAsText(displayX, displayY, displayZ));
 
                 tooltipText += QString("\n%1").arg(nodeInfo);
             }
@@ -1597,10 +1588,7 @@ void SceneWidget::updateToolTip(const QPoint& lastMousePos)
         }
         else
         {
-            tooltipText = QString("Pixel Position: (x: %1, y: %2, z: %3)")
-                              .arg(displayX)
-                              .arg(displayY)
-                              .arg(displayZ);
+            tooltipText = QString("Pixel Position: %1").arg(positionAsText(displayX, displayY, displayZ));
 
             tooltipText += QString("\n%1").arg(nodeInfo);
 
@@ -1890,7 +1878,8 @@ void SceneWidget::setViewMode2D()
         !isNative3DModel() && !substateSliceEnabled)
     {
         sceneWidgetVisualizerProxy->getVisualizer().buildLoadBalanceLine(lines,
-                                                                         settingParameter->numberOfRowsY + 1,
+                                                                         settingParameter->numberOfRowsY,
+                                                                         flatSceneBounds(),
                                                                          renderer,
                                                                          actorBuildLine);
         // Apply grid lines visibility and semi-transparency settings
@@ -2321,6 +2310,49 @@ bool SceneWidget::isHeightSurfaceDisplayed() const
            !get3DSubstateInfosTopToBottom().empty();
 }
 
+GridWorldMapping::Bounds2D SceneWidget::flatSceneBounds() const
+{
+    const int rows = settingParameter->numberOfRowsY;
+    const int columns = settingParameter->numberOfColumnX;
+    return useCellRendering ? GridWorldMapping::cellGridBounds(rows, columns) : GridWorldMapping::pointGridBounds(rows, columns);
+}
+
+bool SceneWidget::pickBasePlane(int displayX, int displayY, std::array<double, 3>& outWorldPos) const
+{
+    if (! renderer || ! isHeightSurfaceDisplayed())
+        return false;
+
+    // Two points under the cursor, on the near and on the far clipping plane, define the view ray
+    GridWorldMapping::Point3D onNearPlane;
+    GridWorldMapping::Point3D onFarPlane;
+    if (! unprojectDisplayPoint(renderer, displayX, displayY, 0.0, onNearPlane)
+        || ! unprojectDisplayPoint(renderer, displayX, displayY, 1.0, onFarPlane))
+    {
+        return false;
+    }
+
+    std::array<double, 3> position{ 0.0, 0.0, GridWorldMapping::heightSurfaceBaseZ };
+    if (! GridWorldMapping::intersectRayWithHorizontalPlane(onNearPlane, onFarPlane, position[2], position[0], position[1]))
+        return false;
+
+    if (! isWorldPositionInGrid(position.data()))
+        return false;
+
+    outWorldPos = position;
+    return true;
+}
+
+QString SceneWidget::positionAsText(int x, int y, int z) const
+{
+    // In the flat 2D view all cells lie on one plane, and over the base plane under the 3D height surface
+    // there is no surface point under the cursor, so Z would only be a constant there.
+    const bool heightIsMeaningful = isNative3DModel() || (isHeightSurfaceDisplayed() && ! m_lastMouseOnBasePlane);
+    if (! heightIsMeaningful)
+        return QString("(x: %1, y: %2)").arg(x).arg(y);
+
+    return QString("(x: %1, y: %2, z: %3)").arg(x).arg(y).arg(z);
+}
+
 bool SceneWidget::convertWorldToDisplayCoordinates(const double worldPos[3], int& outX, int& outY, int& outZ) const
 {
     double bounds[6];
@@ -2479,7 +2511,8 @@ void SceneWidget::initializeAndDraw3DSubstateVisualization()
     if (settingParameter->numberOfLines > 0)
     {
         sceneWidgetVisualizerProxy->getVisualizer().refreshBuildLoadBalanceLine(lines,
-                                                                                settingParameter->numberOfRowsY + 1,
+                                                                                settingParameter->numberOfRowsY,
+                                                                                flatSceneBounds(),
                                                                                 actorBuildLine);
     }
 
