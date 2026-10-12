@@ -743,7 +743,20 @@ void CustomDirectoryDialog::setStartDirectory(const QString &path)
         {
             // Fall back to the directory containing the executable (e.g., AppImage file location)
             // This is especially useful for AppImage deployments where currentPath() is inside the mounted image
-            QString appFilePath = QCoreApplication::applicationFilePath();
+            QString appFilePath;
+
+            // Check if running as AppImage (APPIMAGE environment variable points to real AppImage file)
+            QByteArray appImageEnv = qgetenv("APPIMAGE");
+            if (!appImageEnv.isEmpty())
+            {
+                appFilePath = QString::fromUtf8(appImageEnv);
+            }
+            else
+            {
+                // Not running as AppImage, use standard application path
+                appFilePath = QCoreApplication::applicationFilePath();
+            }
+
             QFileInfo appFileInfo(appFilePath);
             if (appFileInfo.exists() && appFileInfo.isFile())
             {
