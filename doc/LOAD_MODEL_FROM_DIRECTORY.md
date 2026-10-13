@@ -200,13 +200,13 @@ Once a model is loaded from a directory:
 ### Classes Involved
 
 - **HeaderParser**: Parses `Header.txt` configuration files
-- **CppModuleBuilder**: Handles C++ compilation using Tiny Process Library
+- **CppModuleBuilder**: Handles C++ compilation using Qt QProcess
 - **CompilationLogWidget**: Displays compilation results and errors
 - **PluginLoader**: Loads compiled `.so` files
 
 ### Dependencies
 
-- **Tiny Process Library**: Used for safe process execution and output capture
+- **Qt QProcess**: Used for safe process execution and output capture
 - **Qt**: For GUI dialogs and file operations
 - **Clang**: For C++ compilation
 
