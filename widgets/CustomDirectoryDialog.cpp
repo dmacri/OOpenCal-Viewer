@@ -27,6 +27,7 @@
 #include "config/ConfigCategory.h"
 #include "config/ConfigParameter.h"
 #include "config/ConfigConstants.h"
+#include "core/AppImagePaths.h"
 #include "core/directoryConstants.h"
 #include "plugins/ModelLoader.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
@@ -729,23 +730,30 @@ void CustomDirectoryDialog::loadAvailableModels()
 void CustomDirectoryDialog::setStartDirectory(const QString &path)
 {
     QString targetPath = path;
-    
-    // If path doesn't exist or is empty, try to find a valid prefix or fall back to current working directory
+
+    // A directory inside the mounted AppImage (bundled compiler, headers...) exists, but is useless to the user
+    if (viz::appimage::isInsideMountedImage(targetPath))
+    {
+        targetPath.clear();
+    }
+
+    // If path doesn't exist or is empty, try to find a valid prefix or fall back to a sensible default
     if (targetPath.isEmpty() || !QDir(targetPath).exists())
     {
         // Try to find the longest valid prefix
         PathValidationResult validation = validateAndSplitPath(targetPath);
-        if (!validation.validPrefix.isEmpty() && QDir(validation.validPrefix).exists())
+        if (!validation.validPrefix.isEmpty() && QDir(validation.validPrefix).exists()
+            && !viz::appimage::isInsideMountedImage(validation.validPrefix))
         {
             targetPath = validation.validPrefix;
         }
         else
         {
-            // Fall back to current working directory (useful for AppImage deployments)
-            targetPath = QDir::currentPath();
+            // Directory the application was started from (never the AppImage mount point), then home
+            targetPath = viz::appimage::defaultStartDirectory();
         }
     }
-    
+
     QModelIndex sourceIndex = m_fileSystemModel->index(targetPath);
     QModelIndex proxyIndex = m_sortProxy->mapFromSource(sourceIndex);
     if (proxyIndex.isValid())

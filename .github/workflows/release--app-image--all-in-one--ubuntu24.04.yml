@@ -342,6 +342,15 @@ jobs:
           cp -r ${QT_PLUGINS}/xcbglintegrations AppDir/usr/plugins/ 2>/dev/null || true
           cp -r ${QT_PLUGINS}/imageformats AppDir/usr/plugins/ 2>/dev/null || true
 
+          # qt.conf next to the executable: makes Qt look for plugins only inside the AppImage (relative to usr/bin),
+          # never in the plugin directory of the machine which runs it
+          cat > AppDir/usr/bin/qt.conf << 'QTCONF'
+          [Paths]
+          Prefix = ..
+          Plugins = plugins
+          Libraries = lib
+          QTCONF
+
       - name: "Diagnostics of ldd clang++"
         run: |
           echo "System clang++:"
@@ -491,8 +500,16 @@ jobs:
           export C_INCLUDE_PATH="${CLANG_RESOURCE_INCLUDE}:${HERE}/compiler/include/x86_64-linux-gnu:${HERE}/compiler/include:${C_INCLUDE_PATH}"
 
           # Qt configuration
+          # Use ONLY the Qt plugins bundled in the AppImage. The bundled Qt has the plugin directory of the build
+          # machine compiled in (/usr/lib/x86_64-linux-gnu/qt5/plugins); on the user's machine that directory holds
+          # plugins (KDE platform theme, Breeze style, ...) built against a different Qt patch version, and loading
+          # them gives "Cannot mix incompatible Qt library (5.15.17) with this library (5.15.13)" and a crash.
+          # usr/bin/qt.conf (created in the step "Copy Qt libraries") points Qt at the bundled plugins; the variables below do the same for
+          # Qt versions which ignore it, and the host platform theme / style integration is switched off.
           export QT_PLUGIN_PATH="${HERE}/usr/plugins"
           export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/plugins/platforms"
+          unset QT_QPA_PLATFORMTHEME
+          unset QT_STYLE_OVERRIDE
 
           # Disable Qt's automatic high DPI scaling
           export QT_AUTO_SCREEN_SCALE_FACTOR=0

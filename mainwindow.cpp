@@ -27,6 +27,7 @@
 
 #include "config/Config.h"
 #include "config/ConfigConstants.h"
+#include "core/AppImagePaths.h"
 #include "core/CommandLineParser.h"
 #include "plugins/CppModuleBuilder.h"
 #include "plugins/ModelLoader.h"
@@ -77,6 +78,7 @@ inline std::string sourceFileParentDirectoryAbsolutePath(const std::source_locat
  *    - Otherwise, the base directory itself is returned.
  * 5. If neither environment variable nor CMake path exists or is invalid,
  *    an empty QString is returned, meaning the current working directory should be used.
+ * 6. A base directory located inside the mounted AppImage is treated like a missing one (empty QString).
  *
  * @note The returned path is absolute and normalized.
  *
@@ -104,6 +106,14 @@ QString getOOpenCalStartPath()
     if (baseDir.isEmpty() || !dir.exists())
     {
         // Invalid or missing directory → return empty (current path)
+        return QString();
+    }
+
+    // In the AppImage OOPENCAL_DIR points to the bundled headers inside the mounted image (e.g.
+    // /tmp/.mount_XXXX/compiler/include). It is needed for compiling models, but it is not a place the user wants
+    // to browse (and it vanishes when the application exits), so do not start file dialogs there.
+    if (viz::appimage::isInsideMountedImage(dir.absolutePath()))
+    {
         return QString();
     }
 
@@ -1783,10 +1793,12 @@ void MainWindow::onLoadModelFromDirectoryRequested()
 
     // Set the starting directory using the same logic as the original dialog
     QString startPath = getOOpenCalStartPath();
-    if (! startPath.isEmpty())
+    if (startPath.isEmpty())
     {
-        dialog.setStartDirectory(startPath);
+        // No usable OOpenCAL directory (e.g. AppImage): start where the user launched the application
+        startPath = viz::appimage::defaultStartDirectory();
     }
+    dialog.setStartDirectory(startPath);
 
     if (QDialog::Accepted == dialog.exec())
     {
