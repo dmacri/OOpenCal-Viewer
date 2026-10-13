@@ -711,6 +711,7 @@ void MainWindow::connectMenuActions()
     connect(ui->action2DMode, &QAction::triggered, this, &MainWindow::on2DModeRequested);
     connect(ui->action3DMode, &QAction::triggered, this, &MainWindow::on3DModeRequested);
     connect(ui->actionCrossSectionControls, &QAction::toggled, this, &MainWindow::onCrossSectionControlsToggled);
+    connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::onResetCameraRequested);
     connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
     connect(ui->actionLineDetection, &QAction::triggered, this, &MainWindow::onLineDetectionToggled);
     connect(ui->actionFlatSceneBackground, &QAction::triggered, this, &MainWindow::onFlatSceneBackgroundToggled);
@@ -2126,8 +2127,13 @@ void MainWindow::updateSliceControls(bool resetSelection)
     {
         QSignalBlocker blocker(ui->actionCrossSectionControls);
         ui->actionCrossSectionControls->setChecked(false);
+        ui->actionCrossSectionControls->setToolTip(
+            tr("Cross-section controls are only available for 3D models with a substate used as altitude"));
         return;
     }
+
+    ui->actionCrossSectionControls->setToolTip(
+        tr("Show controls for axis-aligned cross-sections"));
 
     if (!resetSelection)
         return;

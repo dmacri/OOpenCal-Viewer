@@ -789,10 +789,14 @@
     <property name="title">
      <string>View</string>
     </property>
+    <property name="toolTipsVisible">
+     <bool>true</bool>
+    </property>
     <addaction name="action2DMode"/>
     <addaction name="action3DMode"/>
     <addaction name="separator"/>
     <addaction name="actionCrossSectionControls"/>
+    <addaction name="actionResetView"/>
     <addaction name="separator"/>
     <addaction name="actionGridLines"/>
     <addaction name="actionLineDetection"/>
@@ -973,6 +977,14 @@
    </property>
    <property name="toolTip">
     <string>Show controls for axis-aligned cross-sections</string>
+   </property>
+  </action>
+  <action name="actionResetView">
+   <property name="text">
+    <string>Reset View</string>
+   </property>
+   <property name="toolTip">
+    <string>Reset camera to initial position and zoom level</string>
    </property>
   </action>
   <action name="actionShow_reduction">
