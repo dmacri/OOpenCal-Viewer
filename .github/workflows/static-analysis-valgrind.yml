@@ -1,4 +1,4 @@
-name: Static Analysis
+name: Static Analysis - valgrind
 
 on:
   push:
@@ -13,8 +13,8 @@ env:
   PROJECT_NAME: OOpenCal-Viewer
 
 jobs:
-  static-analysis:
-    name: cppcheck, flawfinder, clang-tidy, and valgrind
+  valgrind:
+    name: valgrind
     runs-on: ubuntu-24.04
 
     steps:
@@ -49,10 +49,7 @@ jobs:
             libgl1-mesa-dev \
             libglu1-mesa-dev \
             libgtest-dev \
-            cppcheck \
-            flawfinder \
-            valgrind \
-            clang-tidy
+            valgrind
 
       - name: Create build directory
         run: mkdir -p build
@@ -71,50 +68,10 @@ jobs:
           cd build
           cmake --build . --parallel
 
-      - name: Run cppcheck
-        run: |
-          cd build
-          cmake --build . --target cppcheck
-        continue-on-error: true
-
-      - name: Upload cppcheck results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cppcheck-report
-          path: build/cppcheck-report.xml
-
-      - name: Run flawfinder
-        run: |
-          cd build
-          cmake --build . --target flawfinder
-        continue-on-error: true
-
-      - name: Upload flawfinder results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: flawfinder-report
-          path: build/flawfinder-report.txt
-
-      - name: Run clang-tidy
-        run: |
-          cd build
-          cmake --build . --target clang_tidy
-        continue-on-error: true
-
-      - name: Upload clang-tidy results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: clang-tidy-report
-          path: build/clang-tidy-report.txt
-
       - name: Run valgrind
         run: |
           cd build
           cmake --build . --target valgrind
-        continue-on-error: true
 
       - name: Upload valgrind results
         if: always()
@@ -122,10 +79,3 @@ jobs:
         with:
           name: valgrind-report
           path: build/valgrind-report.txt
-
-      - name: Check for critical issues
-        if: always()
-        run: |
-          echo "=== Static Analysis Summary ==="
-          echo "cppcheck, flawfinder, clang-tidy, and valgrind reports have been generated."
-          echo "Please review the uploaded artifacts for detailed analysis."

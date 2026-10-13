@@ -222,6 +222,10 @@ set(OTHER_FILES
     .github/workflows/windows-build.yml
     .github/workflows/doxygen-pages.yml
     .github/workflows/test--build-and-run-tests--ubuntu24.04.yml
+    .github/workflows/static-analysis-cppcheck.yml
+    .github/workflows/static-analysis-flawfinder.yml
+    .github/workflows/static-analysis-clang-tidy.yml
+    .github/workflows/static-analysis-valgrind.yml
     .githooks/pre-commit
     .clang-format
 )
