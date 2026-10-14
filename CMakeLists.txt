@@ -474,37 +474,7 @@ else()
     message(FATAL_ERROR "argparse source directory not found. Ensure initial FetchContent download succeeded.")
 endif()
 
-# ============================================
-# Tiny Process Library (FetchContent)
-# ============================================
-FetchContent_Declare(
-    tiny_process_library
-    GIT_REPOSITORY https://gitlab.com/eidheim/tiny-process-library.git
-    GIT_TAG master
-    ${_UPDATE_ARGS}
-)
 
-FetchContent_MakeAvailable(tiny_process_library)
-
-FetchContent_GetProperties(tiny_process_library)
-if(tiny_process_library_SOURCE_DIR)
-    if(WIN32)
-        target_sources(${PROJECT_NAME} PRIVATE
-            ${tiny_process_library_SOURCE_DIR}/process.cpp
-            ${tiny_process_library_SOURCE_DIR}/process_win.cpp
-        )
-    else()
-        target_sources(${PROJECT_NAME} PRIVATE
-            ${tiny_process_library_SOURCE_DIR}/process.cpp
-        )
-    endif()
-
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        ${tiny_process_library_SOURCE_DIR}
-    )
-else()
-    message(FATAL_ERROR "tiny_process_library source directory not found. Ensure initial FetchContent download succeeded.")
-endif()
 
 
 # ============================================
@@ -524,8 +494,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${QT_TARGET_PREFIX}::OpenGL
     # VTK:
     ${VTK_LIBRARIES}
-    # other:
-    tiny-process-library
 )
 
 # Export symbols for plugins to use (Unix-like systems only)
@@ -764,7 +732,7 @@ foreach(f ${Sources} ${Headers})
     endif()
 
     # Exclude explicit libraries that sometimes appear outside _deps
-    if (_fpath MATCHES ".*/argparse(/|$).*" OR _fpath MATCHES ".*/inih(/|$).*")
+    if (_fpath MATCHES ".*/argparse(/|$).*" OR _fpath MATCHES ".*/inih(/|$).*" OR _fpath MATCHES ".*/tiny_process(/|$).*")
         continue()
     endif()
 

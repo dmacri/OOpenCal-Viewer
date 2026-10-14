@@ -2,7 +2,7 @@
  * @brief Builder for compiling C++ model modules into shared libraries.
  *
  * This class handles automatic compilation of C++ model files into shared libraries
- * (.so files) using the Tiny Process Library to execute the compiler. */
+ * (.so files) using Qt QProcess to execute the compiler. */
 
 #pragma once
 
