@@ -737,6 +737,12 @@ foreach(f ${Sources} ${Headers})
         continue()
     endif()
 
+    # Exclude vendored OOpenCAL checkout (deps/) and deprecated visualizer sources
+    if (_fpath MATCHES ".*/deps/.*" OR
+        _fpath MATCHES ".*/visualizer_deprecated/.*")
+        continue()
+    endif()
+
     # Exclude explicit libraries that sometimes appear outside _deps
     if (_fpath MATCHES ".*/argparse(/|$).*" OR _fpath MATCHES ".*/inih(/|$).*" OR _fpath MATCHES ".*/tiny_process(/|$).*")
         continue()
@@ -785,23 +791,25 @@ find_program(CLANG_TIDY NAMES clang-tidy)
 if (CLANG_TIDY)
     message(STATUS "Adding command: clang_tidy (Project-full, system headers disabled)")
 
-    if (FILTERED_FILES)
-        # Quote file paths to avoid issues with spaces or special characters
-        set(FILTERED_FILES_QUOTED "")
-        foreach(f ${FILTERED_FILES})
-            list(APPEND FILTERED_FILES_QUOTED "\"${f}\"")
-        endforeach()
+    # clang-tidy accepts translation units only. Headers are not in compile_commands.json,
+    # so when passed directly they are parsed with bare flags (no Qt/VTK include paths)
+    # and fail with "file not found". Headers are still checked through --header-filter
+    # whenever a .cpp includes them.
+    set(TIDY_SOURCES ${FILTERED_FILES})
+    list(FILTER TIDY_SOURCES INCLUDE REGEX "\\.cpp$")
+
+    if (TIDY_SOURCES)
+        string(REPLACE ";" " " TIDY_SOURCES_STR "${TIDY_SOURCES}")
+        set(TIDY_HEADER_FILTER
+            "^${CMAKE_SOURCE_DIR}/((config|core|data|examples|plugins|visualiser|visualiserProxy|widgets)/|mainwindow\\.h$)")
+        set(TIDY_REPORT "${CMAKE_BINARY_DIR}/clang-tidy-report.txt")
 
         add_custom_target(clang_tidy
             DEPENDS ${PROJECT_NAME}
-            COMMAND ${CLANG_TIDY}
-                "-p=${CMAKE_BINARY_DIR}"
-                "--system-headers=false"
-                "--header-filter=^${CMAKE_SOURCE_DIR}"
-                ${FILTERED_FILES_QUOTED}
+            COMMAND bash -c "set -o pipefail; '${CLANG_TIDY}' -p='${CMAKE_BINARY_DIR}' --system-headers=false --header-filter='${TIDY_HEADER_FILTER}' ${TIDY_SOURCES_STR} 2>&1 | tee '${TIDY_REPORT}'"
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-            COMMENT "Running clang-tidy (Project-full) on project sources (system headers disabled)"
-            USES_TERMINAL
+            COMMENT "Running clang-tidy on project sources (system headers disabled)"
+            VERBATIM
         )
     else()
         message(WARNING "clang_tidy: no project files to analyze (FILTERED_FILES is empty)")
@@ -819,13 +827,13 @@ if (FLAWFINDER_TOOL)
     message(STATUS "Adding command: flawfinder (project-only)")
 
     if (FILTERED_FILES)
+        string(REPLACE ";" " " FLAWFINDER_FILES_STR "${FILTERED_FILES}")
+        set(FLAWFINDER_REPORT "${CMAKE_BINARY_DIR}/flawfinder-report.txt")
         add_custom_target(flawfinder
-            COMMAND ${FLAWFINDER_TOOL}
-                --quiet --dataonly --nolink --columns --context --singleline --minlevel=0
-                ${FILTERED_FILES}
+            COMMAND bash -c "set -o pipefail; '${FLAWFINDER_TOOL}' --quiet --dataonly --nolink --columns --context --singleline --minlevel=0 ${FLAWFINDER_FILES_STR} 2>&1 | tee '${FLAWFINDER_REPORT}'"
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             COMMENT "Running flawfinder on project sources (excluding vendor/_deps/Qt-generated)"
-            USES_TERMINAL
+            VERBATIM
         )
     else()
         message(WARNING "flawfinder: no project files to analyze (FILTERED_FILES is empty)")
@@ -853,6 +861,8 @@ if (CPPCHECK)
         "-i${CMAKE_SOURCE_DIR}/vendor"
         "-i${CMAKE_SOURCE_DIR}/3rd-party"
         "-i${CMAKE_SOURCE_DIR}/contrib"
+        "-i${CMAKE_SOURCE_DIR}/deps"
+        "-i${CMAKE_SOURCE_DIR}/visualizer_deprecated"
         "-i${CMAKE_SOURCE_DIR}/tests"
         "-i${CMAKE_SOURCE_DIR}/test"
         # skip Qt generated (some may live in source tree)
@@ -861,18 +871,13 @@ if (CPPCHECK)
         "-i${CMAKE_SOURCE_DIR}/qrc_*"
     )
 
+    string(REPLACE ";" " " CPPCHECK_EXCLUDES_STR "${CPPCHECK_EXCLUDES}")
+    # cppcheck writes XML to stderr; keep it in the report file for the artifact upload
     add_custom_target(cppcheck
-        COMMAND ${CPPCHECK}
-            --project=${CMAKE_BINARY_DIR}/compile_commands.json
-            --force
-            --enable=warning,performance,unusedFunction,style,information
-            --template=gcc
-            --inline-suppr
-            --suppress=missingIncludeSystem
-            ${CPPCHECK_EXCLUDES}
+        COMMAND bash -c "'${CPPCHECK}' --project='${CMAKE_BINARY_DIR}/compile_commands.json' --force --enable=warning,performance,unusedFunction,style,information --xml --xml-version=2 --inline-suppr --suppress=missingIncludeSystem --library=qt --library=posix '--suppress=*:${CMAKE_BINARY_DIR}/*' '--suppress=*:${CMAKE_SOURCE_DIR}/deps/*' ${CPPCHECK_EXCLUDES_STR} 2> '${CMAKE_BINARY_DIR}/cppcheck-report.xml'"
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Running cppcheck (project) with excludes for vendor/_deps/Qt-generated"
-        USES_TERMINAL
+        VERBATIM
     )
 else()
     message(STATUS "cppcheck not found: skipping cppcheck target")
@@ -890,27 +895,17 @@ if (VALGRIND_TOOL)
     if (WIN32)
         message(WARNING "Valgrind is not supported on Windows: skipping valgrind target")
     else()
-        # Binary output path depends on configuration type (Debug/Release)
-        # Use generator expression to select correct one at runtime
-        set(PROJECT_EXECUTABLE "$<TARGET_FILE:${PROJECT_NAME}>")
+        # Runs every unit-test binary under valgrind (scripts/run-valgrind-tests.sh).
+        # The GUI application is not used: it needs a display and takes no test arguments.
+        set(VALGRIND_REPORT "${CMAKE_BINARY_DIR}/valgrind-report.txt")
 
-        # Allow passing custom arguments to valgrind run
-        set(VALGRIND_ARGS "" CACHE STRING "Arguments passed to ${PROJECT_NAME} during valgrind run")
-
-        # Add the target
         add_custom_target(valgrind
             DEPENDS ${PROJECT_NAME}
-            COMMAND ${VALGRIND_TOOL}
-                --leak-check=full
-                --show-leak-kinds=all
-                --track-origins=yes
-                --num-callers=20
-                --error-exitcode=1
-                --suppressions=${CMAKE_SOURCE_DIR}/valgrind.supp
-                ${PROJECT_EXECUTABLE} ${VALGRIND_ARGS}
+            COMMAND bash "${CMAKE_SOURCE_DIR}/scripts/run-valgrind-tests.sh"
+                "${CMAKE_BINARY_DIR}" "${VALGRIND_TOOL}" "${VALGRIND_REPORT}"
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-            COMMENT "Running valgrind to check for memory leaks and invalid accesses"
-            USES_TERMINAL
+            COMMENT "Running unit tests under valgrind (memory leaks and invalid accesses)"
+            VERBATIM
         )
     endif()
 else()
