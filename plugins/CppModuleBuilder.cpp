@@ -15,13 +15,13 @@
 
 #include "CppModuleBuilder.h"
 #include "CompilationConfig.h"
-#include "process.hpp" // tiny process library
 #include "ModelLoader.h"
 #include "data/PerformanceMetrics.h"
 
+#include <QProcess>
+
 namespace fs = std::filesystem;
 
-// Helper function to convert std::string to TinyProcessLib::Process::string_type
 namespace
 {
 std::string getEnvCompilerOverride()
@@ -151,23 +151,6 @@ std::string detectBundledCxxVersionDir(const std::string& includeRoot)
         return {};
     }
     return (cxxRoot / bestName).string();
-}
-
-inline TinyProcessLib::Process::string_type toProcessString(const std::string& str)
-{
-#ifdef _WIN32
-    // On Windows, TinyProcessLib uses std::wstring
-    if (str.empty())
-        return TinyProcessLib::Process::string_type();
-    
-    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
-    TinyProcessLib::Process::string_type wstr(size_needed, 0);
-    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0], size_needed);
-    return wstr;
-#else
-    // On Unix-like systems, TinyProcessLib uses std::string
-    return str;
-#endif
 }
 
 /** @brief Find an available C++ compiler (legacy function for compatibility)
@@ -670,23 +653,70 @@ int CppModuleBuilder::executeCommand(const std::string& command,
 {
     try
     {
-        TinyProcessLib::Process process(
-            toProcessString(command),
-            toProcessString(std::string()),
-            [&stdout_callback](const char* bytes, size_t n) {
-                if (stdout_callback)
-                {
-                    stdout_callback(std::string(bytes, n));
-                }
-            },
-            [&stderr_callback](const char* bytes, size_t n) {
-                if (stderr_callback)
-                {
-                    stderr_callback(std::string(bytes, n));
-                }
-            });
+        QProcess process;
+        process.setProcessChannelMode(QProcess::MergedChannels);
 
-        return process.get_exit_status();
+        // Connect readyReadStandardOutput to capture output
+        QObject::connect(&process, &QProcess::readyReadStandardOutput, [&]() {
+            QByteArray data = process.readAllStandardOutput();
+            if (stdout_callback)
+            {
+                stdout_callback(std::string(data.constData(), data.size()));
+            }
+        });
+
+        // Connect readyReadStandardError to capture errors
+        QObject::connect(&process, &QProcess::readyReadStandardError, [&]() {
+            QByteArray data = process.readAllStandardError();
+            if (stderr_callback)
+            {
+                stderr_callback(std::string(data.constData(), data.size()));
+            }
+        });
+
+        // Parse command into program and arguments (shell-like)
+        QString cmdStr = QString::fromStdString(command);
+        QStringList args;
+        QString program;
+
+        // Simple parsing: split by spaces, but respect quotes
+        bool inQuotes = false;
+        QString current;
+        for (QChar c : cmdStr)
+        {
+            if (c == '"' || c == '\'')
+            {
+                inQuotes = !inQuotes;
+            }
+            else if (c == ' ' && !inQuotes)
+            {
+                if (!current.isEmpty())
+                {
+                    if (program.isEmpty())
+                        program = current;
+                    else
+                        args << current;
+                    current.clear();
+                }
+            }
+            else
+            {
+                current += c;
+            }
+        }
+        if (!current.isEmpty())
+        {
+            if (program.isEmpty())
+                program = current;
+            else
+                args << current;
+        }
+
+        // Start the process with program and arguments
+        process.start(program, args);
+        process.waitForFinished(-1); // Wait indefinitely
+
+        return process.exitCode();
     }
     catch (const std::exception& e)
     {
