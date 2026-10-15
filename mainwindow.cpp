@@ -1880,6 +1880,11 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory, bool forc
         QApplication::processEvents();
 
         PluginLoader& pluginLoader = PluginLoader::instance();
+        if (pluginLoader.isPluginLoaded(result.compiledModulePath))
+        {
+            // Overriding unloads the old library; the visualizer still refers to its code, so drop it first.
+            ui->sceneWidget->releaseVisualizer();
+        }
         if (! pluginLoader.loadPlugin(result.compiledModulePath, /*overridePlugin=*/true))
         {
             progress.close();

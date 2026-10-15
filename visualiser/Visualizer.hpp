@@ -413,6 +413,11 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
 template<class Matrix>
 void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
+    // The actor gets its mapper only when the scene is drawn (drawWithVTK). After clearing the scene
+    // there is nothing to refresh yet, so return instead of dereferencing a null mapper.
+    if (!gridActor || !gridActor->GetMapper())
+        return;
+
     if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(gridActor->GetMapper()->GetLookupTable()))
     {
         buidColor(lut, nCols, nRows, p, colorSubstateInfos);

@@ -82,6 +82,12 @@ public:
      * Call this before loading a new configuration file. */
     void clearScene();
 
+    /** @brief Drop the current visualizer and forget the current model.
+     *
+     * Must be called before a plugin that the current visualizer comes from is unloaded
+     * (e.g. when the same model is compiled again). Clears the scene as well. */
+    void releaseVisualizer();
+
     /** @brief Load a new configuration file and reinitialize the scene.
      * 
      * @param configFileName Path to the new configuration file
