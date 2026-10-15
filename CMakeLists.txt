@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.10)
 
 project(OOpenCal-Viewer)
 
+# Export compile_commands.json for tooling (clang-tidy, cppcheck, IWYU, etc.).
+# Must be set before the first add_executable(): the flag is read per target at
+# generation time, so setting it later leaves the main application out of the database.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -630,9 +635,6 @@ endif()
 # ============================================
 # Development tools:
 # ============================================
-
-# Export compile_commands.json for tooling (clang-tidy, cppcheck, IWYU, etc.)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # include-what-you-use (IWYU)
 find_program(IWYU_PATH NAMES include-what-you-use iwyu)
