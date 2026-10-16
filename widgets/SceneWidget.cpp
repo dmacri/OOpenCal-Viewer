@@ -730,6 +730,14 @@ std::string SceneWidget::active3DSubstateStackLabel() const
 
 void SceneWidget::refreshVisualizationWithOptional3DSubstate()
 {
+    if (!gridActor || !gridActor->GetMapper())
+    {
+        // The scene has not been drawn since it was cleared (e.g. the step was changed while
+        // loading a configuration): draw it from the data that has just been read.
+        drawVisualizationWithOptional3DSubstate();
+        return;
+    }
+
     if (isNative3DModel())
     {
         if (isNative3DSliceView())
@@ -1342,7 +1350,6 @@ void SceneWidget::renderVtkScene()
                                                                      settingParameter->outputFileName);
 
     const auto availableSteps = sceneWidgetVisualizerProxy->availableSteps();
-    emit availableStepsReadFromConfigFile(availableSteps);
 
     {
         // Create a performance session for initial data loading
@@ -1385,6 +1392,10 @@ void SceneWidget::renderVtkScene()
         rulerAxisX->SetVisibility(true);
         rulerAxisY->SetVisibility(true);
     }
+
+    // Announce the steps only now: the slot may change the current step and refresh the scene,
+    // which requires that the scene is already drawn.
+    emit availableStepsReadFromConfigFile(availableSteps);
 
     // Render
     renderWindow()->Render();
@@ -1760,6 +1771,13 @@ void SceneWidget::clearScene()
     backgroundActor = vtkSmartPointer<vtkActor>::New();
     actorBuildLine = vtkSmartPointer<vtkActor2D>::New();
     gridLinesOnSurfaceActor = vtkSmartPointer<vtkActor>::New();
+}
+
+void SceneWidget::releaseVisualizer()
+{
+    clearScene();
+    sceneWidgetVisualizerProxy = std::make_unique<NullSceneWidgetVisualizer>();
+    currentModelName.clear();
 }
 
 void SceneWidget::loadNewConfiguration(const std::string& configFileName, int stepNumber)
