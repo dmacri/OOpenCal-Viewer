@@ -190,6 +190,8 @@ list(APPEND Sources
     widgets/RulerAxisActor2D.cpp
     widgets/CustomDirectoryDialog.cpp
     widgets/PerformanceSettingsDialog.cpp
+    widgets/CellHistoryDialog.cpp
+    widgets/TimeSeriesPlot.cpp
     plugins/PluginLoader.cpp
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp
@@ -263,6 +265,7 @@ find_package(freetype QUIET)
 # The 'GUISupportQt' module internally calls find_package(Qt6),
 # so finding VTK first prevents duplicate Qt target definitions.
 find_package(VTK QUIET COMPONENTS
+    ChartsCore
     CommonColor
     CommonCore
     CommonDataModel
@@ -277,6 +280,7 @@ find_package(VTK QUIET COMPONENTS
     RenderingOpenGL2
     RenderingVolume
     RenderingVolumeOpenGL2
+    ViewsContext2D
     IOXML
     IOOggTheora
     GUISupportQt
@@ -513,7 +517,7 @@ endif()
 
 vtk_module_autoinit(
     TARGETS ${PROJECT_NAME}
-    MODULES VTK::GUISupportQt VTK::IOLegacy VTK::RenderingVolumeOpenGL2
+    MODULES VTK::GUISupportQt VTK::IOLegacy VTK::RenderingVolumeOpenGL2 VTK::RenderingContextOpenGL2
 )
 
 # ============================================

@@ -7,9 +7,11 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 #include <QDockWidget>
+#include "core/types.h" // StepIndex
 #include <QScrollArea>
 #include <QVBoxLayout>
 
@@ -17,6 +19,8 @@ class QDragEnterEvent;
 class QDropEvent;
 
 class SubstateDisplayWidget;
+class CellHistoryDialog;
+class QPushButton;
 struct SettingParameter;
 
 /** @class SubstatesDockWidget
@@ -88,6 +92,13 @@ public:
      * @return Checked substate field names in display order */
     std::vector<std::string> checked3DSubstatesInDisplayOrder() const;
 
+    /** @brief Inform the dock which simulation step is shown in the scene.
+     *
+     * The step is marked on the plot of the cell history, if that window is open.
+     *
+     * @param step The step shown in the scene */
+    void setCurrentStep(StepIndex step);
+
 signals:
     /** @brief Signal emitted when a field's 3D state changes.
      * 
@@ -136,6 +147,8 @@ private slots:
      * @param fieldName The name of the field */
     void onCalculateMaximumRequested(const std::string& fieldName);
 
+    /** @brief Handle click of "Plot over time...": read the history of the selected cell and show it */
+    void onPlotHistoryClicked();
     /** @brief Handle deactivate button click */
     void onDeactivateClicked();
 
@@ -194,6 +207,16 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
+    /** @brief Read the history of the selected cell and show it in the history window.
+     *
+     * A progress dialog with a cancel button is shown while the files are read.
+     *
+     * @param showWindow Show (raise) the window; false only refreshes it when it is already visible */
+    void showHistoryOfSelectedCell(bool showWindow);
+
+    /// @brief Forget the selected cell and close the history window (the data it came from is gone)
+    void resetSelectedCell();
+
     /// @brief Clear all substate widgets.
     void clearWidgets();
 
@@ -215,4 +238,11 @@ private:
     std::map<std::string, SubstateDisplayWidget*> m_substateWidgets;
     SettingParameter* m_currentSettingParameter = nullptr;
     class ISceneWidgetVisualizer* m_currentVisualizer = nullptr;
+
+    QPushButton* m_plotHistoryButton = nullptr;
+    CellHistoryDialog* m_historyDialog = nullptr;
+    bool m_hasSelectedCell = false;  ///< A cell was clicked since the data were (re)loaded
+    int m_selectedRow = 0;           ///< Row of the clicked cell in the displayed plane
+    int m_selectedCol = 0;           ///< Column of the clicked cell in the displayed plane
+    std::optional<StepIndex> m_currentStep;
 };

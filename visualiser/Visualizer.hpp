@@ -43,6 +43,7 @@
 #include "OOpenCAL/base/Cell.h" // Color
 #include "visualiser/SettingParameter.h" // SubstateInfo
 #include "visualiser/Line.h"
+#include "visualiser/VolumeZSpacing.h"
 #include "widgets/GridWorldMapping.h"
 
 
@@ -85,7 +86,11 @@ public:
 
     /** @brief Render a native 3D cellular grid as a volume.
      *
-     * This path is separate from the 2D "substate as altitude" surface. */
+     * This path is separate from the 2D "substate as altitude" surface.
+     *
+     * @param zGapPlanes number of empty (fully transparent) planes inserted between every two
+     *        neighbouring Z planes of the model, so that the lower planes (e.g. the subsurface)
+     *        are not hidden by the upper ones. 0 keeps the planes glued together (see VolumeZSpacing.h). */
     template<class Volume>
     void drawWithVTK3DVolume(const Volume& p,
                              int nRows,
@@ -93,7 +98,8 @@ public:
                              int nSlices,
                              vtkSmartPointer<vtkRenderer> renderer,
                              vtkSmartPointer<vtkVolume> volumeActor,
-                             const std::vector<const SubstateInfo*>& colorSubstateInfos);
+                             const std::vector<const SubstateInfo*>& colorSubstateInfos,
+                             int zGapPlanes = 0);
 
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
@@ -187,14 +193,17 @@ public:
     /// @brief Refresh flat background plane colors.
     void refreshFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkActor> backgroundActor);
 
-    /// @brief Draw node-boundary wireframes around a native 3D volume.
+    /** @brief Draw node-boundary wireframes around a native 3D volume.
+     *  @param zGapPlanes empty planes between neighbouring Z planes (see VolumeZSpacing.h), so the
+     *         wireframe covers the whole stretched volume */
     void drawGridLinesFor3DVolume(int nRows,
                                   int nCols,
                                   int nSlices,
                                   int nNodeZ,
                                   const std::vector<Line>& lines,
                                   vtkSmartPointer<vtkRenderer> renderer,
-                                  vtkSmartPointer<vtkActor> gridLinesActor);
+                                  vtkSmartPointer<vtkActor> gridLinesActor,
+                                  int zGapPlanes = 0);
 
     /// @brief Refresh node-boundary wireframes around a native 3D volume.
     void refreshGridLinesFor3DVolume(int nRows,
@@ -202,7 +211,8 @@ public:
                                      int nSlices,
                                      int nNodeZ,
                                      const std::vector<Line>& lines,
-                                     vtkSmartPointer<vtkActor> gridLinesActor);
+                                     vtkSmartPointer<vtkActor> gridLinesActor,
+                                     int zGapPlanes = 0);
 
     /** @brief Builds the lines between the computational nodes in the flat view.
      *  @param nRows Number of grid rows
@@ -294,7 +304,8 @@ private:
                                                                 int nCols,
                                                                 int nSlices,
                                                                 int nNodeZ,
-                                                                const std::vector<Line>& lines);
+                                                                const std::vector<Line>& lines,
+                                                                int zGapPlanes = 0);
 
     /// @brief This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
     Color flatSceneBackgroundColor() const;
@@ -435,10 +446,14 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
                                      int nSlices,
                                      vtkSmartPointer<vtkRenderer> renderer,
                                      vtkSmartPointer<vtkVolume> volumeActor,
-                                     const std::vector<const SubstateInfo*>& colorSubstateInfos)
+                                     const std::vector<const SubstateInfo*>& colorSubstateInfos,
+                                     int zGapPlanes)
 {
     if (!renderer || !volumeActor || nRows <= 0 || nCols <= 0 || nSlices <= 1)
         return;
+
+    const int gapPlanes = VolumeZSpacing::clampGap(zGapPlanes);
+    const int drawnSlices = static_cast<int>(VolumeZSpacing::drawnPlaneCount(static_cast<std::size_t>(nSlices), gapPlanes));
 
     const char* fieldName = nullptr;
     if (!colorSubstateInfos.empty() && colorSubstateInfos.front() &&
@@ -448,10 +463,12 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
     }
 
     const vtkIdType valueCount =
-        static_cast<vtkIdType>(nRows) * nCols * nSlices;
+        static_cast<vtkIdType>(nRows) * nCols * drawnSlices;
     vtkNew<vtkFloatArray> scalars;
     scalars->SetName("cell-value");
     scalars->SetNumberOfValues(valueCount);
+    // The planes inserted by the Z spacing are not filled yet: they are set to a transparent value
+    // once the value range is known (see below).
 
     double minValue = std::numeric_limits<double>::infinity();
     double maxValue = -std::numeric_limits<double>::infinity();
@@ -487,8 +504,12 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
                 }
 
                 // VTK expects X to vary fastest. Invert Y just like the existing 2D renderer.
+                // With a Z spacing the data planes are pulled apart: plane `slice` is drawn at
+                // index slice * (gap + 1), the planes in between stay empty.
+                const vtkIdType drawnSlice =
+                    static_cast<vtkIdType>(VolumeZSpacing::drawnPlaneIndex(static_cast<std::size_t>(slice), gapPlanes));
                 const vtkIdType index =
-                    (static_cast<vtkIdType>(slice) * nRows + (nRows - 1 - row)) *
+                    (drawnSlice * nRows + (nRows - 1 - row)) *
                     nCols +
                     col;
                 scalars->SetValue(index, static_cast<float>(value));
@@ -498,6 +519,22 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
 
     if (!std::isfinite(minValue) || !std::isfinite(maxValue))
         return;
+
+    // Empty planes between the data planes must be fully transparent. The opacity transfer function
+    // below maps `minValue` to opacity 0 (and, when all values are equal, `minValue - 1`).
+    if (gapPlanes > 0)
+    {
+        const float transparentValue = static_cast<float>(minValue < maxValue ? minValue : minValue - 1.0);
+        for (int drawnSlice = 0; drawnSlice < drawnSlices; ++drawnSlice)
+        {
+            if (drawnSlice % (gapPlanes + 1) == 0)
+                continue; // a data plane
+
+            const vtkIdType begin = static_cast<vtkIdType>(drawnSlice) * nRows * nCols;
+            for (vtkIdType i = 0; i < static_cast<vtkIdType>(nRows) * nCols; ++i)
+                scalars->SetValue(begin + i, transparentValue);
+        }
+    }
 
     // A model may intentionally use pure black for occupied cells (Ball3D does).
     // Pure black has no diffuse lighting response and therefore looks like a flat
@@ -513,7 +550,7 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
     maxColor = makeShadeable(maxColor);
 
     vtkNew<vtkImageData> image;
-    image->SetDimensions(nCols, nRows, nSlices);
+    image->SetDimensions(nCols, nRows, drawnSlices);
     image->SetOrigin(0.0, 0.0, 0.0);
     image->SetSpacing(1.0, 1.0, 1.0);
     image->GetPointData()->SetScalars(scalars);
