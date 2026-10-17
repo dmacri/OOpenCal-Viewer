@@ -36,6 +36,7 @@
 #include "visualiser/Line.h"
 #include "visualiser/Visualizer.hpp"
 #include "visualiser/SettingParameter.h"
+#include "visualiser/VolumeZSpacing.h"
 #include "widgets/ColorSettings.h"
 #include "widgets/GridWorldMapping.h"
 #include "widgets/NumberFormatting.h"
@@ -2028,6 +2029,38 @@ void SceneWidget::setNative3DVolumeView()
     setViewMode3D();
     updateCameraPivotFromBounds();
     applyCameraAngles();
+}
+
+void SceneWidget::setNative3DVolumeZGap(int gapPlanes)
+{
+    if (!isNative3DModel() || !sceneWidgetVisualizerProxy)
+        return;
+
+    const int gap = VolumeZSpacing::clampGap(gapPlanes);
+    if (gap == sceneWidgetVisualizerProxy->native3DVolumeZGap())
+        return;
+
+    sceneWidgetVisualizerProxy->setNative3DVolumeZGap(gap);
+
+    // A cross-section shows one plane only; the gap is used when the volume is drawn again.
+    if (isNative3DSliceView())
+        return;
+
+    drawVisualizationWithOptional3DSubstate();
+    if (renderer)
+    {
+        // The volume got taller (or shorter): refit the camera, keeping its viewing direction, otherwise
+        // the stretched volume may reach behind the camera and disappear.
+        renderer->ResetCamera();
+        renderer->ResetCameraClippingRange();
+    }
+    updateCameraPivotFromBounds();
+    triggerRenderUpdate();
+}
+
+int SceneWidget::native3DVolumeZGap() const
+{
+    return sceneWidgetVisualizerProxy ? sceneWidgetVisualizerProxy->native3DVolumeZGap() : 0;
 }
 
 void SceneWidget::setSubstate3DSlice(GridSliceAxis axis, int fixedIndex)
