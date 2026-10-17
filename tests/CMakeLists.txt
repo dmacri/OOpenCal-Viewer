@@ -119,6 +119,23 @@ target_include_directories(GridWorldMappingTests PRIVATE
 add_test(NAME GridWorldMappingTests COMMAND GridWorldMappingTests)
 
 # ============================================
+# Add test executable for VolumeZSpacing (header-only, no Qt/VTK)
+# ============================================
+add_executable(VolumeZSpacingTests
+    VolumeZSpacingTests.cpp
+)
+
+target_link_libraries(VolumeZSpacingTests
+    GTest::gtest_main
+)
+
+target_include_directories(VolumeZSpacingTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME VolumeZSpacingTests COMMAND VolumeZSpacingTests)
+
+# ============================================
 # Add test executable for NumberFormatting (header-only, no Qt/VTK)
 # ============================================
 add_executable(NumberFormattingTests

@@ -84,6 +84,16 @@ public:
     /// @brief Index currently held constant by the native 3D slice.
     virtual int native3DSliceIndex() const = 0;
 
+    /** @brief Set the number of empty planes drawn between neighbouring Z planes of a native 3D volume.
+     *
+     *  Only affects the complete volume view (not the 2D cross-sections). The default implementation
+     *  ignores the request, so visualizers without a native 3D volume need no changes.
+     *  @param gapPlanes 0 keeps the planes glued together; see VolumeZSpacing.h for the valid range */
+    virtual void setNative3DVolumeZGap(int gapPlanes) { static_cast<void>(gapPlanes); }
+
+    /// @brief Number of empty planes currently drawn between neighbouring Z planes of the volume.
+    virtual int native3DVolumeZGap() const { return 0; }
+
     /// @brief Draw the visualization using VTK with 3D substate as quad mesh surface.
     virtual void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) = 0;
 

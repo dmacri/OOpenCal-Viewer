@@ -125,7 +125,8 @@ public:
                                            static_cast<int>(p.layerCount()),
                                            renderer,
                                            nativeVolumeActor,
-                                           colorSubstateInfos);
+                                           colorSubstateInfos,
+                                           nativeVolumeZGap);
             return;
         }
 
@@ -159,7 +160,8 @@ public:
                                            static_cast<int>(p.layerCount()),
                                            nativeVolumeRenderer,
                                            nativeVolumeActor,
-                                           colorSubstateInfos);
+                                           colorSubstateInfos,
+                                           nativeVolumeZGap);
             return;
         }
         visualiser.refreshWindowsVTK(p, nRows, nCols, gridActor, colorSubstateInfos);
@@ -198,6 +200,16 @@ public:
     bool isNative3DSliceEnabled() const override
     {
         return nativeSliceEnabled;
+    }
+
+    void setNative3DVolumeZGap(int gapPlanes) override
+    {
+        nativeVolumeZGap = VolumeZSpacing::clampGap(gapPlanes);
+    }
+
+    int native3DVolumeZGap() const override
+    {
+        return nativeVolumeZGap;
     }
 
     GridSliceAxis native3DSliceAxis() const override
@@ -315,7 +327,8 @@ public:
                                                 static_cast<int>(nodeCountZ),
                                                 lines,
                                                 renderer,
-                                                gridLinesActor);
+                                                gridLinesActor,
+                                                nativeVolumeZGap);
             return;
         }
         visualiser.drawGridLinesOn3DSurface(p, nRows, nCols, lines, renderer, gridLinesActor, substateFieldName, minValue, maxValue);
@@ -336,7 +349,8 @@ public:
                                                 static_cast<int>(nodeCountZ),
                                                 lines,
                                                 renderer,
-                                                gridLinesActor);
+                                                gridLinesActor,
+                                                nativeVolumeZGap);
             return;
         }
         visualiser.drawGridLinesOn3DSubstateStack(p,
@@ -357,7 +371,8 @@ public:
                                                    static_cast<int>(p.layerCount()),
                                                    static_cast<int>(nodeCountZ),
                                                    lines,
-                                                   gridLinesActor);
+                                                   gridLinesActor,
+                                                   nativeVolumeZGap);
             return;
         }
         visualiser.refreshGridLinesOn3DSurface(p, nRows, nCols, lines, gridLinesActor, substateFieldName, minValue, maxValue);
@@ -376,7 +391,8 @@ public:
                                                    static_cast<int>(p.layerCount()),
                                                    static_cast<int>(nodeCountZ),
                                                    lines,
-                                                   gridLinesActor);
+                                                   gridLinesActor,
+                                                   nativeVolumeZGap);
             return;
         }
         visualiser.refreshGridLinesOn3DSubstateStack(p,
@@ -437,4 +453,5 @@ private:
     bool nativeSliceEnabled = false;
     GridSliceAxis nativeSliceAxis = GridSliceAxis::Z;
     std::size_t nativeSliceIndex = 0;
+    int nativeVolumeZGap = 0;        ///< Empty planes between neighbouring Z planes in the volume view
 };
