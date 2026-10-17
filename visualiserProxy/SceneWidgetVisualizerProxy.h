@@ -418,6 +418,73 @@ public:
         return modelReader.availableSteps();
     }
 
+    CellHistory cellHistory(const SettingParameter& sp,
+                            int viewRow,
+                            int viewCol,
+                            const std::vector<std::string>& fields,
+                            const CellHistoryProgress& progress = {}) override
+    {
+        CellHistory history;
+        history.fields = fields;
+        history.values.assign(fields.size(), {});
+
+        if (viewRow < 0 || viewCol < 0)
+            return history;
+
+        // Position of the cell in the whole grid (in a cross-section the view is only one plane of it)
+        GridCellIndex index{static_cast<std::size_t>(viewRow), static_cast<std::size_t>(viewCol), 0};
+        if (nativeSliceEnabled && p.layerCount() > 1)
+        {
+            const ContiguousGridSliceView<Cell> slice(p, nativeSliceAxis, nativeSliceIndex);
+            if (static_cast<std::size_t>(viewRow) >= slice.rowCount() ||
+                static_cast<std::size_t>(viewCol) >= slice.columnCount())
+            {
+                return history;
+            }
+            index = gridIndexFromSliceView(nativeSliceAxis,
+                                           nativeSliceIndex,
+                                           p.layerCount(),
+                                           static_cast<std::size_t>(viewRow),
+                                           static_cast<std::size_t>(viewCol));
+        }
+        history.row = static_cast<int>(index.row);
+        history.column = static_cast<int>(index.column);
+        history.slice = static_cast<int>(index.layer);
+        history.threeDimensional = p.layerCount() > 1;
+
+        history.steps = modelReader.availableSteps();
+
+        // Remember whether the caller cancelled
+        const CellHistoryProgress trackingProgress = [&history, &progress](std::size_t done, std::size_t total)
+        {
+            if (progress && ! progress(done, total))
+            {
+                history.cancelled = true;
+                return false;
+            }
+            return true;
+        };
+        const auto cells = modelReader.readCellAcrossSteps(sp,
+                                                           history.row,
+                                                           history.column,
+                                                           history.slice,
+                                                           history.steps,
+                                                           trackingProgress);
+
+        for (std::size_t f = 0; f < fields.size(); ++f)
+        {
+            auto& series = history.values[f];
+            series.reserve(cells.size());
+            for (const auto& cell : cells)
+            {
+                series.push_back(cell ? parseSubstateValue(cell->stringEncoding(fields[f].c_str()))
+                                      : std::numeric_limits<double>::quiet_NaN());
+            }
+        }
+
+        return history;
+    }
+
     std::string getCellStringEncoding(int row, int col, const char* details = nullptr) const override
     {
         if (nativeSliceEnabled && p.layerCount() > 1)

@@ -1399,6 +1399,7 @@ bool MainWindow::setPositionOnWidgets(StepIndex stepPosition, bool updateSlider)
             ui->updatePositionSlider->setValue(static_cast<int>(stepPosition));
         }
         ui->positionSpinBox->setValue(static_cast<int>(stepPosition));
+        ui->substatesDockWidget->setCurrentStep(stepPosition); // marks the step on the plot of a cell history
     }
     catch (const std::exception& e)
     {

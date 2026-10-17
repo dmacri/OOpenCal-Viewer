@@ -14,10 +14,14 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <functional>
 #include <future>
 #include <iostream>
+#include <limits>
+#include <optional>
 #include <ranges>
 #include <regex>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -80,6 +84,29 @@ public:
      * @param lines Pointer to the line data structure */
     template<class Matrix>
     void readStageStateFromFilesForStep(Matrix& m, SettingParameter* sp, Line* lines);
+
+    /** @brief Reads one cell at many simulation steps (history of a cell).
+     *
+     * Only the record of the requested cell is read at each step: in the binary mode a single
+     * `sizeof(Cell)` record is read from the file, in the text mode the lines up to the cell's row are
+     * skipped. The node which contains the cell is found separately for every step, because the
+     * size of the nodes may change between steps.
+     *
+     * @param sp       Setting parameters (output file name, read mode, number of nodes)
+     * @param row      Row of the cell in the whole grid
+     * @param col      Column of the cell in the whole grid
+     * @param slice    Slice (Z plane) of the cell in the whole grid; 0 for 2D models
+     * @param steps    Steps to read
+     * @param progress Optional callback `(done, total)`; return false from it to cancel
+     * @return one entry per step; empty when the cell could not be read at that step
+     *         (a step that was not read because of a cancellation is empty too) */
+    [[nodiscard]] std::vector<std::optional<Cell>> readCellAcrossSteps(
+        const SettingParameter& sp,
+        int row,
+        int col,
+        int slice,
+        const std::vector<StepIndex>& steps,
+        const std::function<bool(std::size_t done, std::size_t total)>& progress = {});
 
     /** @brief Loads step offset data from text files into an internal hash map.
      *
@@ -460,6 +487,117 @@ void ModelReader<Cell>::readStageStateFromFilesForStep(Matrix& m, SettingParamet
                           {
                               f.get();
                           });
+}
+
+template<CellLike Cell>
+std::vector<std::optional<Cell>> ModelReader<Cell>::readCellAcrossSteps(
+    const SettingParameter& sp,
+    int row,
+    int col,
+    int slice,
+    const std::vector<StepIndex>& steps,
+    const std::function<bool(std::size_t done, std::size_t total)>& progress)
+{
+    std::vector<std::optional<Cell>> result(steps.size());
+
+    const bool isBinary = (sp.readMode == "binary");
+    const auto totalNodes = sp.nNodeX * sp.nNodeY * sp.nNodeZ;
+
+    for (std::size_t i = 0; i < steps.size(); ++i)
+    {
+        if (progress && ! progress(i, steps.size()))
+            return result; // cancelled, the remaining steps stay empty
+
+        const StepIndex step = steps[i];
+        try
+        {
+            const auto dimensions = localDimensionsForAllNodes(step, sp.nNodeX, sp.nNodeY, sp.nNodeZ, sp.outputFileName, isBinary);
+
+            for (NodeIndex node = 0; node < totalNodes; ++node)
+            {
+                const auto offset = ReaderHelpers::calculateXYZOffsetForNode(node, sp.nNodeX, sp.nNodeY, sp.nNodeZ, dimensions);
+                const auto& local = dimensions[node];
+
+                const int localX = col - offset.x();
+                const int localY = row - offset.y();
+                const int localZ = slice - offset.z();
+                if (localX < 0 || localY < 0 || localZ < 0 ||
+                    localX >= local.column || localY >= local.row || localZ >= local.slice)
+                {
+                    continue; // the cell is in another node
+                }
+
+                ColumnRowSlice ignoredDimensions;
+                std::ifstream fp = readColumnAndRowForStepFromFileReturningStream(step,
+                                                                                  sp.outputFileName,
+                                                                                  node,
+                                                                                  ignoredDimensions,
+                                                                                  isBinary);
+
+                // Same order as in readStageStateFromFilesForStep(): slice by slice, row by row
+                const std::size_t rowInNode = static_cast<std::size_t>(localZ) * local.row + localY;
+
+                Cell cell;
+                cell.startStep(static_cast<int>(step));
+
+                if (isBinary)
+                {
+                    const std::size_t cellIndex = rowInNode * local.column + localX;
+                    fp.seekg(static_cast<std::streamoff>(cellIndex * sizeof(Cell)), std::ios::cur);
+
+                    std::vector<char> raw(sizeof(Cell));
+                    fp.read(raw.data(), static_cast<std::streamsize>(raw.size()));
+                    if (fp.gcount() != static_cast<std::streamsize>(raw.size()))
+                        throw std::runtime_error("Failed to read a cell record");
+
+                    Cell fromFile;
+                    std::memcpy(&fromFile, raw.data(), sizeof(Cell)); /// @note This erases the temporary object's vtable; the assignment copies the cell state only.
+                    cell = fromFile;
+                }
+                else
+                {
+                    for (std::size_t skipped = 0; skipped < rowInNode; ++skipped)
+                        fp.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+                    std::string line;
+                    if (! std::getline(fp, line))
+                        throw std::runtime_error("Failed to read a line of cells");
+
+                    // Cells in a line are separated by spaces
+                    std::size_t cursor = 0;
+                    std::string token;
+                    for (int column = 0; column <= localX; ++column)
+                    {
+                        while (cursor < line.size() && line[cursor] == ' ')
+                            ++cursor;
+                        if (cursor >= line.size())
+                            throw std::runtime_error("Line has fewer cells than expected");
+
+                        const std::size_t begin = cursor;
+                        while (cursor < line.size() && line[cursor] != ' ')
+                            ++cursor;
+                        token.assign(line, begin, cursor - begin);
+                    }
+
+                    std::vector<char> buffer(token.begin(), token.end());
+                    buffer.push_back('\0');
+                    cell.composeElement(buffer.data());
+                }
+
+                result[i] = std::move(cell);
+                break;
+            }
+        }
+        catch (const std::exception&)
+        {
+            // This step cannot be read; the entry stays empty
+        }
+    }
+
+    if (progress)
+        progress(steps.size(), steps.size());
+
+    return result;
 }
 
 template<CellLike Cell>
