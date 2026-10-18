@@ -10,7 +10,6 @@
 
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkAxesActor.h>
-#include <vtkAxisActor2D.h>
 #include <vtkDataSet.h>
 #include <vtkNamedColors.h>
 #include <vtkOrientationMarkerWidget.h>
@@ -21,6 +20,8 @@
 #include "core/types.h"
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+#include "widgets/GridWorldMapping.h"
+#include "widgets/RulerAxisActor2D.h"
 
 // Forward declarations
 class SubstatesDockWidget;
@@ -80,6 +81,12 @@ public:
      * This method clears the renderer and resets the visualizer state.
      * Call this before loading a new configuration file. */
     void clearScene();
+
+    /** @brief Drop the current visualizer and forget the current model.
+     *
+     * Must be called before a plugin that the current visualizer comes from is unloaded
+     * (e.g. when the same model is compiled again). Clears the scene as well. */
+    void releaseVisualizer();
 
     /** @brief Load a new configuration file and reinitialize the scene.
      * 
@@ -480,10 +487,12 @@ protected:
     /** @brief Fit the camera and apply the stored Roll/Pitch/Yaw orientation. */
     void applyCameraAngles();
 
-    /// @brief Apply stored Roll/Pitch/Yaw while preserving camera distance.
+    /// @brief Rotate the camera around the scene pivot to the stored Roll/Pitch/Yaw orientation.
+    /// Distance (zoom) and the zoomed-in view are preserved; the view is not re-centred.
     void applyCameraAnglesPreservingZoom();
 
-    /// @brief Update cached camera pivot using current visible bounds
+    /// @brief Set the rotation pivot to the centre of the visible bounds (the scene centre).
+    /// Mouse and slider rotations orbit this point; zoom and pan do not move it.
     void updateCameraPivotFromBounds();
 
     /** @brief Load and update visualization data for the current step.
@@ -529,6 +538,29 @@ protected:
     /** @brief True when one or more substates are currently drawn as a 3D height surface
      *         (2D model + "Use as 3D altitude", not in the cross-section view). */
     bool isHeightSurfaceDisplayed() const;
+
+    /** @brief Finds where the view ray under the cursor meets the flat base plane under the 3D height surface.
+     *
+     *  The height surface has no quads where its substate is outside (Min, Max], so the picker misses there
+     *  although the cursor is above the grid (the "chessboard"). The base plane gives such a position (issue #135).
+     *
+     *  @param displayX X of the cursor in VTK display coordinates (origin: bottom-left)
+     *  @param displayY Y of the cursor in VTK display coordinates (origin: bottom-left)
+     *  @param outWorldPos Output: world position on the plane (Z = GridWorldMapping::heightSurfaceBaseZ)
+     *  @return True if a height surface is displayed and the ray meets the plane inside the grid. */
+    bool pickBasePlane(int displayX, int displayY, std::array<double, 3>& outWorldPos) const;
+
+    /** @brief Position under the cursor as shown in the tooltip: "(x: .., y: ..)" or "(x: .., y: .., z: ..)".
+     *
+     *  Z is left out when it carries no information: in the flat 2D view every cell lies on one plane, and
+     *  over the base plane under a 3D height surface the cursor is not above any point of the surface. */
+    QString positionAsText(int x, int y, int z) const;
+
+    /** @brief World extent of the flat (2D) scene, to which the lines between the nodes are fitted.
+     *
+     *  The grid is drawn with one quad per cell (useCellRendering) or with one point per cell; the second
+     *  one ends one unit earlier on the right and at the top (see GridWorldMapping::pointGridBounds()). */
+    GridWorldMapping::Bounds2D flatSceneBounds() const;
 
     /** @brief Converts VTK world coordinates to display/pixel coordinates shown to users.
      *
@@ -655,6 +687,10 @@ protected:
     /** @brief Whether the last mouse move picked the rendered data grid actor. */
     bool m_lastMousePickedGrid = false;
 
+    /** @brief Whether m_lastWorldPos lies on the flat base plane under the 3D height surface (the "chessboard"):
+     *         the cursor was above the grid but not above the surface. Reset together with m_lastMousePickedGrid. */
+    bool m_lastMouseOnBasePlane = false;
+
     /// @brief VTK renderer for the scene: This renderer is responsible for rendering the 3D scene.
     vtkNew<vtkRenderer> renderer;
 
@@ -678,7 +714,8 @@ protected:
     /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number in the scene.
     vtkNew<vtkTextMapper> singleLineTextStep;
 
-    /// @brief Pivot point used for GUI-controlled camera rotations in 3D mode
+    /// @brief Rotation pivot in world coordinates: the scene centre (see updateCameraPivotFromBounds()).
+    /// The focal point moves on zoom and pan; the pivot does not.
     std::array<double, 3> cameraPivot{ 0.0, 0.0, 0.0 };
 
     /// @brief Axes actor for showing coordinate system orientation
@@ -688,8 +725,8 @@ protected:
     vtkNew<vtkOrientationMarkerWidget> axesWidget;
 
     /// @brief 2D ruler axes for showing scale in 2D mode (X and Y axes)
-    vtkNew<vtkAxisActor2D> rulerAxisX;
-    vtkNew<vtkAxisActor2D> rulerAxisY;
+    vtkNew<RulerAxisActor2D> rulerAxisX;
+    vtkNew<RulerAxisActor2D> rulerAxisY;
 
     /** @brief Collection of line segments used for visualization.
      *

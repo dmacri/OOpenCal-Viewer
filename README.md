@@ -1,4 +1,8 @@
 ![Build Status: Linux](https://github.com/dmacri/OOpenCal-Viewer/actions/workflows/release--deb-package--ubuntu24.04.yml/badge.svg)
+![Static Analysis: cppcheck](https://github.com/dmacri/OOpenCal-Viewer/actions/workflows/static-analysis-cppcheck.yml/badge.svg)
+![Static Analysis: flawfinder](https://github.com/dmacri/OOpenCal-Viewer/actions/workflows/static-analysis-flawfinder.yml/badge.svg)
+![Static Analysis: clang-tidy](https://github.com/dmacri/OOpenCal-Viewer/actions/workflows/static-analysis-clang-tidy.yml/badge.svg)
+![Dynamic Analysis of tests: valgrind](https://github.com/dmacri/OOpenCal-Viewer/actions/workflows/static-analysis-valgrind.yml/badge.svg)
 
 # OOpenCal-Viewer
 

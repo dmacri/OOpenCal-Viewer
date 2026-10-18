@@ -160,3 +160,304 @@ TEST(GridWorldMappingFlatView, RejectsDegenerateInput)
     EXPECT_FALSE(worldToGridCell(1.0, 1.0, Bounds2D{0, 10, 0, 0}, 10, 10, r, c));
     EXPECT_FALSE(worldToGridCell(1.0, 1.0, Bounds2D{0, 10, 0, 10}, 0, 10, r, c));
 }
+
+/** Test Suite: GridWorldMappingBasePlane
+ *
+ * Regression for issue #135: with a substate shown as 3D height the surface has quads only where
+ * the substate is inside (Min, Max], so the picker misses over the rest of the grid (the flat
+ * "chessboard") and the tooltip said "(Outside the grid)". There the world position comes from
+ * the view ray meeting the base plane under the surface. */
+
+namespace
+{
+// Two points of the view ray through `ground`: one close to the camera (near clipping plane)
+// and one behind the plane (far clipping plane), as vtkRenderer::DisplayToWorld gives them.
+struct Ray
+{
+    Point3D start, end;
+};
+Ray rayThroughGroundPoint(const Point3D& camera, const Point3D& ground, double nearT = 0.02, double farT = 3.0)
+{
+    const auto at = [&](double t)
+    {
+        return Point3D{ camera.x + t * (ground.x - camera.x),
+                        camera.y + t * (ground.y - camera.y),
+                        camera.z + t * (ground.z - camera.z) };
+    };
+    return { at(nearT), at(farT) };
+}
+} // namespace
+
+TEST(GridWorldMappingBasePlane, VerticalRayHitsThePointRightBelowTheCursor)
+{
+    double x = 0.0, y = 0.0;
+    ASSERT_TRUE(intersectRayWithHorizontalPlane({ 12.5, 7.25, 100.0 }, { 12.5, 7.25, -100.0 }, heightSurfaceBaseZ, x, y));
+    EXPECT_DOUBLE_EQ(x, 12.5);
+    EXPECT_DOUBLE_EQ(y, 7.25);
+}
+
+TEST(GridWorldMappingBasePlane, ObliqueRayIsShiftedAlongItsDirection)
+{
+    double x = 0.0, y = 0.0;
+    ASSERT_TRUE(intersectRayWithHorizontalPlane({ 0.0, 0.0, 10.0 }, { 20.0, 10.0, 0.0 }, 0.0, x, y));
+    EXPECT_DOUBLE_EQ(x, 20.0);
+    EXPECT_DOUBLE_EQ(y, 10.0);
+
+    // the same line, the second point taken further along it
+    ASSERT_TRUE(intersectRayWithHorizontalPlane({ 0.0, 0.0, 10.0 }, { 60.0, 30.0, -20.0 }, 0.0, x, y));
+    EXPECT_DOUBLE_EQ(x, 20.0);
+    EXPECT_DOUBLE_EQ(y, 10.0);
+}
+
+TEST(GridWorldMappingBasePlane, FindsTheGroundPointSeenThroughAPerspectiveCamera)
+{
+    // Camera in front of the grid, looking across it (like a tilted 3D view)
+    const Point3D camera{ -40.0, -90.0, 260.0 };
+    const Point3D ground{ 123.0, 45.0, heightSurfaceBaseZ };
+    const Ray ray = rayThroughGroundPoint(camera, ground);
+
+    double x = 0.0, y = 0.0;
+    ASSERT_TRUE(intersectRayWithHorizontalPlane(ray.start, ray.end, heightSurfaceBaseZ, x, y));
+    EXPECT_NEAR(x, ground.x, 1e-9);
+    EXPECT_NEAR(y, ground.y, 1e-9);
+}
+
+TEST(GridWorldMappingBasePlane, RayParallelToThePlaneNeverHitsIt)
+{
+    double x = -1.0, y = -1.0;
+    EXPECT_FALSE(intersectRayWithHorizontalPlane({ 0.0, 0.0, 5.0 }, { 10.0, 0.0, 5.0 }, 0.0, x, y));
+    EXPECT_DOUBLE_EQ(x, -1.0); // untouched on failure
+    EXPECT_DOUBLE_EQ(y, -1.0);
+}
+
+TEST(GridWorldMappingBasePlane, PlaneBehindTheRayStartIsNotHit)
+{
+    double x = 0.0, y = 0.0;
+    // the ray climbs away from the plane
+    EXPECT_FALSE(intersectRayWithHorizontalPlane({ 0.0, 0.0, 5.0 }, { 10.0, 0.0, 10.0 }, 0.0, x, y));
+    // the ray starts below the plane and goes further down
+    EXPECT_FALSE(intersectRayWithHorizontalPlane({ 0.0, 0.0, -5.0 }, { 10.0, 0.0, -10.0 }, 0.0, x, y));
+}
+
+TEST(GridWorldMappingBasePlane, DegenerateRayIsRejected)
+{
+    double x = 0.0, y = 0.0;
+    EXPECT_FALSE(intersectRayWithHorizontalPlane({ 1.0, 2.0, 3.0 }, { 1.0, 2.0, 3.0 }, 0.0, x, y));
+}
+
+TEST(GridWorldMappingBasePlane, HitAboveAGapOfTheSurfaceMapsToTheCellUnderTheCursor)
+{
+    // SciddicaT: 496 rows x 610 columns. Cell (row 300, col 120) lies outside of the lava flow,
+    // so the surface has no quad there and the picker misses it.
+    constexpr int nRows = 496;
+    constexpr int nCols = 610;
+    const World cell = vertexOf(300, 120, nRows);
+    const Point3D camera{ cell.x - 80.0, cell.y - 250.0, 400.0 };
+    const Ray ray = rayThroughGroundPoint(camera, { cell.x + 0.2, cell.y - 0.3, heightSurfaceBaseZ });
+
+    double x = 0.0, y = 0.0;
+    ASSERT_TRUE(intersectRayWithHorizontalPlane(ray.start, ray.end, heightSurfaceBaseZ, x, y));
+
+    const Bounds2D grid = pointGridBounds(nRows, nCols);
+    EXPECT_TRUE(x >= grid.xMin && x <= grid.xMax && y >= grid.yMin && y <= grid.yMax);
+
+    int row = -1, col = -1;
+    ASSERT_TRUE(worldToNearestVertexCell(x, y, nRows, nCols, row, col));
+    EXPECT_EQ(row, 300);
+    EXPECT_EQ(col, 120);
+}
+
+TEST(GridWorldMappingBasePlane, HitBesideTheGridIsOutsideOfTheLogicalExtent)
+{
+    constexpr int nRows = 496;
+    constexpr int nCols = 610;
+    const Point3D camera{ 300.0, -300.0, 500.0 };
+    // a point of the plane left of the grid
+    const Ray ray = rayThroughGroundPoint(camera, { -60.0, 200.0, heightSurfaceBaseZ });
+
+    double x = 0.0, y = 0.0;
+    ASSERT_TRUE(intersectRayWithHorizontalPlane(ray.start, ray.end, heightSurfaceBaseZ, x, y));
+    EXPECT_LT(x, pointGridBounds(nRows, nCols).xMin);
+}
+
+/** Test Suite: GridWorldMappingLines
+ *
+ * The lines between the computational nodes (visualiser/Line.h) are kept with Y growing downwards, like the
+ * rows of the grid, while the flat view has Y growing upwards. The tool tip over a line compared the two
+ * without converting, so for a vertical line it described its mirror image: the segment of the bottom node row
+ * while the cursor was over the top one. */
+
+namespace
+{
+constexpr int kRows = 496; // SciddicaT: 610 x 496 cells split into 4 x 4 nodes
+
+std::vector<Line> nodeLines()
+{
+    const float xs[] = { 0, 153, 306, 458, 610 };
+    const float ys[] = { 0, 124, 248, 372, 496 };
+    std::vector<Line> lines;
+    for (const float x : xs)
+        for (int i = 0; i < 4; ++i)
+            lines.emplace_back(x, ys[i], x, ys[i + 1]); // vertical segments, from the top
+    for (const float y : ys)
+        for (int i = 0; i < 4; ++i)
+            lines.emplace_back(xs[i], y, xs[i + 1], y); // horizontal segments, from the left
+    return lines;
+}
+
+std::size_t indexOfLine(const std::vector<Line>& lines, float x1, float y1, float x2, float y2)
+{
+    for (std::size_t i = 0; i < lines.size(); ++i)
+        if (lines[i].x1 == x1 && lines[i].y1 == y1 && lines[i].x2 == x2 && lines[i].y2 == y2)
+            return i;
+    return lines.size();
+}
+} // namespace
+
+TEST(GridWorldMappingLines, LineYAndWorldYAreInverseOfEachOther)
+{
+    EXPECT_DOUBLE_EQ(lineYToWorldY(0.0, kRows), kRows); // top edge of the grid
+    EXPECT_DOUBLE_EQ(lineYToWorldY(kRows, kRows), 0.0); // bottom edge of the grid
+    for (const double y : { 0.0, 1.0, 42.0, 124.5, 372.0, 496.0 })
+        EXPECT_DOUBLE_EQ(worldYToLineY(lineYToWorldY(y, kRows), kRows), y);
+}
+
+TEST(GridWorldMappingLines, VerticalLineIsNotMistakenForItsMirrorImage)
+{
+    const auto lines = nodeLines();
+
+    // cursor on the line x = 153, in the top node row (row 42 of the grid)
+    const auto top = findNearestLine(lines, 153.0, lineYToWorldY(42.0, kRows), kRows);
+    ASSERT_TRUE(top.has_value());
+    EXPECT_EQ(top->index, indexOfLine(lines, 153, 0, 153, 124));
+    EXPECT_DOUBLE_EQ(top->distanceSquared, 0.0);
+
+    // and in the bottom node row (row 450)
+    const auto bottom = findNearestLine(lines, 153.0, lineYToWorldY(450.0, kRows), kRows);
+    ASSERT_TRUE(bottom.has_value());
+    EXPECT_EQ(bottom->index, indexOfLine(lines, 153, 372, 153, 496));
+}
+
+TEST(GridWorldMappingLines, HorizontalLineIsFoundAtItsOwnHeight)
+{
+    const auto lines = nodeLines();
+
+    // the line between the first and the second node row, over the first node column
+    const auto hit = findNearestLine(lines, 75.0, lineYToWorldY(124.0, kRows), kRows);
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_EQ(hit->index, indexOfLine(lines, 0, 124, 153, 124));
+}
+
+TEST(GridWorldMappingLines, ReportsTheSquaredDistanceToTheLine)
+{
+    const auto lines = nodeLines();
+    const auto hit = findNearestLine(lines, 154.0, lineYToWorldY(60.0, kRows), kRows);
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_EQ(hit->index, indexOfLine(lines, 153, 0, 153, 124));
+    EXPECT_DOUBLE_EQ(hit->distanceSquared, 1.0);
+}
+
+TEST(GridWorldMappingLines, NothingIsFoundAwayFromTheLines)
+{
+    const auto lines = nodeLines();
+
+    // middle of a node, further than the threshold from every boundary
+    EXPECT_FALSE(findNearestLine(lines, 76.0, lineYToWorldY(62.0, kRows), kRows).has_value());
+    // just outside of the default threshold of 2 units, but accepted with a greater one
+    EXPECT_FALSE(findNearestLine(lines, 156.5, lineYToWorldY(60.0, kRows), kRows).has_value());
+    EXPECT_TRUE(findNearestLine(lines, 156.5, lineYToWorldY(60.0, kRows), kRows, 4.0).has_value());
+    // no lines at all
+    EXPECT_FALSE(findNearestLine({}, 153.0, 100.0, kRows).has_value());
+    // a zero-length "line" is skipped
+    EXPECT_FALSE(findNearestLine({ Line(10, 10, 10, 10) }, 10.0, lineYToWorldY(10.0, kRows), kRows).has_value());
+}
+
+TEST(GridWorldMappingLines, WhenTwoLinesAreEquallyCloseTheFirstOneWins)
+{
+    const std::vector<Line> lines{ Line(100, 0, 100, 496), Line(104, 0, 104, 496) };
+    const auto hit = findNearestLine(lines, 102.0, lineYToWorldY(10.0, kRows), kRows);
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_EQ(hit->index, 0u);
+}
+
+TEST(GridWorldMappingLines, VerticalLineInTheThirdNodeRowIsFoundAtItsOwnHeight)
+{
+    const auto lines = nodeLines();
+    const auto hit = findNearestLine(lines, 306.0, lineYToWorldY(300.0, kRows), kRows);
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_EQ(hit->index, indexOfLine(lines, 306, 248, 306, 372));
+}
+
+/** Test Suite: GridWorldMappingFlatLines
+ *
+ * Regression for issue #120 ("when zooming edge lines are somewhere far"). The lines between the nodes were moved
+ * 0.5 unit away from the scene by a constant, and the flat view drawn with one point per cell ends one unit before
+ * the lines on the right and at the top, so these two outer lines floated 1.5 unit away from the scene. Such a gap
+ * is made of world units, so it grows with the zoom. The outer lines have to lie exactly on the edges of the scene. */
+
+TEST(GridWorldMappingFlatLines, CellGridBoundsCoverEveryQuad)
+{
+    const Bounds2D scene = cellGridBounds(kRows, 610);
+    EXPECT_DOUBLE_EQ(scene.xMin, 0.0);
+    EXPECT_DOUBLE_EQ(scene.xMax, 610.0);
+    EXPECT_DOUBLE_EQ(scene.yMin, 0.0);
+    EXPECT_DOUBLE_EQ(scene.yMax, kRows);
+}
+
+TEST(GridWorldMappingFlatLines, OuterLinesLieOnTheEdgesOfTheSceneDrawnWithOnePointPerCell)
+{
+    const Bounds2D scene = pointGridBounds(kRows, 610);                    // [0, 609] x [0, 495]
+    EXPECT_DOUBLE_EQ(lineToWorld(0, 200, kRows, scene).x, scene.xMin);     // left
+    EXPECT_DOUBLE_EQ(lineToWorld(610, 200, kRows, scene).x, scene.xMax);   // right
+    EXPECT_DOUBLE_EQ(lineToWorld(300, 0, kRows, scene).y, scene.yMax);     // top
+    EXPECT_DOUBLE_EQ(lineToWorld(300, kRows, kRows, scene).y, scene.yMin); // bottom
+}
+
+TEST(GridWorldMappingFlatLines, OuterLinesLieOnTheEdgesOfTheSceneDrawnWithOneQuadPerCell)
+{
+    const Bounds2D scene = cellGridBounds(kRows, 610); // [0, 610] x [0, 496]
+    EXPECT_DOUBLE_EQ(lineToWorld(0, 200, kRows, scene).x, 0.0);
+    EXPECT_DOUBLE_EQ(lineToWorld(610, 200, kRows, scene).x, 610.0);
+    EXPECT_DOUBLE_EQ(lineToWorld(300, 0, kRows, scene).y, 496.0);
+    EXPECT_DOUBLE_EQ(lineToWorld(300, kRows, kRows, scene).y, 0.0);
+}
+
+TEST(GridWorldMappingFlatLines, LinesInsideTheSceneAreNotMoved)
+{
+    for (const Bounds2D scene : { pointGridBounds(kRows, 610), cellGridBounds(kRows, 610) })
+    {
+        const Point2D p = lineToWorld(153, 124, kRows, scene);
+        EXPECT_DOUBLE_EQ(p.x, 153.0);
+        EXPECT_DOUBLE_EQ(p.y, 372.0); // 496 - 124
+    }
+}
+
+TEST(GridWorldMappingFlatLines, NoLineLeavesTheScene)
+{
+    for (const Bounds2D scene : { pointGridBounds(kRows, 610), cellGridBounds(kRows, 610) })
+    {
+        for (int x = 0; x <= 610; x += 7)
+        {
+            for (int y = 0; y <= kRows; y += 7)
+            {
+                const Point2D p = lineToWorld(x, y, kRows, scene);
+                ASSERT_TRUE(p.x >= scene.xMin && p.x <= scene.xMax && p.y >= scene.yMin && p.y <= scene.yMax)
+                    << "line point (" << x << ", " << y << ")";
+            }
+        }
+    }
+}
+
+TEST(GridWorldMappingFlatLines, OuterLineDrawnOnTheEdgeIsStillFoundByTheToolTip)
+{
+    // One point per cell: the right frame (x = 610) is drawn at 609 and the top one (y = 0) at 495
+    const auto lines = nodeLines();
+
+    const auto right = findNearestLine(lines, 609.0, lineYToWorldY(60.0, kRows), kRows);
+    ASSERT_TRUE(right.has_value());
+    EXPECT_EQ(right->index, indexOfLine(lines, 610, 0, 610, 124));
+
+    const auto top = findNearestLine(lines, 250.0, 495.0, kRows);
+    ASSERT_TRUE(top.has_value());
+    EXPECT_EQ(top->index, indexOfLine(lines, 153, 0, 306, 0));
+}

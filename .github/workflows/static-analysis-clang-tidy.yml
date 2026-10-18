@@ -1,0 +1,81 @@
+name: Static Analysis - clang-tidy
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+env:
+  PROJECT_NAME: OOpenCal-Viewer
+
+jobs:
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout OOpenCAL dependency
+        uses: actions/checkout@v4
+        with:
+          repository: alessioderango/OOpenCAL
+          path: deps/OOpenCAL
+          token: ${{ secrets.VisualizerOpenCal }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            qtbase5-dev \
+            qttools5-dev \
+            qttools5-dev-tools \
+            libvtk9-dev \
+            libvtk9-qt-dev \
+            libfreetype-dev \
+            libeigen3-dev \
+            libtiff-dev \
+            libpng-dev \
+            libjpeg-dev \
+            zlib1g-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libgtest-dev \
+            clang-tidy
+
+      - name: Create build directory
+        run: mkdir -p build
+
+      - name: Configure CMake
+        run: |
+          cd build
+          cmake .. \
+            -DOOPENCAL_DIR=${{ github.workspace }}/deps \
+            -DBUILD_TESTS=ON \
+            -DBUILD_EXAMPLES=OFF \
+            -G Ninja
+
+      - name: Build application
+        run: |
+          cd build
+          cmake --build . --parallel
+
+      - name: Run clang-tidy
+        run: |
+          cd build
+          cmake --build . --target clang_tidy
+
+      - name: Upload clang-tidy results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-tidy-report
+          path: build/clang-tidy-report.txt

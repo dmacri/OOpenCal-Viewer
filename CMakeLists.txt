@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.10)
 
 project(OOpenCal-Viewer)
 
+# Export compile_commands.json for tooling (clang-tidy, cppcheck, IWYU, etc.).
+# Must be set before the first add_executable(): the flag is read per target at
+# generation time, so setting it later leaves the main application out of the database.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -182,6 +187,7 @@ list(APPEND Sources
     widgets/SubstateDisplayWidget.cpp
     widgets/SubstatesDockWidget.cpp
     widgets/CustomInteractorStyle.cpp
+    widgets/RulerAxisActor2D.cpp
     widgets/CustomDirectoryDialog.cpp
     widgets/PerformanceSettingsDialog.cpp
     plugins/PluginLoader.cpp
@@ -190,6 +196,7 @@ list(APPEND Sources
     plugins/CompilationConfig.cpp
     plugins/PrecompiledHeader.cpp
     core/CommandLineParser.cpp
+    core/PrecompiledHeaderCommand.cpp
     data/ReductionManager.cpp
     data/ModelReader.cpp
     data/CompressedStepReader.cpp
@@ -217,11 +224,14 @@ file(GLOB_RECURSE Docs
 )
 set(OTHER_FILES
     LICENSE
-    .github/workflows/release--deb-package--ubuntu24.04.yml
-    .github/workflows/release--deb-package-bundled--ubuntu24.04.yml
-    .github/workflows/release--app-image--ubuntu24.04.yml
     .github/workflows/release--app-image--all-in-one--ubuntu24.04.yml
     .github/workflows/windows-build.yml
+    .github/workflows/doxygen-pages.yml
+    .github/workflows/test--build-and-run-tests--ubuntu24.04.yml
+    .github/workflows/static-analysis-cppcheck.yml
+    .github/workflows/static-analysis-flawfinder.yml
+    .github/workflows/static-analysis-clang-tidy.yml
+    .github/workflows/static-analysis-valgrind.yml
     .githooks/pre-commit
     .clang-format
 )
@@ -474,80 +484,8 @@ else()
     message(FATAL_ERROR "argparse source directory not found. Ensure initial FetchContent download succeeded.")
 endif()
 
-# ============================================
-# Tiny Process Library (FetchContent)
-# ============================================
-FetchContent_Declare(
-    tiny_process_library
-    GIT_REPOSITORY https://gitlab.com/eidheim/tiny-process-library.git
-    GIT_TAG master
-    ${_UPDATE_ARGS}
-)
-
-FetchContent_MakeAvailable(tiny_process_library)
-
-FetchContent_GetProperties(tiny_process_library)
-if(tiny_process_library_SOURCE_DIR)
-    if(WIN32)
-        target_sources(${PROJECT_NAME} PRIVATE
-            ${tiny_process_library_SOURCE_DIR}/process.cpp
-            ${tiny_process_library_SOURCE_DIR}/process_win.cpp
-        )
-    else()
-        target_sources(${PROJECT_NAME} PRIVATE
-            ${tiny_process_library_SOURCE_DIR}/process.cpp
-        )
-    endif()
-
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        ${tiny_process_library_SOURCE_DIR}
-    )
-else()
-    message(FATAL_ERROR "tiny_process_library source directory not found. Ensure initial FetchContent download succeeded.")
-endif()
 
 
-# ============================================
-# C-Blosc2 (FetchContent): reading `mode=compressed` output of OOpenCAL
-# ============================================
-# Only the Viewer executable needs it: the decompression lives in data/CompressedStepReader.cpp and plugins built
-# on the fly resolve it from the executable (see -rdynamic below), so they need neither headers nor library.
-# Use -DVIEWER_WITH_BLOSC2=OFF to build without it; mode=compressed then fails with a clear message.
-option(VIEWER_WITH_BLOSC2 "Support OOpenCAL mode=compressed (C-Blosc2)" ON)
-
-add_library(viewer_blosc2 INTERFACE)
-
-if(VIEWER_WITH_BLOSC2)
-    # Function scope: c-blosc2 has options named BUILD_TESTS / BUILD_EXAMPLES like this project, so its
-    # settings are plain variables visible only to that sub-project, not cache entries.
-    function(viewer_fetch_blosc2)
-        set(BUILD_STATIC ON)
-        set(BUILD_SHARED OFF)
-        set(BUILD_TESTS OFF)
-        set(BUILD_BENCHMARKS OFF)
-        set(BUILD_EXAMPLES OFF)
-        set(BUILD_FUZZERS OFF)
-        set(BUILD_PLUGINS OFF)
-        set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-        FetchContent_Declare(
-            blosc2
-            GIT_REPOSITORY https://github.com/Blosc/c-blosc2.git
-            GIT_TAG        v3.3.5
-            ${_UPDATE_ARGS}
-        )
-        FetchContent_MakeAvailable(blosc2)
-    endfunction()
-
-    viewer_fetch_blosc2()
-
-    if(NOT TARGET blosc2_static)
-        message(FATAL_ERROR "C-Blosc2 target 'blosc2_static' not found. Ensure initial FetchContent download succeeded "
-                            "or configure with -DVIEWER_WITH_BLOSC2=OFF.")
-    endif()
-
-    target_link_libraries(viewer_blosc2 INTERFACE blosc2_static)
-    target_compile_definitions(viewer_blosc2 INTERFACE OOPENCAL_VIEWER_WITH_BLOSC2)
-endif()
 
 # ============================================
 # Linking
@@ -566,9 +504,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${QT_TARGET_PREFIX}::OpenGL
     # VTK:
     ${VTK_LIBRARIES}
-    # other:
-    tiny-process-library
-    viewer_blosc2
 )
 
 # Export symbols for plugins to use (Unix-like systems only)
@@ -888,10 +823,10 @@ if (FLAWFINDER_TOOL)
     message(STATUS "Adding command: flawfinder (project-only)")
 
     if (FILTERED_FILES)
+        string(REPLACE ";" " " FLAWFINDER_FILES_STR "${FILTERED_FILES}")
+        set(FLAWFINDER_REPORT "${CMAKE_BINARY_DIR}/flawfinder-report.txt")
         add_custom_target(flawfinder
-            COMMAND ${FLAWFINDER_TOOL}
-                --quiet --dataonly --nolink --columns --context --singleline --minlevel=0
-                ${FILTERED_FILES}
+            COMMAND bash -c "set -o pipefail; '${FLAWFINDER_TOOL}' --quiet --dataonly --nolink --columns --context --singleline --minlevel=0 ${FLAWFINDER_FILES_STR} 2>&1 | tee '${FLAWFINDER_REPORT}'"
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             COMMENT "Running flawfinder on project sources (excluding vendor/_deps/Qt-generated)"
             USES_TERMINAL
@@ -930,18 +865,13 @@ if (CPPCHECK)
         "-i${CMAKE_SOURCE_DIR}/qrc_*"
     )
 
+    string(REPLACE ";" " " CPPCHECK_EXCLUDES_STR "${CPPCHECK_EXCLUDES}")
+    # cppcheck writes XML to stderr; keep it in the report file for the artifact upload
     add_custom_target(cppcheck
-        COMMAND ${CPPCHECK}
-            --project=${CMAKE_BINARY_DIR}/compile_commands.json
-            --force
-            --enable=warning,performance,unusedFunction,style,information
-            --template=gcc
-            --inline-suppr
-            --suppress=missingIncludeSystem
-            ${CPPCHECK_EXCLUDES}
+        COMMAND bash -c "'${CPPCHECK}' --project='${CMAKE_BINARY_DIR}/compile_commands.json' --force --enable=warning,performance,unusedFunction,style,information --xml --xml-version=2 --inline-suppr --suppress=missingIncludeSystem --library=qt --library=posix '--suppress=*:${CMAKE_BINARY_DIR}/*' '--suppress=*:${CMAKE_SOURCE_DIR}/deps/*' ${CPPCHECK_EXCLUDES_STR} 2> '${CMAKE_BINARY_DIR}/cppcheck-report.xml'"
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Running cppcheck (project) with excludes for vendor/_deps/Qt-generated"
-        USES_TERMINAL
+        VERBATIM
     )
 else()
     message(STATUS "cppcheck not found: skipping cppcheck target")
@@ -959,9 +889,9 @@ if (VALGRIND_TOOL)
     if (WIN32)
         message(WARNING "Valgrind is not supported on Windows: skipping valgrind target")
     else()
-        # Binary output path depends on configuration type (Debug/Release)
-        # Use generator expression to select correct one at runtime
-        set(PROJECT_EXECUTABLE "$<TARGET_FILE:${PROJECT_NAME}>")
+        # Runs every unit-test binary under valgrind (scripts/run-valgrind-tests.sh).
+        # The GUI application is not used: it needs a display and takes no test arguments.
+        set(VALGRIND_REPORT "${CMAKE_BINARY_DIR}/valgrind-report.txt")
 
         # Allow passing custom arguments to valgrind run
         set(VALGRIND_ARGS "" CACHE STRING "Arguments passed to ${PROJECT_NAME} during valgrind run")
@@ -969,17 +899,11 @@ if (VALGRIND_TOOL)
         # Add the target
         add_custom_target(valgrind
             DEPENDS ${PROJECT_NAME}
-            COMMAND ${VALGRIND_TOOL}
-                --leak-check=full
-                --show-leak-kinds=all
-                --track-origins=yes
-                --num-callers=20
-                --error-exitcode=1
-                --suppressions=${CMAKE_SOURCE_DIR}/valgrind.supp
-                ${PROJECT_EXECUTABLE} ${VALGRIND_ARGS}
+            COMMAND bash "${CMAKE_SOURCE_DIR}/scripts/run-valgrind-tests.sh"
+                "${CMAKE_BINARY_DIR}" "${VALGRIND_TOOL}" "${VALGRIND_REPORT}"
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-            COMMENT "Running valgrind to check for memory leaks and invalid accesses"
-            USES_TERMINAL
+            COMMENT "Running unit tests under valgrind (memory leaks and invalid accesses)"
+            VERBATIM
         )
     endif()
 else()

@@ -125,11 +125,11 @@ jobs:
           if-no-files-found: error
 
       - name: Configure GitHub Pages
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
         uses: actions/configure-pages@v5
 
       - name: Prepare GitHub Pages artifact
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
         uses: actions/upload-pages-artifact@v3
         with:
           path: build/docs/html
@@ -137,7 +137,7 @@ jobs:
   deploy-docs:
     name: Deploy documentation to GitHub Pages
     needs: build-docs
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     runs-on: ubuntu-24.04
 
     concurrency:

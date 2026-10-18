@@ -1,0 +1,81 @@
+name: Static Analysis - cppcheck
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+env:
+  PROJECT_NAME: OOpenCal-Viewer
+
+jobs:
+  cppcheck:
+    name: cppcheck
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout OOpenCAL dependency
+        uses: actions/checkout@v4
+        with:
+          repository: alessioderango/OOpenCAL
+          path: deps/OOpenCAL
+          token: ${{ secrets.VisualizerOpenCal }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            qtbase5-dev \
+            qttools5-dev \
+            qttools5-dev-tools \
+            libvtk9-dev \
+            libvtk9-qt-dev \
+            libfreetype-dev \
+            libeigen3-dev \
+            libtiff-dev \
+            libpng-dev \
+            libjpeg-dev \
+            zlib1g-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libgtest-dev \
+            cppcheck
+
+      - name: Create build directory
+        run: mkdir -p build
+
+      - name: Configure CMake
+        run: |
+          cd build
+          cmake .. \
+            -DOOPENCAL_DIR=${{ github.workspace }}/deps \
+            -DBUILD_TESTS=ON \
+            -DBUILD_EXAMPLES=OFF \
+            -G Ninja
+
+      - name: Build application
+        run: |
+          cd build
+          cmake --build . --parallel
+
+      - name: Run cppcheck
+        run: |
+          cd build
+          cmake --build . --target cppcheck
+
+      - name: Upload cppcheck results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cppcheck-report
+          path: build/cppcheck-report.xml

@@ -745,6 +745,12 @@ std::string CompilationConfig::getDefaultViewerRootDirImpl() const
 
 std::string CompilationConfig::getDefaultPrecompiledHeaderDirImpl() const
 {
+    // OOPENCAL_NO_PRECOMPILED_HEADER=1 switches the precompiled header off everywhere (build_plugin.sh honours it as well)
+    if (const char* disabled = std::getenv("OOPENCAL_NO_PRECOMPILED_HEADER"); disabled && std::string(disabled) == "1")
+    {
+        return {};
+    }
+
     // 1. Environment variable, 2. CMake define. Unlike the other directories it does not have to exist:
     //    --buildPrecompiledHeader creates it, and a missing directory simply means "no precompiled header".
     if (const char* envPath = std::getenv("OOPENCAL_PRECOMPILED_HEADER_DIR"); envPath && *envPath != '\0')

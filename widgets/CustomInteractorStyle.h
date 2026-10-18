@@ -8,25 +8,27 @@
 
 #include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkSmartPointer.h>
+#include <array>
 #include <functional>
 
 class vtkCellPicker;
 
 /** @brief Custom interactor style for cursor-based zoom and 3D rotation.
- * 
+ *
  * Extends vtkInteractorStyleTrackballCamera to provide enhanced interaction:
- * 
+ *
  * **Inherited from vtkInteractorStyleTrackballCamera:**
- * - Left mouse button: 3D trackball rotation (rotate around focal point)
+ * - Left mouse button: 3D trackball rotation (orbits the rotation pivot, see SetRotationPivotProvider)
  * - Right mouse button: Zoom (dolly - move camera closer/farther)
  * - Middle mouse button: Pan (move focal point in view plane)
- * 
+ *
  * **Custom enhancements:**
  * - Mouse wheel: Zoom towards cursor position (instead of screen center)
- * - Shift + Left drag: Pan (alternative to middle button)
+ * - Shift + Left drag: Pan (works in both 2D and 3D modes)
  * - Accumulated zoom: Multiple wheel events are batched for smooth zooming
- * 
- * This provides intuitive 3D navigation with cursor-aware zoom behavior. */
+ *
+ * This provides intuitive 3D navigation with cursor-aware zoom behavior,
+ * and enables panning in 2D mode via Shift + Left mouse button. */
 class CustomInteractorStyle : public vtkInteractorStyleTrackballCamera
 {
 public:
@@ -60,6 +62,17 @@ public:
         m_interactionStateCallback = std::move(callback);
     }
 
+    /** @brief Set the point that 3D rotations orbit around, in world coordinates.
+     *
+     * Zoom towards the cursor and panning move the camera's focal point, so VTK's
+     * trackball would otherwise rotate around a point away from the scene centre.
+     * With a provider set, rotation keeps this point fixed on screen instead.
+     * Without a provider, rotation behaves like plain VTK (around the focal point). */
+    void SetRotationPivotProvider(std::function<std::array<double, 3>()> provider)
+    {
+        m_rotationPivotProvider = std::move(provider);
+    }
+
     /** @brief Handle mouse wheel forward event (zoom in).
      * 
      * Zooms in towards the cursor position. */
@@ -71,12 +84,12 @@ public:
     void OnMouseWheelBackward() override;
 
     /** @brief Handle left mouse button press event.
-     * 
-     * Starts panning when left button is pressed. */
+     *
+     * Starts panning when Shift is pressed (works in both 2D and 3D modes). */
     void OnLeftButtonDown() override;
 
     /** @brief Handle left mouse button release event.
-     * 
+     *
      * Stops panning when left button is released. */
     void OnLeftButtonUp() override;
 
@@ -86,8 +99,8 @@ public:
     void OnRightButtonUp() override;
 
     /** @brief Handle mouse move event during panning.
-     * 
-     * Pans the view when left button is held down. */
+     *
+     * Pans the view when Shift+Left or Shift+Right is held down. */
     void OnMouseMove() override;
 
 private:
@@ -111,6 +124,12 @@ private:
      * Moves the focal point based on the delta between last and current mouse position. */
     void PanCamera();
 
+    /** @brief Trackball rotation around the rotation pivot.
+     *
+     * Runs VTK's own rotation step (same sensitivity), then moves the camera so the
+     * rotation is about the pivot rather than the focal point. */
+    void RotateAroundPivot();
+
     /// @brief Last mouse position for drag calculation
     int m_lastMouseX = 0;
     int m_lastMouseY = 0;
@@ -126,6 +145,9 @@ private:
 
     /// @brief Notified when a camera gesture (rotate/pan/dolly) starts or ends
     std::function<void(bool)> m_interactionStateCallback;
+
+    /// @brief World-space point rotations orbit around (scene centre); empty = VTK's focal-point rotation
+    std::function<std::array<double, 3>()> m_rotationPivotProvider;
 
     /// @brief Picker used to find world position under cursor
     vtkSmartPointer<vtkCellPicker> m_picker;

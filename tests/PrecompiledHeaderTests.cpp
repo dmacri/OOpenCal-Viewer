@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "core/PrecompiledHeaderCommand.h"
 #include "plugins/PrecompiledHeader.h"
 
 namespace fs = std::filesystem;
@@ -365,4 +366,27 @@ TEST(PrecompiledHeaderTests, EvaluateRejectsHeadersChangedAfterTheBuild)
     const auto missing = pch::evaluate(temp.path().string(), clangIdentity(), manifest.command, "");
     EXPECT_FALSE(missing.usable);
     EXPECT_NE(missing.reason.find("missing"), std::string::npos);
+}
+
+TEST(PrecompiledHeaderTests, FindBuildPrecompiledHeaderRequestRecognizesOnlyTheExactOption)
+{
+    const char* normalStart[] = {"app", "/some/model/dir", "--autoPlay"};
+    EXPECT_FALSE(viz::cli::findBuildPrecompiledHeaderRequest(3, normalStart).has_value());
+
+    const char* withoutDirectory[] = {"app", "--buildPrecompiledHeader"};
+    const auto bare = viz::cli::findBuildPrecompiledHeaderRequest(2, withoutDirectory);
+    ASSERT_TRUE(bare.has_value());
+    EXPECT_EQ(*bare, "");
+
+    const char* withDirectory[] = {"app", "--autoPlay", "--buildPrecompiledHeader=/a dir/with spaces"};
+    const auto given = viz::cli::findBuildPrecompiledHeaderRequest(3, withDirectory);
+    ASSERT_TRUE(given.has_value());
+    EXPECT_EQ(*given, "/a dir/with spaces");
+
+    const char* similar[] = {"app", "--buildPrecompiledHeaderX", "--buildPrecompiledHeade"};
+    EXPECT_FALSE(viz::cli::findBuildPrecompiledHeaderRequest(3, similar).has_value());
+
+    // the name of the program (argv[0]) is not an option
+    const char* programNameOnly[] = {"--buildPrecompiledHeader"};
+    EXPECT_FALSE(viz::cli::findBuildPrecompiledHeaderRequest(1, programNameOnly).has_value());
 }

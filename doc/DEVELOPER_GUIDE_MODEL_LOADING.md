@@ -59,7 +59,7 @@ if (result.success) {
 **Features**:
 - Captures compiler stdout and stderr
 - Returns exit code and error messages
-- Uses Tiny Process Library for safe execution
+- Uses Qt QProcess for safe execution
 - Supports custom compiler paths
 - Auto-detects C++ standard from `__cplusplus` macro
 - Adds OOpenCAL include path (`-I$OOPENCAL_DIR/base`)
@@ -242,13 +242,10 @@ namespace viz::plugins {
 
 ## Dependencies
 
-### External Libraries
-- **Tiny Process Library**: Process execution and I/O capture
-  - Included via FetchContent in CMakeLists.txt
-  - Header: `process.hpp`
-  - Usage: `TinyProcessLib::Process`
-
 ### Qt Libraries
+- `QProcess`: Process execution and I/O capture
+  - Used for running compiler commands
+  - Captures stdout/stderr via callbacks
 - `QDialog`: Base for CompilationLogWidget
 - `QFileDialog`: Directory selection
 - `QProgressDialog`: Progress indication
@@ -261,17 +258,6 @@ namespace viz::plugins {
 - `<functional>`: Callbacks
 
 ## CMake Configuration
-
-### FetchContent Setup
-
-```cmake
-FetchContent_Declare(
-    tiny_process_library
-    GIT_REPOSITORY https://gitlab.com/eidheim/tiny-process-library.git
-    GIT_TAG master
-)
-
-FetchContent_MakeAvailable(tiny_process_library)
 
 ### Integration Tests
 
@@ -293,7 +279,7 @@ FetchContent_MakeAvailable(tiny_process_library)
 
 1. **Compilation**: Blocking operation, shown with progress dialog
 2. **File I/O**: Synchronous, acceptable for directory operations
-3. **Process Execution**: Uses Tiny Process Library for efficiency
+3. **Process Execution**: Uses Qt QProcess for efficiency
 4. **Memory**: Compilation results stored temporarily, freed after display
 
 ## Security Considerations

@@ -6,6 +6,7 @@
  *  viewer sees both "1008.000000" and "1008,000000". */
 #pragma once
 
+#include <clocale>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -116,5 +117,20 @@ inline std::string withoutZeroFractionsInList(std::string_view text)
     }
     result += ']';
     return result;
+}
+
+/** @brief Formats a list value only when the decimal separator is '.'.
+ *
+ *  When the process locale uses '.' as decimal point, applies withoutZeroFractionsInList()
+ *  to tidy up "[1008.000000,0.000000]" -> "[1008, 0]".
+ *  When the decimal separator is ',' (e.g. European locale), returns the text unchanged
+ *  because the comma cannot be reliably used as both decimal and list separator.
+ *
+ *  This is a convenience wrapper that checks the locale and calls withoutZeroFractionsInList()
+ *  only when safe to do so. */
+inline std::string withoutZeroFractionsInListIfNeeded(std::string_view text)
+{
+    const bool decimalPointIsDot = *std::localeconv()->decimal_point == '.';
+    return decimalPointIsDot ? withoutZeroFractionsInList(text) : std::string{text};
 }
 } // namespace NumberFormatting

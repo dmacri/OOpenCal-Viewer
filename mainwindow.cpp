@@ -27,6 +27,7 @@
 
 #include "config/Config.h"
 #include "config/ConfigConstants.h"
+#include "core/AppImagePaths.h"
 #include "core/CommandLineParser.h"
 #include "plugins/CppModuleBuilder.h"
 #include "plugins/ModelLoader.h"
@@ -77,6 +78,7 @@ inline std::string sourceFileParentDirectoryAbsolutePath(const std::source_locat
  *    - Otherwise, the base directory itself is returned.
  * 5. If neither environment variable nor CMake path exists or is invalid,
  *    an empty QString is returned, meaning the current working directory should be used.
+ * 6. A base directory located inside the mounted AppImage is treated like a missing one (empty QString).
  *
  * @note The returned path is absolute and normalized.
  *
@@ -104,6 +106,14 @@ QString getOOpenCalStartPath()
     if (baseDir.isEmpty() || !dir.exists())
     {
         // Invalid or missing directory → return empty (current path)
+        return QString();
+    }
+
+    // In the AppImage OOPENCAL_DIR points to the bundled headers inside the mounted image (e.g.
+    // /tmp/.mount_XXXX/compiler/include). It is needed for compiling models, but it is not a place the user wants
+    // to browse (and it vanishes when the application exits), so do not start file dialogs there.
+    if (viz::appimage::isInsideMountedImage(dir.absolutePath()))
+    {
         return QString();
     }
 
@@ -701,6 +711,7 @@ void MainWindow::connectMenuActions()
     connect(ui->action2DMode, &QAction::triggered, this, &MainWindow::on2DModeRequested);
     connect(ui->action3DMode, &QAction::triggered, this, &MainWindow::on3DModeRequested);
     connect(ui->actionCrossSectionControls, &QAction::toggled, this, &MainWindow::onCrossSectionControlsToggled);
+    connect(ui->actionResetView, &QAction::triggered, this, &MainWindow::onResetCameraRequested);
     connect(ui->actionGridLines, &QAction::triggered, this, &MainWindow::onGridLinesToggled);
     connect(ui->actionLineDetection, &QAction::triggered, this, &MainWindow::onLineDetectionToggled);
     connect(ui->actionFlatSceneBackground, &QAction::triggered, this, &MainWindow::onFlatSceneBackgroundToggled);
@@ -1783,10 +1794,12 @@ void MainWindow::onLoadModelFromDirectoryRequested()
 
     // Set the starting directory using the same logic as the original dialog
     QString startPath = getOOpenCalStartPath();
-    if (! startPath.isEmpty())
+    if (startPath.isEmpty())
     {
-        dialog.setStartDirectory(startPath);
+        // No usable OOpenCAL directory (e.g. AppImage): start where the user launched the application
+        startPath = viz::appimage::defaultStartDirectory();
     }
+    dialog.setStartDirectory(startPath);
 
     if (QDialog::Accepted == dialog.exec())
     {
@@ -1867,6 +1880,11 @@ void MainWindow::loadModelFromDirectory(const QString& modelDirectory, bool forc
         QApplication::processEvents();
 
         PluginLoader& pluginLoader = PluginLoader::instance();
+        if (pluginLoader.isPluginLoaded(result.compiledModulePath))
+        {
+            // Overriding unloads the old library; the visualizer still refers to its code, so drop it first.
+            ui->sceneWidget->releaseVisualizer();
+        }
         if (! pluginLoader.loadPlugin(result.compiledModulePath, /*overridePlugin=*/true))
         {
             progress.close();
@@ -2114,8 +2132,13 @@ void MainWindow::updateSliceControls(bool resetSelection)
     {
         QSignalBlocker blocker(ui->actionCrossSectionControls);
         ui->actionCrossSectionControls->setChecked(false);
+        ui->actionCrossSectionControls->setToolTip(
+            tr("Cross-section controls are only available for 3D models with a substate used as altitude"));
         return;
     }
+
+    ui->actionCrossSectionControls->setToolTip(
+        tr("Show controls for axis-aligned cross-sections"));
 
     if (!resetSelection)
         return;
