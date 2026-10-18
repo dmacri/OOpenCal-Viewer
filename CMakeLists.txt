@@ -488,6 +488,48 @@ endif()
 
 
 # ============================================
+# C-Blosc2 (FetchContent): reading `mode=compressed` output of OOpenCAL
+# ============================================
+# Only the Viewer executable needs it: the decompression lives in data/CompressedStepReader.cpp and plugins built
+# on the fly resolve it from the executable (see -rdynamic below), so they need neither headers nor library.
+# Use -DVIEWER_WITH_BLOSC2=OFF to build without it; mode=compressed then fails with a clear message.
+option(VIEWER_WITH_BLOSC2 "Support OOpenCAL mode=compressed (C-Blosc2)" ON)
+
+add_library(viewer_blosc2 INTERFACE)
+
+if(VIEWER_WITH_BLOSC2)
+    # Function scope: c-blosc2 has options named BUILD_TESTS / BUILD_EXAMPLES like this project, so its
+    # settings are plain variables visible only to that sub-project, not cache entries.
+    function(viewer_fetch_blosc2)
+        set(BUILD_STATIC ON)
+        set(BUILD_SHARED OFF)
+        set(BUILD_TESTS OFF)
+        set(BUILD_BENCHMARKS OFF)
+        set(BUILD_EXAMPLES OFF)
+        set(BUILD_FUZZERS OFF)
+        set(BUILD_PLUGINS OFF)
+        set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+        FetchContent_Declare(
+            blosc2
+            GIT_REPOSITORY https://github.com/Blosc/c-blosc2.git
+            GIT_TAG        v3.3.5
+            ${_UPDATE_ARGS}
+        )
+        FetchContent_MakeAvailable(blosc2)
+    endfunction()
+
+    viewer_fetch_blosc2()
+
+    if(NOT TARGET blosc2_static)
+        message(FATAL_ERROR "C-Blosc2 target 'blosc2_static' not found. Ensure initial FetchContent download succeeded "
+                            "or configure with -DVIEWER_WITH_BLOSC2=OFF.")
+    endif()
+
+    target_link_libraries(viewer_blosc2 INTERFACE blosc2_static)
+    target_compile_definitions(viewer_blosc2 INTERFACE OOPENCAL_VIEWER_WITH_BLOSC2)
+endif()
+
+# ============================================
 # Linking
 # ============================================
 if(USE_QT6)
@@ -504,6 +546,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${QT_TARGET_PREFIX}::OpenGL
     # VTK:
     ${VTK_LIBRARIES}
+    # other:
+    viewer_blosc2
 )
 
 # Export symbols for plugins to use (Unix-like systems only)
@@ -637,9 +681,6 @@ endif()
 # Development tools:
 # ============================================
 
-# Export compile_commands.json for tooling (clang-tidy, cppcheck, IWYU, etc.)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 # include-what-you-use (IWYU)
 find_program(IWYU_PATH NAMES include-what-you-use iwyu)
 
@@ -741,8 +782,14 @@ foreach(f ${Sources} ${Headers})
         continue()
     endif()
 
+    # Exclude vendored OOpenCAL checkout (deps/) and deprecated visualizer sources
+    if (_fpath MATCHES ".*/deps/.*" OR
+        _fpath MATCHES ".*/visualizer_deprecated/.*")
+        continue()
+    endif()
+
     # Exclude explicit libraries that sometimes appear outside _deps
-    if (_fpath MATCHES ".*/argparse(/|$).*" OR _fpath MATCHES ".*/inih(/|$).*")
+    if (_fpath MATCHES ".*/argparse(/|$).*" OR _fpath MATCHES ".*/inih(/|$).*" OR _fpath MATCHES ".*/tiny_process(/|$).*")
         continue()
     endif()
 
@@ -789,23 +836,25 @@ find_program(CLANG_TIDY NAMES clang-tidy)
 if (CLANG_TIDY)
     message(STATUS "Adding command: clang_tidy (Project-full, system headers disabled)")
 
-    if (FILTERED_FILES)
-        # Quote file paths to avoid issues with spaces or special characters
-        set(FILTERED_FILES_QUOTED "")
-        foreach(f ${FILTERED_FILES})
-            list(APPEND FILTERED_FILES_QUOTED "\"${f}\"")
-        endforeach()
+    # clang-tidy accepts translation units only. Headers are not in compile_commands.json,
+    # so when passed directly they are parsed with bare flags (no Qt/VTK include paths)
+    # and fail with "file not found". Headers are still checked through --header-filter
+    # whenever a .cpp includes them.
+    set(TIDY_SOURCES ${FILTERED_FILES})
+    list(FILTER TIDY_SOURCES INCLUDE REGEX "\\.cpp$")
+
+    if (TIDY_SOURCES)
+        string(REPLACE ";" " " TIDY_SOURCES_STR "${TIDY_SOURCES}")
+        set(TIDY_HEADER_FILTER
+            "^${CMAKE_SOURCE_DIR}/((config|core|data|examples|plugins|visualiser|visualiserProxy|widgets)/|mainwindow\\.h$)")
+        set(TIDY_REPORT "${CMAKE_BINARY_DIR}/clang-tidy-report.txt")
 
         add_custom_target(clang_tidy
             DEPENDS ${PROJECT_NAME}
-            COMMAND ${CLANG_TIDY}
-                "-p=${CMAKE_BINARY_DIR}"
-                "--system-headers=false"
-                "--header-filter=^${CMAKE_SOURCE_DIR}"
-                ${FILTERED_FILES_QUOTED}
+            COMMAND bash -c "set -o pipefail; '${CLANG_TIDY}' -p='${CMAKE_BINARY_DIR}' --system-headers=false --header-filter='${TIDY_HEADER_FILTER}' ${TIDY_SOURCES_STR} 2>&1 | tee '${TIDY_REPORT}'"
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-            COMMENT "Running clang-tidy (Project-full) on project sources (system headers disabled)"
-            USES_TERMINAL
+            COMMENT "Running clang-tidy on project sources (system headers disabled)"
+            VERBATIM
         )
     else()
         message(WARNING "clang_tidy: no project files to analyze (FILTERED_FILES is empty)")
@@ -829,7 +878,7 @@ if (FLAWFINDER_TOOL)
             COMMAND bash -c "set -o pipefail; '${FLAWFINDER_TOOL}' --quiet --dataonly --nolink --columns --context --singleline --minlevel=0 ${FLAWFINDER_FILES_STR} 2>&1 | tee '${FLAWFINDER_REPORT}'"
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             COMMENT "Running flawfinder on project sources (excluding vendor/_deps/Qt-generated)"
-            USES_TERMINAL
+            VERBATIM
         )
     else()
         message(WARNING "flawfinder: no project files to analyze (FILTERED_FILES is empty)")
@@ -857,6 +906,8 @@ if (CPPCHECK)
         "-i${CMAKE_SOURCE_DIR}/vendor"
         "-i${CMAKE_SOURCE_DIR}/3rd-party"
         "-i${CMAKE_SOURCE_DIR}/contrib"
+        "-i${CMAKE_SOURCE_DIR}/deps"
+        "-i${CMAKE_SOURCE_DIR}/visualizer_deprecated"
         "-i${CMAKE_SOURCE_DIR}/tests"
         "-i${CMAKE_SOURCE_DIR}/test"
         # skip Qt generated (some may live in source tree)
@@ -893,10 +944,6 @@ if (VALGRIND_TOOL)
         # The GUI application is not used: it needs a display and takes no test arguments.
         set(VALGRIND_REPORT "${CMAKE_BINARY_DIR}/valgrind-report.txt")
 
-        # Allow passing custom arguments to valgrind run
-        set(VALGRIND_ARGS "" CACHE STRING "Arguments passed to ${PROJECT_NAME} during valgrind run")
-
-        # Add the target
         add_custom_target(valgrind
             DEPENDS ${PROJECT_NAME}
             COMMAND bash "${CMAKE_SOURCE_DIR}/scripts/run-valgrind-tests.sh"
