@@ -34,6 +34,7 @@
 #include <vtkUnsignedCharArray.h>
 #include <vtkPolyDataNormals.h>
 #include <vtkCellData.h>
+#include <vtkDataArray.h>
 #include <vtkProperty.h>
 #include <vtkSmartVolumeMapper.h>
 #include <vtkVolume.h>
@@ -66,6 +67,44 @@ inline double toUnitColor(double channel)
 
     // Already normalized (future format) — return as-is.
     return channel;
+}
+
+/** @brief Returns the opacity (0 = fully transparent, 1 = fully opaque) of a color returned by Cell::outputValue().
+ *
+ * The alpha channel of Color uses the 0–255 range (0 = transparent, 255 = opaque), the same convention that
+ * the viewer itself uses for the colors it creates (e.g. Color(r, g, b, 255)).
+ *
+ * Backward compatibility: older versions of OOpenCAL's Cell.h declare the default alpha of Color as 0,
+ * so every model written as Color(r, g, b) would be reported as fully transparent. When such a Cell.h is detected
+ * (a Color created without alpha has alpha == 0) alpha == 0 is treated as "alpha not specified" = opaque.
+ * In this legacy mode a nearly invisible cell can still be requested with alpha == 1.
+ * With the current Cell.h (default alpha = 255) alpha is honored exactly, so Color(r, g, b, 0) is transparent. */
+inline double toOpacity(const Color& color)
+{
+    static const bool legacyDefaultAlphaIsZero = (Color(0, 0, 0).getAlpha() == 0);
+
+    const std::uint8_t alpha = color.getAlpha();
+    if (legacyDefaultAlphaIsZero && alpha == 0)
+        return 1.0;
+
+    return alpha / 255.0;
+}
+
+/** @brief Tells whether the per-cell RGBA colors of a poly data mapper contain a (partially) transparent cell.
+ *
+ * VTK renders such geometry correctly only in the translucent pass, so the actor has to be told about it. */
+inline bool hasTranslucentCellColors(vtkPolyDataMapper* mapper)
+{
+    if (!mapper || !mapper->GetInput())
+        return false;
+
+    vtkDataArray* colors = mapper->GetInput()->GetCellData()->GetScalars();
+    if (!colors || colors->GetNumberOfComponents() < 4 || colors->GetNumberOfTuples() == 0)
+        return false;
+
+    double alphaRange[2];
+    colors->GetRange(alphaRange, 3);
+    return alphaRange[0] < 255.0;
 }
 
 
@@ -224,8 +263,10 @@ private:
     /// @note This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
     void applyGridColorTo3DGridLinesActor(vtkSmartPointer<vtkActor> gridLinesActor);
 
+    /// @brief Fills the lookup table with the cell colors (including alpha).
+    /// @return true if at least one cell is (partially) transparent, so the actor must be rendered as translucent geometry
     template<class Matrix>
-    void buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p, const std::vector<const SubstateInfo*>& colorSubstateInfos);
+    bool buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
     /// @brief The method is calculating color for specific cell with substateInfo considered
     template<class Matrix>
@@ -345,7 +386,7 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
         structuredGrid->SetPoints(points);
         structuredGrid->GetCellData()->SetScalars(cellValues);
 
-        buidColor(lut, nCols, nRows, p, colorSubstateInfos);
+        const bool hasTransparentCells = buidColor(lut, nCols, nRows, p, colorSubstateInfos);
 
         vtkNew<vtkDataSetMapper> gridMapper;
         gridMapper->UpdateDataObject();
@@ -356,6 +397,8 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
         gridMapper->InterpolateScalarsBeforeMappingOff(); // Keep sharp cell boundaries for small grids
 
         gridActor->SetMapper(gridMapper);
+        // Cells with alpha < 255 must go through the translucent rendering pass, otherwise VTK ignores the alpha.
+        gridActor->SetForceTranslucent(hasTransparentCells);
         renderer->AddActor(gridActor);
     }
     else
@@ -396,7 +439,7 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
         structuredGrid->SetPoints(points);
         structuredGrid->GetPointData()->SetScalars(pointValues);
 
-        buidColor(lut, nCols, nRows, p, colorSubstateInfos);
+        const bool hasTransparentCells = buidColor(lut, nCols, nRows, p, colorSubstateInfos);
 
         vtkNew<vtkDataSetMapper> gridMapper;
         gridMapper->UpdateDataObject();
@@ -406,6 +449,8 @@ void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPoin
         gridMapper->InterpolateScalarsBeforeMappingOff();
 
         gridActor->SetMapper(gridMapper);
+        // Cells with alpha < 255 must go through the translucent rendering pass, otherwise VTK ignores the alpha.
+        gridActor->SetForceTranslucent(hasTransparentCells);
         renderer->AddActor(gridActor);
     }
 }
@@ -420,7 +465,8 @@ void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSma
 
     if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(gridActor->GetMapper()->GetLookupTable()))
     {
-        buidColor(lut, nCols, nRows, p, colorSubstateInfos);
+        const bool hasTransparentCells = buidColor(lut, nCols, nRows, p, colorSubstateInfos);
+        gridActor->SetForceTranslucent(hasTransparentCells);
         gridActor->GetMapper()->SetLookupTable(lut);
         gridActor->GetMapper()->Update();
     }
@@ -507,7 +553,7 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
     {
         const int brightness = color.getRed() + color.getGreen() + color.getBlue();
         if (brightness < 48)
-            return Color(70, 82, 100);
+            return Color(70, 82, 100, color.getAlpha());
         return color;
     };
     maxColor = makeShadeable(maxColor);
@@ -534,14 +580,14 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
         addColor(minValue, minColor);
         addColor(maxValue, maxColor);
         opacity->AddPoint(minValue, 0.0);
-        opacity->AddPoint(maxValue, 0.9);
+        opacity->AddPoint(maxValue, 0.9 * toOpacity(maxColor));
     }
     else
     {
         addColor(minValue - 1.0, minColor);
         addColor(minValue, minColor);
         opacity->AddPoint(minValue - 1.0, 0.0);
-        opacity->AddPoint(minValue, minValue == 0.0 ? 0.0 : 0.9);
+        opacity->AddPoint(minValue, minValue == 0.0 ? 0.0 : 0.9 * toOpacity(minColor));
     }
 
     vtkNew<vtkVolumeProperty> property;
@@ -566,21 +612,26 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
 }
 
 template<class Matrix>
-void Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix &p, const std::vector<const SubstateInfo*>& colorSubstateInfos)
+bool Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix &p, const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
+    bool anyTransparent = false;
     for (int r = 0; r < nRows; ++r)
     {
         for (int c = 0; c < nCols; ++c)
         {
             const auto color = calculateCellColor(r, c, p, colorSubstateInfos);
+            const double opacity = toOpacity(color);
+            anyTransparent = anyTransparent || opacity < 1.0;
             lut->SetTableValue(
                 (nRows - 1 - r) * nCols + c,
                 toUnitColor(color.getRed()),
                 toUnitColor(color.getGreen()),
-                toUnitColor(color.getBlue())
+                toUnitColor(color.getBlue()),
+                opacity
             );
         }
     }
+    return anyTransparent;
 }
 
 template<class Matrix>
@@ -874,7 +925,7 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Ma
     vtkNew<vtkPoints> points;
     vtkNew<vtkCellArray> cells;
     vtkNew<vtkUnsignedCharArray> cellColors;
-    cellColors->SetNumberOfComponents(3);
+    cellColors->SetNumberOfComponents(4); // RGBA, the alpha channel makes transparent cells see-through
 
     // Build base points (one per grid location)
     std::vector<vtkIdType> basePointId(nRows * nCols, -1);
@@ -950,16 +1001,18 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateSurfaceQuadMesh(const Ma
             Color c3 = getCellColor(row + 1, col);
 
             int rSum = 0, gSum = 0, bSum = 0;
-            if (v0) { rSum += c0.getRed(); gSum += c0.getGreen(); bSum += c0.getBlue(); }
-            if (v1) { rSum += c1.getRed(); gSum += c1.getGreen(); bSum += c1.getBlue(); }
-            if (v2) { rSum += c2.getRed(); gSum += c2.getGreen(); bSum += c2.getBlue(); }
-            if (v3) { rSum += c3.getRed(); gSum += c3.getGreen(); bSum += c3.getBlue(); }
+            double opacitySum = 0.0;
+            if (v0) { rSum += c0.getRed(); gSum += c0.getGreen(); bSum += c0.getBlue(); opacitySum += toOpacity(c0); }
+            if (v1) { rSum += c1.getRed(); gSum += c1.getGreen(); bSum += c1.getBlue(); opacitySum += toOpacity(c1); }
+            if (v2) { rSum += c2.getRed(); gSum += c2.getGreen(); bSum += c2.getBlue(); opacitySum += toOpacity(c2); }
+            if (v3) { rSum += c3.getRed(); gSum += c3.getGreen(); bSum += c3.getBlue(); opacitySum += toOpacity(c3); }
 
             unsigned char r = static_cast<unsigned char>(rSum / validCount);
             unsigned char g = static_cast<unsigned char>(gSum / validCount);
             unsigned char b = static_cast<unsigned char>(bSum / validCount);
+            unsigned char a = static_cast<unsigned char>(std::lround(255.0 * opacitySum / validCount));
 
-            cellColors->InsertNextTuple3(r, g, b);
+            cellColors->InsertNextTuple4(r, g, b, a);
         }
     }
 
@@ -1098,7 +1151,7 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateStackSurfaceQuadMesh(
     vtkNew<vtkPoints> points;
     vtkNew<vtkCellArray> cells;
     vtkNew<vtkUnsignedCharArray> cellColors;
-    cellColors->SetNumberOfComponents(3);
+    cellColors->SetNumberOfComponents(4); // RGBA, the alpha channel makes transparent cells see-through
 
     std::vector<std::vector<vtkIdType>> basePointIds(layers.size(),
                                                      std::vector<vtkIdType>(static_cast<std::size_t>(nRows * nCols), -1));
@@ -1169,14 +1222,16 @@ vtkSmartPointer<vtkPolyData> Visualizer::build3DSubstateStackSurfaceQuadMesh(
                 const Color c3 = getLayerColor(row + 1, col, layerInfo);
 
                 int rSum = 0, gSum = 0, bSum = 0;
-                if (v0) { rSum += c0.getRed(); gSum += c0.getGreen(); bSum += c0.getBlue(); }
-                if (v1) { rSum += c1.getRed(); gSum += c1.getGreen(); bSum += c1.getBlue(); }
-                if (v2) { rSum += c2.getRed(); gSum += c2.getGreen(); bSum += c2.getBlue(); }
-                if (v3) { rSum += c3.getRed(); gSum += c3.getGreen(); bSum += c3.getBlue(); }
+                double opacitySum = 0.0;
+                if (v0) { rSum += c0.getRed(); gSum += c0.getGreen(); bSum += c0.getBlue(); opacitySum += toOpacity(c0); }
+                if (v1) { rSum += c1.getRed(); gSum += c1.getGreen(); bSum += c1.getBlue(); opacitySum += toOpacity(c1); }
+                if (v2) { rSum += c2.getRed(); gSum += c2.getGreen(); bSum += c2.getBlue(); opacitySum += toOpacity(c2); }
+                if (v3) { rSum += c3.getRed(); gSum += c3.getGreen(); bSum += c3.getBlue(); opacitySum += toOpacity(c3); }
 
-                cellColors->InsertNextTuple3(static_cast<unsigned char>(rSum / validCount),
+                cellColors->InsertNextTuple4(static_cast<unsigned char>(rSum / validCount),
                                              static_cast<unsigned char>(gSum / validCount),
-                                             static_cast<unsigned char>(bSum / validCount));
+                                             static_cast<unsigned char>(bSum / validCount),
+                                             static_cast<unsigned char>(std::lround(255.0 * opacitySum / validCount)));
             }
         }
     }
@@ -1497,6 +1552,7 @@ void Visualizer::drawWithVTK3DSubstate(const Matrix& p, int nRows, int nCols,
 
     // Configure actor
     gridActor->SetMapper(mapper);
+    gridActor->SetForceTranslucent(hasTranslucentCellColors(mapper));
     gridActor->GetProperty()->SetInterpolationToPhong();
     gridActor->GetProperty()->SetAmbient(0.3);
     gridActor->GetProperty()->SetDiffuse(0.7);
@@ -1536,6 +1592,7 @@ void Visualizer::drawWithVTK3DSubstates(
     mapper->ScalarVisibilityOn();
 
     gridActor->SetMapper(mapper);
+    gridActor->SetForceTranslucent(hasTranslucentCellColors(mapper));
     gridActor->GetProperty()->SetInterpolationToPhong();
     gridActor->GetProperty()->SetAmbient(0.3);
     gridActor->GetProperty()->SetDiffuse(0.7);
@@ -1629,7 +1686,7 @@ void Visualizer::drawWithVTK3DSubstateSlice(
     vtkNew<vtkPoints> points;
     vtkNew<vtkCellArray> cells;
     vtkNew<vtkUnsignedCharArray> cellColors;
-    cellColors->SetNumberOfComponents(3);
+    cellColors->SetNumberOfComponents(4); // RGBA, the alpha channel makes transparent cells see-through
 
     for (int sample = 0; sample < sampleCount; ++sample)
     {
@@ -1664,7 +1721,7 @@ void Visualizer::drawWithVTK3DSubstateSlice(
             cells->InsertCellPoint(id);
 
         const Color color = calculateCellColor(row, col, p, colorSubstateInfos);
-        cellColors->InsertNextTuple3(color.getRed(), color.getGreen(), color.getBlue());
+        cellColors->InsertNextTuple4(color.getRed(), color.getGreen(), color.getBlue(), static_cast<unsigned char>(std::lround(255.0 * toOpacity(color))));
     }
 
     vtkNew<vtkPolyData> profile;
@@ -1679,6 +1736,7 @@ void Visualizer::drawWithVTK3DSubstateSlice(
 
     renderer->RemoveActor(gridActor);
     gridActor->SetMapper(mapper);
+    gridActor->SetForceTranslucent(hasTranslucentCellColors(mapper));
     gridActor->GetProperty()->SetInterpolationToFlat();
     gridActor->GetProperty()->SetAmbient(1.0);
     gridActor->GetProperty()->SetDiffuse(0.0);
@@ -1785,7 +1843,7 @@ void Visualizer::drawWithVTK3DSubstatesSlice(
     vtkNew<vtkPoints> points;
     vtkNew<vtkCellArray> cells;
     vtkNew<vtkUnsignedCharArray> cellColors;
-    cellColors->SetNumberOfComponents(3);
+    cellColors->SetNumberOfComponents(4); // RGBA, the alpha channel makes transparent cells see-through
 
     for (int sample = 0; sample < sampleCount; ++sample)
     {
@@ -1815,7 +1873,7 @@ void Visualizer::drawWithVTK3DSubstatesSlice(
                 cells->InsertCellPoint(id);
 
             const Color color = getLayerColor(row, col, layerInfo);
-            cellColors->InsertNextTuple3(color.getRed(), color.getGreen(), color.getBlue());
+            cellColors->InsertNextTuple4(color.getRed(), color.getGreen(), color.getBlue(), static_cast<unsigned char>(std::lround(255.0 * toOpacity(color))));
             baseHeight = topHeight;
         }
     }
@@ -1832,6 +1890,7 @@ void Visualizer::drawWithVTK3DSubstatesSlice(
 
     renderer->RemoveActor(gridActor);
     gridActor->SetMapper(mapper);
+    gridActor->SetForceTranslucent(hasTranslucentCellColors(mapper));
     gridActor->GetProperty()->SetInterpolationToFlat();
     gridActor->GetProperty()->SetAmbient(1.0);
     gridActor->GetProperty()->SetDiffuse(0.0);
