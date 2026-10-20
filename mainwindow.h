@@ -104,6 +104,8 @@ private slots: // menu actions
     void onCrossSectionControlsToggled(bool checked);
     void onSliceViewChanged(int viewIndex);
     void onSliceChanged(int fixedIndex);
+    /// Pull the Z planes of a native 3D volume apart (empty planes between them).
+    void onVolumeZGapChanged(int gapPlanes);
 
     void onUse3dStateChanged(const std::string& fieldName, bool checked);
     void onUse3dSubstateOrderChanged();
@@ -185,6 +187,8 @@ private:
     void createViewModeActionGroup();
     void updateCameraControlsVisibility();
     void updateSliceControls(bool resetSelection = false);
+    /// Shows the "Z spacing" control for native 3D models and enables it in the Volume view only.
+    void updateZGapControls();
     void synchronizeViewModeWithLoadedModel();
 
     /// @brief Clear all active substates (2D and 3D)

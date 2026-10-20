@@ -169,6 +169,17 @@ public:
     /// @brief Return from an axis-aligned cross-section to the complete 3D volume.
     void setNative3DVolumeView();
 
+    /** @brief Pull the Z planes of a native 3D volume apart.
+     *
+     *  Inserts @p gapPlanes empty planes between every two neighbouring Z planes, so that the lower
+     *  planes (e.g. the subsurface) are not hidden by the upper ones. Applied immediately in the
+     *  volume view; in a cross-section view it is remembered and applied when the volume is shown again.
+     *  @param gapPlanes 0 (planes touch each other) up to VolumeZSpacing::maxGapPlanes */
+    void setNative3DVolumeZGap(int gapPlanes);
+
+    /// @brief Number of empty planes currently inserted between neighbouring Z planes of the volume.
+    int native3DVolumeZGap() const;
+
     /// @brief Return true while a native 3D cross-section is displayed.
     bool isNative3DSliceView() const;
 

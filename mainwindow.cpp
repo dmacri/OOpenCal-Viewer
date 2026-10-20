@@ -877,6 +877,10 @@ void MainWindow::connectSliders()
             QOverload<int>::of(&QSpinBox::valueChanged),
             ui->sliceSlider,
             &QSlider::setValue);
+    connect(ui->sliceZGapSpinBox,
+            QOverload<int>::of(&QSpinBox::valueChanged),
+            this,
+            &MainWindow::onVolumeZGapChanged);
     connect(ui->sliceSlider,
             &QSlider::valueChanged,
             ui->sliceSpinBox,
@@ -2171,6 +2175,33 @@ void MainWindow::updateSliceControls(bool resetSelection)
     ui->sliceSlider->setEnabled(false);
     ui->sliceSpinBox->setEnabled(false);
     ui->sliceRangeLabel->setEnabled(false);
+
+    {
+        // Show what the scene really uses (a new model starts without any spacing)
+        QSignalBlocker gapBlocker(ui->sliceZGapSpinBox);
+        ui->sliceZGapSpinBox->setValue(ui->sceneWidget->native3DVolumeZGap());
+    }
+    updateZGapControls();
+}
+
+void MainWindow::updateZGapControls()
+{
+    // Only a native 3D model has Z planes to pull apart, and only the complete volume shows them all
+    const bool native3D = ui->sceneWidget->isNative3DModel();
+    const bool volumeView = ui->sliceViewComboBox->currentIndex() <= 0;
+    ui->sliceZGapLabel->setVisible(native3D);
+    ui->sliceZGapSpinBox->setVisible(native3D);
+    ui->sliceZGapLabel->setEnabled(volumeView);
+    ui->sliceZGapSpinBox->setEnabled(volumeView);
+}
+
+void MainWindow::onVolumeZGapChanged(int gapPlanes)
+{
+    if (!ui->sceneWidget->isNative3DModel())
+        return;
+
+    WaitCursorGuard waitCursor("Updating Z spacing...");
+    ui->sceneWidget->setNative3DVolumeZGap(gapPlanes);
 }
 
 void MainWindow::onCrossSectionControlsToggled(bool checked)
@@ -2210,6 +2241,8 @@ void MainWindow::onSliceViewChanged(int viewIndex)
 {
     if (!ui->sceneWidget->hasSliceable3DView())
         return;
+
+    updateZGapControls();
 
     if (viewIndex <= 0)
     {
