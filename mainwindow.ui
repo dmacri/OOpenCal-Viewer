@@ -297,6 +297,26 @@
         </widget>
        </item>
        <item>
+        <widget class="QLabel" name="sliceZGapLabel">
+         <property name="toolTip">
+          <string>Empty planes drawn between the Z planes of the volume, so that the lower planes (e.g. the subsurface) are not hidden by the upper ones</string>
+         </property>
+         <property name="text">
+          <string>Z spacing:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="sliceZGapSpinBox">
+         <property name="toolTip">
+          <string>Empty planes drawn between the Z planes of the volume (0 = planes touch each other). Available in the Volume view of 3D models</string>
+         </property>
+         <property name="maximum">
+          <number>20</number>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="sliceHorizontalSpacer">
          <property name="orientation">
           <enum>Qt::Orientation::Horizontal</enum>

@@ -209,7 +209,8 @@ vtkSmartPointer<vtkPolyData> Visualizer::create3DVolumeGridLinePolyData(
     int nCols,
     int nSlices,
     int nNodeZ,
-    const std::vector<Line>& lines)
+    const std::vector<Line>& lines,
+    int zGapPlanes)
 {
     vtkNew<vtkPoints> points;
     vtkNew<vtkCellArray> cellLines;
@@ -226,7 +227,10 @@ vtkSmartPointer<vtkPolyData> Visualizer::create3DVolumeGridLinePolyData(
 
     const double maxX = std::max(0, nCols - 1);
     const double maxY = std::max(0, nRows - 1);
-    const double maxZ = std::max(0, nSlices - 1);
+    // With a Z spacing the volume is taller than the number of its data planes
+    const int gapPlanes = VolumeZSpacing::clampGap(zGapPlanes);
+    const double maxZ = std::max<double>(
+        0.0, static_cast<double>(VolumeZSpacing::drawnPlaneCount(static_cast<std::size_t>(std::max(nSlices, 0)), gapPlanes)) - 1.0);
 
     for (const auto& line : lines)
     {
@@ -247,8 +251,10 @@ vtkSmartPointer<vtkPolyData> Visualizer::create3DVolumeGridLinePolyData(
     // represented by Line, so derive their regular slice boundaries here.
     for (int nodeZ = 1; nodeZ < nNodeZ; ++nodeZ)
     {
+        // The partition starts at data plane `firstPlane`; with a Z spacing draw it in the middle of the gap before that plane
+        const int firstPlane = nodeZ * nSlices / nNodeZ;
         const double z = std::clamp(
-            static_cast<double>(nodeZ * nSlices) / nNodeZ,
+            static_cast<double>(VolumeZSpacing::drawnPlaneIndex(static_cast<std::size_t>(firstPlane), gapPlanes)) - gapPlanes / 2.0,
             0.0,
             maxZ);
         addSegment(0.0, 0.0, z, maxX, 0.0, z);
@@ -269,13 +275,14 @@ void Visualizer::drawGridLinesFor3DVolume(int nRows,
                                           int nNodeZ,
                                           const std::vector<Line>& lines,
                                           vtkSmartPointer<vtkRenderer> renderer,
-                                          vtkSmartPointer<vtkActor> gridLinesActor)
+                                          vtkSmartPointer<vtkActor> gridLinesActor,
+                                          int zGapPlanes)
 {
     if (!renderer || !gridLinesActor)
         return;
 
     vtkNew<vtkPolyDataMapper> mapper;
-    mapper->SetInputData(create3DVolumeGridLinePolyData(nRows, nCols, nSlices, nNodeZ, lines));
+    mapper->SetInputData(create3DVolumeGridLinePolyData(nRows, nCols, nSlices, nNodeZ, lines, zGapPlanes));
     gridLinesActor->SetMapper(mapper);
     gridLinesActor->GetProperty()->SetLineWidth(1.25);
     gridLinesActor->GetProperty()->SetOpacity(0.8);
@@ -288,7 +295,8 @@ void Visualizer::refreshGridLinesFor3DVolume(int nRows,
                                              int nSlices,
                                              int nNodeZ,
                                              const std::vector<Line>& lines,
-                                             vtkSmartPointer<vtkActor> gridLinesActor)
+                                             vtkSmartPointer<vtkActor> gridLinesActor,
+                                             int zGapPlanes)
 {
     if (!gridLinesActor)
         return;
@@ -297,7 +305,7 @@ void Visualizer::refreshGridLinesFor3DVolume(int nRows,
     if (!mapper)
         return;
 
-    mapper->SetInputData(create3DVolumeGridLinePolyData(nRows, nCols, nSlices, nNodeZ, lines));
+    mapper->SetInputData(create3DVolumeGridLinePolyData(nRows, nCols, nSlices, nNodeZ, lines, zGapPlanes));
     mapper->Update();
     applyGridColorTo3DGridLinesActor(gridLinesActor);
 }
