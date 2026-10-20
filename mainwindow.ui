@@ -699,14 +699,31 @@
           <number>5</number>
          </property>
          <item>
-          <widget class="QLabel" name="cellHeaderLabel">
-           <property name="styleSheet">
-            <string notr="true">QLabel { font-weight: bold; padding: 2px; }</string>
-           </property>
-           <property name="text">
-            <string>Cell: (x=-, y=-)</string>
-           </property>
-          </widget>
+          <layout class="QVBoxLayout" name="cellHeaderLayout">
+           <item>
+            <widget class="QLabel" name="cellHeaderLabel">
+             <property name="styleSheet">
+              <string notr="true">QLabel { font-weight: bold; padding: 2px; }</string>
+             </property>
+             <property name="text">
+              <string>Cell: (x=-, y=-)</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="plotHistoryButton">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="toolTip">
+              <string>Plot the substates of the selected cell over the whole simulation</string>
+             </property>
+             <property name="text">
+              <string>Plot over time...</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
          </item>
          <item>
           <widget class="QFrame" name="separator">

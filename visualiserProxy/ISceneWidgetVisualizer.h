@@ -17,10 +17,12 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 #include <vtkRenderer.h>
 
 #include "core/types.h"
+#include "visualiserProxy/CellHistory.h"
 #include "visualiserProxy/ContiguousGrid.h"
 
 // Forward declarations
@@ -83,6 +85,31 @@ public:
 
     /// @brief Index currently held constant by the native 3D slice.
     virtual int native3DSliceIndex() const = 0;
+
+    /** @brief Read the values of substates of one cell at all available simulation steps.
+     *
+     *  The cell is given the way the user sees it: `viewRow`/`viewCol` are the row and column in the
+     *  currently displayed 2D plane (for a native 3D model in a cross-section view this is the plane,
+     *  otherwise the whole grid). The default implementation returns an empty history.
+     *
+     *  @param sp       setting parameters of the loaded model
+     *  @param viewRow  row of the cell in the displayed plane
+     *  @param viewCol  column of the cell in the displayed plane
+     *  @param fields   substates to read
+     *  @param progress optional progress callback; return false from it to cancel */
+    virtual CellHistory cellHistory(const SettingParameter& sp,
+                                    int viewRow,
+                                    int viewCol,
+                                    const std::vector<std::string>& fields,
+                                    const CellHistoryProgress& progress = {})
+    {
+        static_cast<void>(sp);
+        static_cast<void>(viewRow);
+        static_cast<void>(viewCol);
+        static_cast<void>(fields);
+        static_cast<void>(progress);
+        return {};
+    }
 
     /** @brief Set the number of empty planes drawn between neighbouring Z planes of a native 3D volume.
      *

@@ -5,6 +5,7 @@
 #include <cmath> // std::isnan
 #include <QVBoxLayout>
 #include <QLabel>
+#include <QProgressDialog>
 #include <QFrame>
 #include <QPushButton>
 #include <QDragEnterEvent>
@@ -12,6 +13,7 @@
 #include <QMimeData>
 #include "SubstatesDockWidget.h"
 #include "SubstateDisplayWidget.h"
+#include "widgets/CellHistoryDialog.h"
 #include "visualiser/SettingParameter.h"
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 
@@ -54,6 +56,88 @@ void SubstatesDockWidget::initializeFromUI()
             m_containerLayout = qobject_cast<QVBoxLayout*>(m_containerWidget->layout());
         }
     }
+
+    m_plotHistoryButton = findChild<QPushButton*>("plotHistoryButton");
+    if (m_plotHistoryButton)
+        connect(m_plotHistoryButton, &QPushButton::clicked, this, &SubstatesDockWidget::onPlotHistoryClicked);
+}
+
+void SubstatesDockWidget::setCurrentStep(StepIndex step)
+{
+    m_currentStep = step;
+    if (m_historyDialog)
+        m_historyDialog->setCurrentStep(step);
+}
+
+void SubstatesDockWidget::resetSelectedCell()
+{
+    m_hasSelectedCell = false;
+    if (m_plotHistoryButton)
+        m_plotHistoryButton->setEnabled(false);
+    if (m_historyDialog)
+        m_historyDialog->hide();
+}
+
+void SubstatesDockWidget::onPlotHistoryClicked()
+{
+    showHistoryOfSelectedCell(true);
+}
+
+void SubstatesDockWidget::showHistoryOfSelectedCell(bool showWindow)
+{
+    if (! m_hasSelectedCell || ! m_currentSettingParameter || ! m_currentVisualizer)
+        return;
+    if (! showWindow && (! m_historyDialog || ! m_historyDialog->isVisible()))
+        return;
+
+    const auto fields = m_currentSettingParameter->getSubstateFields();
+    if (fields.empty())
+        return;
+
+    // Reading goes through the files of all steps: let the user see the progress and cancel it
+    QProgressDialog progressDialog(tr("Reading the cell from all steps..."), tr("Cancel"), 0, 0, window());
+    progressDialog.setWindowTitle(tr("Cell history"));
+    progressDialog.setWindowModality(Qt::WindowModal);
+    progressDialog.setMinimumDuration(400); // quick readings do not flash a dialog
+
+    const CellHistoryProgress progress = [&progressDialog](std::size_t done, std::size_t total)
+    {
+        progressDialog.setMaximum(static_cast<int>(total));
+        progressDialog.setValue(static_cast<int>(done));
+        return ! progressDialog.wasCanceled();
+    };
+
+    const CellHistory history = m_currentVisualizer->cellHistory(*m_currentSettingParameter,
+                                                                 m_selectedRow,
+                                                                 m_selectedCol,
+                                                                 fields,
+                                                                 progress);
+    progressDialog.close();
+
+    if (history.empty())
+        return;
+
+    if (! m_historyDialog)
+    {
+        // Child of the main window, not of this dock: the dock hides when the user clicks outside the grid
+        m_historyDialog = new CellHistoryDialog(parentWidget() ? parentWidget() : window());
+    }
+
+    // Preselect the substate the user works with: the one highlighted in the dock
+    std::string preferred = fields.front();
+    if (const auto* active = getActiveSubstateWidget())
+        preferred = active->fieldName();
+
+    m_historyDialog->setHistory(history, preferred);
+    if (m_currentStep)
+        m_historyDialog->setCurrentStep(*m_currentStep);
+
+    if (showWindow)
+    {
+        m_historyDialog->show();
+        m_historyDialog->raise();
+        m_historyDialog->activateWindow();
+    }
 }
 
 void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
@@ -63,6 +147,9 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
 
     // Store reference to current setting parameter
     m_currentSettingParameter = settingParameter;
+
+    // The data were (re)loaded: a previously clicked cell and its history are no longer valid
+    resetSelectedCell();
 
     // Clear existing widgets
     clearWidgets();
@@ -150,6 +237,13 @@ void SubstatesDockWidget::updateCellValues(SettingParameter* settingParameter, i
     // Store visualizer for later use in calculations
     m_currentVisualizer = visualizer;
 
+    // Remember the cell for the plot of its history
+    m_hasSelectedCell = true;
+    m_selectedRow = row;
+    m_selectedCol = col;
+    if (m_plotHistoryButton)
+        m_plotHistoryButton->setEnabled(true);
+
     // Update header with row/col information (x=col, y=row for clarity)
     auto headerLabel = findChild<QLabel*>("cellHeaderLabel");
     if (headerLabel)
@@ -170,6 +264,9 @@ void SubstatesDockWidget::updateCellValues(SettingParameter* settingParameter, i
             widget->setCellValue(cellValue);
         }
     }
+
+    // When the history window is open it follows the clicked cell
+    showHistoryOfSelectedCell(false);
 }
 
 void SubstatesDockWidget::saveParametersToSettings(SettingParameter* settingParameter)

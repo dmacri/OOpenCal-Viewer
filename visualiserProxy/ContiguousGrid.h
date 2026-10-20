@@ -225,6 +225,45 @@ private:
     size_type layerCount_ = 1;
 };
 
+/** @struct GridCellIndex
+ * @brief Position of one cell in a ContiguousGrid: `grid[row, column, layer]`. */
+struct GridCellIndex
+{
+    std::size_t row = 0;
+    std::size_t column = 0;
+    std::size_t layer = 0;
+
+    friend constexpr bool operator==(const GridCellIndex&, const GridCellIndex&) = default;
+};
+
+/** @brief Maps a cell of a ContiguousGridSliceView back to its position in the 3D grid.
+ *
+ * This is the same mapping the slice view uses for `view[viewRow][viewColumn]`: XZ and YZ planes
+ * reverse their Z-backed row, so Z=0 is displayed at the bottom of the 2D view.
+ *
+ * @param axis        axis held constant by the view
+ * @param fixedIndex  index along that axis
+ * @param layerCount  number of layers (Z planes) of the grid
+ * @param viewRow     row in the 2D view
+ * @param viewColumn  column in the 2D view */
+[[nodiscard]] constexpr GridCellIndex gridIndexFromSliceView(GridSliceAxis axis,
+                                                             std::size_t fixedIndex,
+                                                             std::size_t layerCount,
+                                                             std::size_t viewRow,
+                                                             std::size_t viewColumn) noexcept
+{
+    switch (axis)
+    {
+        case GridSliceAxis::X:
+            return {viewColumn, fixedIndex, layerCount - 1 - viewRow};
+        case GridSliceAxis::Y:
+            return {fixedIndex, viewColumn, layerCount - 1 - viewRow};
+        case GridSliceAxis::Z:
+            return {viewRow, viewColumn, fixedIndex};
+    }
+    return {};
+}
+
 /** @class ContiguousGridSliceView
  * @brief Non-owning 2D view of one axis-aligned plane in a 3D grid.
  *
