@@ -136,6 +136,23 @@ target_include_directories(VolumeZSpacingTests PRIVATE
 add_test(NAME VolumeZSpacingTests COMMAND VolumeZSpacingTests)
 
 # ============================================
+# Add test executable for VolumePicking (header-only, no Qt/VTK)
+# ============================================
+add_executable(VolumePickingTests
+    VolumePickingTests.cpp
+)
+
+target_link_libraries(VolumePickingTests
+    GTest::gtest_main
+)
+
+target_include_directories(VolumePickingTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME VolumePickingTests COMMAND VolumePickingTests)
+
+# ============================================
 # Add test executable for the history of a cell (reading one cell across steps)
 # ============================================
 add_executable(CellHistoryTests

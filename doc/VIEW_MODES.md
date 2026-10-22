@@ -64,6 +64,24 @@ The OOpenCal-Viewer now supports switching between **2D** and **3D** view modes,
   - **Right-click + drag**: Zoom
   - **Scroll wheel**: Zoom in/out
 
+### Clicking a cell of a native 3D model
+
+A model with more than one Z plane (`number_of_slices` > 1) is drawn as a **volume**. Like in the 2D view,
+the *Substate Parameters* panel opens when you **click a cell** of the volume:
+
+- The cell is the **first visible cell along the line of sight** under the cursor, i.e. the one you see
+  there. Cells with a transparent value (the lowest value of the colour range) cannot be clicked, and
+  neither can the empty planes inserted by the **Z spacing** option.
+- The panel header shows all three coordinates, e.g. `Cell: (x=47, y=53, z=59)`, because in the volume
+  there is no displayed plane they could refer to. **Plot over time...** plots exactly this cell.
+- Hovering the mouse over the volume shows a ToolTip with the coordinates and the values of the cell.
+  No ToolTip is shown while a mouse button is held (rotating, panning, zooming).
+- Because the left button rotates the volume, the cell is taken when the button is **released**, and only
+  if the mouse has not been dragged (more than a few pixels) in between. A click on the background hides
+  the panel.
+- In a cross-section of a native 3D model the click works as before (the panel shows the position in the
+  displayed plane).
+
 ## Technical Details
 
 ### Camera Behavior

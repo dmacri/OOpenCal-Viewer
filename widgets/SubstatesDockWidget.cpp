@@ -107,11 +107,9 @@ void SubstatesDockWidget::showHistoryOfSelectedCell(bool showWindow)
         return ! progressDialog.wasCanceled();
     };
 
-    const CellHistory history = m_currentVisualizer->cellHistory(*m_currentSettingParameter,
-                                                                 m_selectedRow,
-                                                                 m_selectedCol,
-                                                                 fields,
-                                                                 progress);
+    const CellHistory history = m_selectedVolumeCell
+        ? m_currentVisualizer->cellHistoryOfVolumeCell(*m_currentSettingParameter, *m_selectedVolumeCell, fields, progress)
+        : m_currentVisualizer->cellHistory(*m_currentSettingParameter, m_selectedRow, m_selectedCol, fields, progress);
     progressDialog.close();
 
     if (history.empty())
@@ -241,6 +239,7 @@ void SubstatesDockWidget::updateCellValues(SettingParameter* settingParameter, i
     m_hasSelectedCell = true;
     m_selectedRow = row;
     m_selectedCol = col;
+    m_selectedVolumeCell.reset();
     if (m_plotHistoryButton)
         m_plotHistoryButton->setEnabled(true);
 
@@ -263,6 +262,38 @@ void SubstatesDockWidget::updateCellValues(SettingParameter* settingParameter, i
         {
             widget->setCellValue(cellValue);
         }
+    }
+
+    // When the history window is open it follows the clicked cell
+    showHistoryOfSelectedCell(false);
+}
+
+void SubstatesDockWidget::updateVolumeCellValues(SettingParameter* settingParameter, const GridCellIndex& cell, class ISceneWidgetVisualizer* visualizer)
+{
+    if (!settingParameter || !visualizer)
+        return;
+
+    m_currentVisualizer = visualizer;
+
+    // Remember the cell for the plot of its history
+    m_hasSelectedCell = true;
+    m_selectedRow = static_cast<int>(cell.row);
+    m_selectedCol = static_cast<int>(cell.column);
+    m_selectedVolumeCell = cell;
+    if (m_plotHistoryButton)
+        m_plotHistoryButton->setEnabled(true);
+
+    // The whole 3D grid: all three coordinates identify the cell (x=col, y=row, z=layer)
+    if (auto headerLabel = findChild<QLabel*>("cellHeaderLabel"))
+    {
+        headerLabel->setText(QString("Cell: (x=%1, y=%2, z=%3)").arg(cell.column).arg(cell.row).arg(cell.layer));
+    }
+
+    for (auto& pair : m_substateWidgets)
+    {
+        const std::string cellValue = visualizer->getVolumeCellStringEncoding(cell, pair.first.c_str());
+        if (!cellValue.empty())
+            pair.second->setCellValue(cellValue);
     }
 
     // When the history window is open it follows the clicked cell

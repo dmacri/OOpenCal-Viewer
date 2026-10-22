@@ -12,6 +12,7 @@
 #include <vector>
 #include <QDockWidget>
 #include "core/types.h" // StepIndex
+#include "visualiserProxy/ContiguousGrid.h" // GridCellIndex
 #include <QScrollArea>
 #include <QVBoxLayout>
 
@@ -59,6 +60,17 @@ public:
      * @param col Grid column index
      * @param visualizer Optional visualizer to get cell values from */
     void updateCellValues(SettingParameter* settingParameter, int row, int col, class ISceneWidgetVisualizer* visualizer = nullptr);
+
+    /** @brief Update cell values for a cell clicked in the complete 3D volume of a native 3D model.
+     *
+     *  Like updateCellValues(), but the cell is given by its position in the whole grid (row, column
+     *  and layer), not in the displayed plane: the volume is not a cross-section. The header shows
+     *  all three coordinates and the plot of the history follows the same cell.
+     *
+     *  @param settingParameter The setting parameter
+     *  @param cell Position of the cell in the whole 3D grid
+     *  @param visualizer Visualizer to get cell values from */
+    void updateVolumeCellValues(SettingParameter* settingParameter, const GridCellIndex& cell, class ISceneWidgetVisualizer* visualizer);
 
     /** @brief Save current parameter values to SettingParameter.
      * 
@@ -244,5 +256,6 @@ private:
     bool m_hasSelectedCell = false;  ///< A cell was clicked since the data were (re)loaded
     int m_selectedRow = 0;           ///< Row of the clicked cell in the displayed plane
     int m_selectedCol = 0;           ///< Column of the clicked cell in the displayed plane
+    std::optional<GridCellIndex> m_selectedVolumeCell; ///< Set when the cell was clicked in the complete 3D volume (then it is the position in the whole grid)
     std::optional<StepIndex> m_currentStep;
 };
