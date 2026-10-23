@@ -1527,6 +1527,8 @@ void MainWindow::updateSubstateDockeWidget()
     {
         auto settingParam = const_cast<SettingParameter*>(ui->sceneWidget->getSettingParameter());
         settingParam->initializeSubstateInfo();
+        // In a native 3D model the substates are drawn in the volume, in a 2D model they are altitudes
+        ui->substatesDockWidget->setNative3DVolumeMode(ui->sceneWidget->isNative3DModel());
         ui->substatesDockWidget->updateSubstates(settingParam);
 
         // TODO: GB: Do we really need to send this to MainWindow? Maybe SubstatesDockWidget can directly control SceneWidget?
@@ -2898,6 +2900,18 @@ void MainWindow::onRecentDirectoryTriggered()
 
 void MainWindow::apply3DSubstateSelection(const std::vector<std::string>& fieldNamesTopToBottom)
 {
+    if (ui->sceneWidget->isNative3DModel())
+    {
+        // Every cell of a native 3D model has its own place in 3D, so the checked substates are not heights:
+        // they are what the voxels of the volume are made of. There is no mode to switch, only to redraw.
+        WaitCursorGuard waitCursor("Updating 3D volume...");
+        activeSubstatesFor3D = fieldNamesTopToBottom;
+        ui->sceneWidget->setActiveSubstatesFor3D(fieldNamesTopToBottom);
+        ui->substatesDockWidget->setActiveSubstates(fieldNamesTopToBottom);
+        ui->sceneWidget->refreshVisualization();
+        return;
+    }
+
     if (fieldNamesTopToBottom.empty())
     {
         // Show wait cursor during view mode change
@@ -2992,6 +3006,14 @@ void MainWindow::onDeactivateRequested()
     
     // Uncheck all use2D checkboxes
     ui->substatesDockWidget->uncheckAllUse2DCheckboxes();
+
+    // The substates shown in the volume of a native 3D model are deactivated too
+    if (ui->sceneWidget->isNative3DModel())
+    {
+        ui->substatesDockWidget->uncheckAllUse3DCheckboxes();
+        ui->sceneWidget->setActiveSubstatesFor3D({});
+        activeSubstatesFor3D.clear();
+    }
     
     // Immediately refresh visualization to show the change
     ui->sceneWidget->refreshVisualization();

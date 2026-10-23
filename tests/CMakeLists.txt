@@ -153,6 +153,23 @@ target_include_directories(VolumePickingTests PRIVATE
 add_test(NAME VolumePickingTests COMMAND VolumePickingTests)
 
 # ============================================
+# Add test executable for VolumeLayers (header-only, no Qt/VTK)
+# ============================================
+add_executable(VolumeLayersTests
+    VolumeLayersTests.cpp
+)
+
+target_link_libraries(VolumeLayersTests
+    GTest::gtest_main
+)
+
+target_include_directories(VolumeLayersTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME VolumeLayersTests COMMAND VolumeLayersTests)
+
+# ============================================
 # Add test executable for the history of a cell (reading one cell across steps)
 # ============================================
 add_executable(CellHistoryTests

@@ -177,6 +177,8 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
             widget->setNoValueEnabled(it->second.noValueEnabled);
         }
 
+        widget->setNative3DVolumeMode(m_native3DVolumeMode);
+
         // Connect signals
         connect(widget, &SubstateDisplayWidget::use3dStateChanged, this, &SubstatesDockWidget::onUse3DStateChanged);
         connect(widget, &SubstateDisplayWidget::useSubstateColorringRequested, this, &SubstatesDockWidget::onUseSubstateColorringRequested);
@@ -634,6 +636,22 @@ void SubstatesDockWidget::uncheckAllUse2DCheckboxes()
     {
         widget->setUse2DChecked(false);
     }
+}
+
+void SubstatesDockWidget::uncheckAllUse3DCheckboxes()
+{
+    for (auto& [name, widget] : m_substateWidgets)
+    {
+        QSignalBlocker blocker(widget);
+        widget->setUse3DChecked(false);
+    }
+}
+
+void SubstatesDockWidget::setNative3DVolumeMode(bool enabled)
+{
+    m_native3DVolumeMode = enabled;
+    for (auto& [name, widget] : m_substateWidgets)
+        widget->setNative3DVolumeMode(enabled);
 }
 
 void SubstatesDockWidget::dragEnterEvent(QDragEnterEvent* event)

@@ -135,7 +135,8 @@ public:
                                            renderer,
                                            nativeVolumeActor,
                                            colorSubstateInfos,
-                                           nativeVolumeZGap);
+                                           nativeVolumeZGap,
+                                           nativeVolumeLayerPointers());
             return;
         }
 
@@ -170,7 +171,8 @@ public:
                                            nativeVolumeRenderer,
                                            nativeVolumeActor,
                                            colorSubstateInfos,
-                                           nativeVolumeZGap);
+                                           nativeVolumeZGap,
+                                           nativeVolumeLayerPointers());
             return;
         }
         visualiser.refreshWindowsVTK(p, nRows, nCols, gridActor, colorSubstateInfos);
@@ -465,6 +467,16 @@ public:
         return readCellHistory(sp, cell, fields, progress);
     }
 
+    void setNative3DVolumeSubstates(const std::vector<const SubstateInfo*>& layersTopToBottom) override
+    {
+        nativeVolumeLayers.clear();
+        for (const SubstateInfo* info : layersTopToBottom)
+        {
+            if (info)
+                nativeVolumeLayers.push_back(*info);
+        }
+    }
+
     std::optional<GridCellIndex> pickNative3DVolumeCell(const std::array<double, 3>& rayStart,
                                                         const std::array<double, 3>& rayEnd) const override
     {
@@ -534,6 +546,18 @@ public:
     }
 
 private:
+    std::vector<const SubstateInfo*> nativeVolumeLayerPointers() const
+    {
+        std::vector<const SubstateInfo*> pointers;
+        pointers.reserve(nativeVolumeLayers.size());
+        for (const SubstateInfo& info : nativeVolumeLayers)
+            pointers.push_back(&info);
+        return pointers;
+    }
+
+    /// Substates shown in the volume, the one on top of the panel first (see setNative3DVolumeSubstates())
+    std::vector<SubstateInfo> nativeVolumeLayers;
+
     static CellHistory emptyHistory(const std::vector<std::string>& fields)
     {
         CellHistory history;

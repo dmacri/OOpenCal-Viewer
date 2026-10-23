@@ -658,6 +658,12 @@ protected:
     /// @brief Returns color substate infos
     std::vector<const SubstateInfo*> getColorSubstateInfos();
 
+    /** @brief Substates to draw in the volume of a native 3D model, the one on top of the panel first.
+     *
+     *  These are the substates checked with "Show in 3D volume" which can be drawn (Min and Max set).
+     *  Empty for a model which is not a native 3D model. */
+    std::vector<const SubstateInfo*> getNative3DVolumeSubstateInfos() const;
+
     /// @brief Get active 3D altitude substate infos in dock display order (top-to-bottom).
     std::vector<const SubstateInfo*> get3DSubstateInfosTopToBottom() const;
 

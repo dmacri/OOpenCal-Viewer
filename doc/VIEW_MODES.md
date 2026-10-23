@@ -82,6 +82,30 @@ the *Substate Parameters* panel opens when you **click a cell** of the volume:
 - In a cross-section of a native 3D model the click works as before (the panel shows the position in the
   displayed plane).
 
+### Substates in the volume of a native 3D model
+
+Every cell of a native 3D model already has its own place in 3D and its own value of every substate, so
+"Use as 3D altitude" (a height, as in a 2D model) makes no sense there. In a native 3D model the checkbox of
+a substate in the *Substate Parameters* panel is **Show in 3D volume** instead (it is enabled once both Min
+and Max are set):
+
+- A checked substate is drawn **in the volume**: every cell with a value is a voxel, coloured by the
+  **intensity** of the value, i.e. by where it lies between Min and Max, from the Min colour to the Max
+  colour of the substate (the *Colors* buttons). Without colours of its own a substate is coloured like the
+  model colours its lowest and highest value (including the transparency of those colours), or - when the
+  model does not tell them apart - by a default gradient which differs from substate to substate.
+- A cell has **no value** (is transparent) when the value is `<= Min` or `> Max`, or equals the *No value*
+  of the substate: Min is the background, Max is still drawn.
+- **Several substates** can be checked, all of them are drawn. Where more than one has a value in the same
+  cell, only the **highest one in the panel is shown** - drag the substates to change their order. A cell
+  where the highest substate has no value shows the next one.
+- Without any substate checked the volume is drawn as before (by the first substate used for coloring, or by
+  the default cell value). **Deactivate Substate** unchecks them all.
+- Changing Min, Max, the colours or the order redraws the volume. The substates shown in the volume do not
+  affect a cross-section, which is coloured with *Use substate for coloring*.
+- Clicking or hovering a voxel shows the values of all substates of that cell (see above), also of those
+  which are not shown.
+
 ## Technical Details
 
 ### Camera Behavior

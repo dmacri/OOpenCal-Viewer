@@ -208,6 +208,15 @@ public slots:
     /// @brief Uncheck all use2D checkboxes. */
     void uncheckAllUse2DCheckboxes();
 
+    /** @brief Uncheck all "3D" checkboxes without notifying anybody (the caller redraws the scene itself). */
+    void uncheckAllUse3DCheckboxes();
+
+    /** @brief Whether the substates of a native 3D model are shown (see SubstateDisplayWidget::setNative3DVolumeMode()).
+     *
+     *  Applies to the widgets which exist now and to the ones created by updateSubstates() later.
+     *  @param enabled true for a native 3D model */
+    void setNative3DVolumeMode(bool enabled);
+
     /// @brief Informs about changes in substat colloring
     void onUseSubstateColorringRequested(const std::string& fieldName);
 
@@ -256,6 +265,7 @@ private:
     bool m_hasSelectedCell = false;  ///< A cell was clicked since the data were (re)loaded
     int m_selectedRow = 0;           ///< Row of the clicked cell in the displayed plane
     int m_selectedCol = 0;           ///< Column of the clicked cell in the displayed plane
+    bool m_native3DVolumeMode = false; ///< The substates are shown in a 3D volume, not as altitude
     std::optional<GridCellIndex> m_selectedVolumeCell; ///< Set when the cell was clicked in the complete 3D volume (then it is the position in the whole grid)
     std::optional<StepIndex> m_currentStep;
 };

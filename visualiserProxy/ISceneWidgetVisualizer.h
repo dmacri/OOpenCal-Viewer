@@ -113,6 +113,21 @@ public:
         return {};
     }
 
+    /** @brief Choose the substates drawn in the volume of a native 3D model ("Show in 3D volume").
+     *
+     *  Every cell of a native 3D model has its own value of every substate, so the substates are not heights
+     *  but what the voxels are made of. A voxel shows the highest of the layers which has a value in the cell
+     *  (see VolumeLayers.h), coloured by the intensity of the value. With no layers the volume is coloured as
+     *  before (by the first coloring substate). The choice is remembered until it is changed and is used by
+     *  the next drawWithVTK() / refreshWindowsVTK().
+     *
+     *  @param layersTopToBottom substates to show, the one on top of the Substate Parameters panel first
+     *         (the values are copied, the pointers need not outlive the call) */
+    virtual void setNative3DVolumeSubstates(const std::vector<const SubstateInfo*>& layersTopToBottom)
+    {
+        static_cast<void>(layersTopToBottom);
+    }
+
     /** @brief Find the cell of the native 3D volume under a view ray.
      *
      *  The complete volume is not a polygonal actor, so it cannot be picked with a vtkPropPicker. The ray (two

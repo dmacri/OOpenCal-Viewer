@@ -44,6 +44,7 @@
 #include "OOpenCAL/base/Cell.h" // Color
 #include "visualiser/SettingParameter.h" // SubstateInfo
 #include "visualiser/Line.h"
+#include "visualiser/VolumeLayers.h"
 #include "visualiser/VolumeZSpacing.h"
 #include "widgets/GridWorldMapping.h"
 
@@ -129,7 +130,12 @@ public:
      *
      * @param zGapPlanes number of empty (fully transparent) planes inserted between every two
      *        neighbouring Z planes of the model, so that the lower planes (e.g. the subsurface)
-     *        are not hidden by the upper ones. 0 keeps the planes glued together (see VolumeZSpacing.h). */
+     *        are not hidden by the upper ones. 0 keeps the planes glued together (see VolumeZSpacing.h).
+     * @param volumeLayersTopToBottom substates the user chose to show in the volume ("Show in 3D volume"),
+     *        the one on top of the Substate Parameters panel first. When there is at least one with a usable
+     *        Min/Max, every voxel shows the highest of them which has a value in the cell, coloured by the
+     *        intensity of the value (see VolumeLayers.h) and @p colorSubstateInfos is not used.
+     *        Otherwise the volume is coloured by the first of @p colorSubstateInfos (or the default value). */
     template<class Volume>
     void drawWithVTK3DVolume(const Volume& p,
                              int nRows,
@@ -138,7 +144,23 @@ public:
                              vtkSmartPointer<vtkRenderer> renderer,
                              vtkSmartPointer<vtkVolume> volumeActor,
                              const std::vector<const SubstateInfo*>& colorSubstateInfos,
-                             int zGapPlanes = 0);
+                             int zGapPlanes = 0,
+                             const std::vector<const SubstateInfo*>& volumeLayersTopToBottom = {});
+
+private:
+    /// @brief Draws the volume from the chosen substates (see the last parameter of drawWithVTK3DVolume())
+    /// @return false when none of the layers can be drawn (no usable Min/Max): nothing was drawn then
+    template<class Volume>
+    bool drawWithVTK3DVolumeLayers(const Volume& p,
+                                   int nRows,
+                                   int nCols,
+                                   int nSlices,
+                                   vtkSmartPointer<vtkRenderer> renderer,
+                                   vtkSmartPointer<vtkVolume> volumeActor,
+                                   const std::vector<const SubstateInfo*>& layersTopToBottom,
+                                   int zGapPlanes);
+
+public:
 
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
@@ -493,10 +515,17 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
                                      vtkSmartPointer<vtkRenderer> renderer,
                                      vtkSmartPointer<vtkVolume> volumeActor,
                                      const std::vector<const SubstateInfo*>& colorSubstateInfos,
-                                     int zGapPlanes)
+                                     int zGapPlanes,
+                                     const std::vector<const SubstateInfo*>& volumeLayersTopToBottom)
 {
     if (!renderer || !volumeActor || nRows <= 0 || nCols <= 0 || nSlices <= 1)
         return;
+
+    if (!volumeLayersTopToBottom.empty() &&
+        drawWithVTK3DVolumeLayers(p, nRows, nCols, nSlices, renderer, volumeActor, volumeLayersTopToBottom, zGapPlanes))
+    {
+        return;
+    }
 
     const int gapPlanes = VolumeZSpacing::clampGap(zGapPlanes);
     const int drawnSlices = static_cast<int>(VolumeZSpacing::drawnPlaneCount(static_cast<std::size_t>(nSlices), gapPlanes));
@@ -646,6 +675,193 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
     volumeActor->SetMapper(mapper);
     volumeActor->SetProperty(property);
     renderer->AddVolume(volumeActor);
+}
+
+template<class Volume>
+bool Visualizer::drawWithVTK3DVolumeLayers(const Volume& p,
+                                           int nRows,
+                                           int nCols,
+                                           int nSlices,
+                                           vtkSmartPointer<vtkRenderer> renderer,
+                                           vtkSmartPointer<vtkVolume> volumeActor,
+                                           const std::vector<const SubstateInfo*>& layersTopToBottom,
+                                           int zGapPlanes)
+{
+    // Layers which cannot be drawn (Min/Max not set) are skipped; the number of a layer is its position
+    // among those which are drawn, because it decides about its stretch of the transfer function
+    std::vector<const SubstateInfo*> layers;
+    std::vector<VolumeLayers::LayerRange> ranges;
+    for (const SubstateInfo* info : layersTopToBottom)
+    {
+        if (!info)
+            continue;
+        VolumeLayers::LayerRange range;
+        range.minValue = info->minValue;
+        range.maxValue = info->maxValue;
+        range.noValueEnabled = info->noValueEnabled;
+        range.noValue = info->noValue;
+        if (!range.isUsable())
+            continue;
+        layers.push_back(info);
+        ranges.push_back(range);
+    }
+    if (layers.empty())
+        return false;
+
+    const int gapPlanes = VolumeZSpacing::clampGap(zGapPlanes);
+    const int drawnSlices = static_cast<int>(VolumeZSpacing::drawnPlaneCount(static_cast<std::size_t>(nSlices), gapPlanes));
+
+    const vtkIdType planeSize = static_cast<vtkIdType>(nRows) * nCols;
+    vtkNew<vtkFloatArray> scalars;
+    scalars->SetName("cell-layer-value");
+    scalars->SetNumberOfValues(planeSize * drawnSlices);
+    // Planes inserted by the Z spacing stay empty (transparent)
+    scalars->FillValue(static_cast<float>(VolumeLayers::emptyScalar));
+
+    // A layer without colours of its own is coloured like the model colours its lowest and its highest value
+    // (like the volume always was); when the model does not tell them apart, by a default gradient.
+    struct Extreme
+    {
+        double intensity = 0.0;
+        std::optional<Color> color;
+    };
+    std::vector<Extreme> lowest(layers.size());
+    std::vector<Extreme> highest(layers.size());
+    std::vector<bool> hasCustomColors(layers.size());
+    for (std::size_t k = 0; k < layers.size(); ++k)
+    {
+        hasCustomColors[k] = VolumeLayers::parseHexColor(layers[k]->minColor).has_value() &&
+                             VolumeLayers::parseHexColor(layers[k]->maxColor).has_value();
+        lowest[k].intensity = std::numeric_limits<double>::infinity();
+        highest[k].intensity = -std::numeric_limits<double>::infinity();
+    }
+
+    std::vector<std::optional<double>> fieldValues(layers.size());
+    for (int slice = 0; slice < nSlices; ++slice)
+    {
+        const vtkIdType drawnSlice =
+            static_cast<vtkIdType>(VolumeZSpacing::drawnPlaneIndex(static_cast<std::size_t>(slice), gapPlanes));
+        for (int row = 0; row < nRows; ++row)
+        {
+            for (int col = 0; col < nCols; ++col)
+            {
+                const auto& cell = p.get(row, col, slice);
+                const double scalar = VolumeLayers::scalarForVoxel(
+                    ranges,
+                    [&](std::size_t layer) -> std::optional<double>
+                    {
+                        try
+                        {
+                            return std::stod(cell.stringEncoding(layers[layer]->name.c_str()));
+                        }
+                        catch (...)
+                        {
+                            return std::nullopt;
+                        }
+                    });
+
+                if (scalar == VolumeLayers::emptyScalar)
+                    continue;
+
+                if (const auto decoded = VolumeLayers::decode(scalar); decoded && !hasCustomColors[decoded->layer])
+                {
+                    const std::size_t k = decoded->layer;
+                    if (decoded->intensity < lowest[k].intensity)
+                    {
+                        lowest[k] = {decoded->intensity, cell.outputValue(layers[k]->name.c_str(), gvm)};
+                    }
+                    if (decoded->intensity > highest[k].intensity)
+                    {
+                        highest[k] = {decoded->intensity, cell.outputValue(layers[k]->name.c_str(), gvm)};
+                    }
+                }
+
+                // VTK expects X to vary fastest. Invert Y just like the existing 2D renderer.
+                const vtkIdType index = (drawnSlice * nRows + (nRows - 1 - row)) * nCols + col;
+                scalars->SetValue(index, static_cast<float>(scalar));
+            }
+        }
+    }
+
+    // Near-black colours have no diffuse lighting response and would look like a flat disk from every angle
+    auto makeShadeable = [](VolumeLayers::Rgb color)
+    {
+        if (color.red + color.green + color.blue < 48)
+            return VolumeLayers::Rgb{70, 82, 100};
+        return color;
+    };
+    auto toRgb = [](const Color& color) { return VolumeLayers::Rgb{color.getRed(), color.getGreen(), color.getBlue()}; };
+
+    vtkNew<vtkColorTransferFunction> colors;
+    vtkNew<vtkPiecewiseFunction> opacity;
+    // No value: fully transparent (the scalars below 1)
+    opacity->AddPoint(VolumeLayers::emptyScalar, 0.0);
+    opacity->AddPoint(0.0, 0.0);
+
+    constexpr double fullOpacity = 0.9; // like in the volume coloured by one substate
+
+    for (std::size_t k = 0; k < layers.size(); ++k)
+    {
+        auto lowColor = VolumeLayers::parseHexColor(layers[k]->minColor);
+        auto highColor = VolumeLayers::parseHexColor(layers[k]->maxColor);
+        // The colours of the model can be (partially) transparent, those chosen in the panel cannot
+        double lowOpacity = 1.0;
+        double highOpacity = 1.0;
+        if (!lowColor || !highColor)
+        {
+            // The colours the model gives; when they are the same the model does not show the intensity
+            if (lowest[k].color && highest[k].color && toRgb(*lowest[k].color) != toRgb(*highest[k].color))
+            {
+                lowColor = toRgb(*lowest[k].color);
+                highColor = toRgb(*highest[k].color);
+                lowOpacity = toOpacity(*lowest[k].color);
+                highOpacity = toOpacity(*highest[k].color);
+            }
+            else
+            {
+                const auto [defaultLow, defaultHigh] = VolumeLayers::defaultColors(k);
+                lowColor = defaultLow;
+                highColor = defaultHigh;
+            }
+        }
+        const auto low = makeShadeable(*lowColor);
+        const auto high = makeShadeable(*highColor);
+        colors->AddRGBPoint(VolumeLayers::layerFirstScalar(k), toUnitColor(low.red), toUnitColor(low.green), toUnitColor(low.blue));
+        colors->AddRGBPoint(VolumeLayers::layerLastScalar(k), toUnitColor(high.red), toUnitColor(high.green), toUnitColor(high.blue));
+
+        // Right below the first scalar of the layer the opacity is already the one of the layer, so that
+        // the voxels of the layer get exactly their opacity and the "no value" scalars stay transparent
+        opacity->AddPoint(VolumeLayers::layerFirstScalar(k) - 0.1, fullOpacity * lowOpacity);
+        opacity->AddPoint(VolumeLayers::layerFirstScalar(k), fullOpacity * lowOpacity);
+        opacity->AddPoint(VolumeLayers::layerLastScalar(k), fullOpacity * highOpacity);
+    }
+
+    vtkNew<vtkImageData> image;
+    image->SetDimensions(nCols, nRows, drawnSlices);
+    image->SetOrigin(0.0, 0.0, 0.0);
+    image->SetSpacing(1.0, 1.0, 1.0);
+    image->GetPointData()->SetScalars(scalars);
+
+    vtkNew<vtkVolumeProperty> property;
+    property->SetColor(colors);
+    property->SetScalarOpacity(opacity);
+    property->SetInterpolationTypeToNearest();
+    property->ShadeOn();
+    property->SetAmbient(0.22);
+    property->SetDiffuse(0.78);
+    property->SetSpecular(0.35);
+    property->SetSpecularPower(18.0);
+    property->SetScalarOpacityUnitDistance(0.8);
+
+    vtkNew<vtkSmartVolumeMapper> mapper;
+    mapper->SetInputData(image);
+    mapper->SetBlendModeToComposite();
+    mapper->SetAutoAdjustSampleDistances(true);
+
+    volumeActor->SetMapper(mapper);
+    volumeActor->SetProperty(property);
+    renderer->AddVolume(volumeActor);
+    return true;
 }
 
 template<class Matrix>

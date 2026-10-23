@@ -501,6 +501,9 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         }
 
         const auto colorSubstateInfos = getColorSubstateInfos();
+        // The substates checked with "Show in 3D volume" (only the volume uses them, not a cross-section)
+        sceneWidgetVisualizerProxy->setNative3DVolumeSubstates(sliceView ? std::vector<const SubstateInfo*>{}
+                                                                         : getNative3DVolumeSubstateInfos());
         sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY,
                                                 settingParameter->numberOfColumnX,
                                                 renderer,
@@ -680,6 +683,25 @@ std::vector<const SubstateInfo*> SceneWidget::getColorSubstateInfos()
     return colorSubstateInfos;
 }
 
+std::vector<const SubstateInfo*> SceneWidget::getNative3DVolumeSubstateInfos() const
+{
+    std::vector<const SubstateInfo*> layers;
+    if (!settingParameter || !isNative3DModel())
+        return layers;
+
+    for (const auto& fieldName : activeSubstatesFor3D)
+    {
+        const auto it = settingParameter->substateInfo.find(fieldName);
+        if (it == settingParameter->substateInfo.end())
+            continue;
+
+        const auto& info = it->second;
+        if (!std::isnan(info.minValue) && !std::isnan(info.maxValue) && info.minValue < info.maxValue)
+            layers.push_back(&info);
+    }
+    return layers;
+}
+
 std::vector<const SubstateInfo*> SceneWidget::get3DSubstateInfosTopToBottom() const
 {
     std::vector<const SubstateInfo*> heightSubstateInfos;
@@ -759,6 +781,7 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
         }
 
         const auto colorSubstateInfos = getColorSubstateInfos();
+        sceneWidgetVisualizerProxy->setNative3DVolumeSubstates(getNative3DVolumeSubstateInfos());
         sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY,
                                                       settingParameter->numberOfColumnX,
                                                       gridActor,
