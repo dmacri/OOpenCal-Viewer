@@ -78,7 +78,7 @@ the *Substate Parameters* panel opens when you **click a cell** of the volume:
   No ToolTip is shown while a mouse button is held (rotating, panning, zooming).
 - Because the left button rotates the volume, the cell is taken when the button is **released**, and only
   if the mouse has not been dragged (more than a few pixels) in between. A click on the background hides
-  the panel.
+  the panel, unless it was opened from the menu (see below).
 - In a cross-section of a native 3D model the click works as before (the panel shows the position in the
   displayed plane).
 
@@ -94,8 +94,8 @@ and Max are set):
   colour of the substate (the *Colors* buttons). Without colours of its own a substate is coloured like the
   model colours its lowest and highest value (including the transparency of those colours), or - when the
   model does not tell them apart - by a default gradient which differs from substate to substate.
-- A cell has **no value** (is transparent) when the value is `<= Min` or `> Max`, or equals the *No value*
-  of the substate: Min is the background, Max is still drawn.
+- A cell is drawn when **Min < value <= Max** (and the value is not the *No value* of the substate); otherwise
+  it has no value and is transparent. Min is the background, Max itself is still drawn.
 - **Several substates** can be checked, all of them are drawn. Where more than one has a value in the same
   cell, only the **highest one in the panel is shown** - drag the substates to change their order. A cell
   where the highest substate has no value shows the next one.
@@ -105,6 +105,11 @@ and Max are set):
   affect a cross-section, which is coloured with *Use substate for coloring*.
 - Clicking or hovering a voxel shows the values of all substates of that cell (see above), also of those
   which are not shown.
+- **Opening the panel without a cell to click:** until a substate is chosen the volume can be completely
+  transparent, so there may be nothing to click. Use **View -> Substate parameters**: it shows the panel
+  (with the substates and their Min/Max/colours) without selecting a cell. The panel opened this way stays
+  open when the background of the scene is clicked and is closed from the same menu item or with its close
+  button.
 
 ## Technical Details
 

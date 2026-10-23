@@ -60,6 +60,13 @@ void SubstatesDockWidget::initializeFromUI()
     m_plotHistoryButton = findChild<QPushButton*>("plotHistoryButton");
     if (m_plotHistoryButton)
         connect(m_plotHistoryButton, &QPushButton::clicked, this, &SubstatesDockWidget::onPlotHistoryClicked);
+
+    // Once the panel is closed (menu, close button) it is an ordinary panel again
+    connect(this, &QDockWidget::visibilityChanged, this, [this](bool visible)
+            {
+                if (!visible)
+                    m_keptOpen = false;
+            });
 }
 
 void SubstatesDockWidget::setCurrentStep(StepIndex step)
@@ -72,6 +79,9 @@ void SubstatesDockWidget::setCurrentStep(StepIndex step)
 void SubstatesDockWidget::resetSelectedCell()
 {
     m_hasSelectedCell = false;
+    m_selectedVolumeCell.reset();
+    if (auto headerLabel = findChild<QLabel*>("cellHeaderLabel"))
+        headerLabel->setText(m_native3DVolumeMode ? "Cell: (x=-, y=-, z=-)" : "Cell: (x=-, y=-)");
     if (m_plotHistoryButton)
         m_plotHistoryButton->setEnabled(false);
     if (m_historyDialog)

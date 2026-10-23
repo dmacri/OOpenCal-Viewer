@@ -2359,8 +2359,10 @@ void SceneWidget::mousePressEvent(QMouseEvent* event)
         }
         else
         {
-            // Click was outside grid (on background) - hide the dock widget
-            m_substatesDockWidget->hide();
+            // Click was outside grid (on background) - hide the dock widget,
+            // unless the user opened it from the menu and wants to keep it
+            if (!m_substatesDockWidget->isKeptOpen())
+                m_substatesDockWidget->hide();
         }
     }
 }
@@ -2395,8 +2397,10 @@ void SceneWidget::mouseReleaseEvent(QMouseEvent* event)
     }
     else
     {
-        // Click on the background - hide the dock widget (like in the flat view)
-        m_substatesDockWidget->hide();
+        // Click on the background - hide the dock widget (like in the flat view),
+        // unless the user opened it from the menu and wants to keep it
+        if (!m_substatesDockWidget->isKeptOpen())
+            m_substatesDockWidget->hide();
     }
 }
 

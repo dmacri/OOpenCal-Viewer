@@ -635,6 +635,7 @@ MainWindow::MainWindow(QWidget* parent)
     // Initialize substate dock widget from UI
     ui->substatesDockWidget->initializeFromUI();
     ui->substatesDockWidget->hide();  // Hidden by default until simulation data is loaded
+    createSubstatesPanelAction();
 
     setupConnections();
     configureButtons();
@@ -1521,12 +1522,30 @@ void MainWindow::clearActiveSubstates()
     activeSubstatesFor3D.clear();
 }
 
+void MainWindow::createSubstatesPanelAction()
+{
+    // The panel normally appears when a cell is clicked. When nothing is visible yet (a 3D model shows nothing
+    // until a substate is chosen to be drawn) there is nothing to click, so it can be opened from the menu too.
+    // The action of the dock widget is checked as long as the panel is visible, whichever way it was opened.
+    QAction* action = ui->substatesDockWidget->toggleViewAction();
+    action->setText(tr("Substate parameters"));
+    action->setToolTip(tr("Show the panel with the parameters of the substates (Min/Max, colours, what to draw)"));
+    action->setEnabled(false); // until a model is loaded
+
+    ui->menuView->insertAction(ui->actionGridLines, action);
+    ui->menuView->insertSeparator(ui->actionGridLines);
+
+    // Only a click of the user (not hiding by a click on the scene) keeps the panel open
+    connect(action, &QAction::triggered, this, [this](bool checked) { ui->substatesDockWidget->setKeptOpen(checked); });
+}
+
 void MainWindow::updateSubstateDockeWidget()
 {
     if (ui->substatesDockWidget && ui->sceneWidget->getSettingParameter())
     {
         auto settingParam = const_cast<SettingParameter*>(ui->sceneWidget->getSettingParameter());
         settingParam->initializeSubstateInfo();
+        ui->substatesDockWidget->toggleViewAction()->setEnabled(!settingParam->substateInfo.empty());
         // In a native 3D model the substates are drawn in the volume, in a 2D model they are altitudes
         ui->substatesDockWidget->setNative3DVolumeMode(ui->sceneWidget->isNative3DModel());
         ui->substatesDockWidget->updateSubstates(settingParam);

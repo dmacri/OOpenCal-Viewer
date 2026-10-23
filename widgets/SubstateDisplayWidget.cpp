@@ -285,7 +285,7 @@ void SubstateDisplayWidget::updateButtonState()
     {
         ui->use3dCheckBox->setToolTip(isEnabled
             ? tr("Draw this substate in the 3D volume, coloured by its value between the Min and Max colours.\n"
-                 "Cells with a value <= Min or > Max (or equal to \"No value\") are not drawn.\n"
+                 "A cell is drawn when Min < value <= Max (and the value is not the \"No value\"); Max itself is drawn.\n"
                  "When several substates are checked, the one higher in this panel hides the ones below it on a cell.")
             : tr("Set both Min and Max values to show this substate in the 3D volume"));
     }

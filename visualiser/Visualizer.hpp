@@ -826,8 +826,9 @@ bool Visualizer::drawWithVTK3DVolumeLayers(const Volume& p,
         }
         const auto low = makeShadeable(*lowColor);
         const auto high = makeShadeable(*highColor);
-        colors->AddRGBPoint(VolumeLayers::layerFirstScalar(k), toUnitColor(low.red), toUnitColor(low.green), toUnitColor(low.blue));
-        colors->AddRGBPoint(VolumeLayers::layerLastScalar(k), toUnitColor(high.red), toUnitColor(high.green), toUnitColor(high.blue));
+        const auto unit = [](int channel) { return toUnitColor(static_cast<std::uint8_t>(channel)); };
+        colors->AddRGBPoint(VolumeLayers::layerFirstScalar(k), unit(low.red), unit(low.green), unit(low.blue));
+        colors->AddRGBPoint(VolumeLayers::layerLastScalar(k), unit(high.red), unit(high.green), unit(high.blue));
 
         // Right below the first scalar of the layer the opacity is already the one of the layer, so that
         // the voxels of the layer get exactly their opacity and the "no value" scalars stay transparent
