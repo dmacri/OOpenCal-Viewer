@@ -48,47 +48,27 @@
 #include "widgets/GridWorldMapping.h"
 
 
-/** @brief Converts a color channel value to a normalized range [0, 1].
+/** @brief Converts a color channel (red, green, blue or alpha) from the OOpenCAL range [0, 255] to the VTK range [0, 1].
  *
- * This function is designed to be forward-compatible with upcoming changes in OOpenCal.
- * Currently, OOpenCal provides color values in the 0–255 integer range. VTK, however,
- * expects normalized double precision values in the 0–1 range.
+ * OOpenCAL stores every component of Color as std::uint8_t in the range [0, 255], while VTK expects normalized
+ * values in the range [0, 1]. The conversion is always a division by 255 - there is no second (already normalized)
+ * format, so a channel with value 1 means 1/255 (almost black), not 100% intensity.
  *
- * If the input value is greater than 1, it is assumed to be in the 0–255 range
- * and will be scaled down to [0, 1]. If the value is already in the [0, 1] range
- * (future OOpenCal format), it will be returned unchanged.
- *
- * @param channel The input color component (either in 0–255 or already in 0–1).
- * @return Normalized color value in the range [0, 1]. */
-inline double toUnitColor(double channel)
+ * @param channel The color component in the range [0, 255].
+ * @return Normalized value in the range [0, 1]. */
+inline double toUnitColor(std::uint8_t channel)
 {
-    // Backward compatibility: if value is > 1, assume 0–255 format and scale.
-    if (channel > 1.0)
-        return channel / 255.0;
-
-    // Already normalized (future format) — return as-is.
-    return channel;
+    return static_cast<double>(channel) / 255.0;
 }
 
 /** @brief Returns the opacity (0 = fully transparent, 1 = fully opaque) of a color returned by Cell::outputValue().
  *
- * The alpha channel of Color uses the 0–255 range (0 = transparent, 255 = opaque), the same convention that
- * the viewer itself uses for the colors it creates (e.g. Color(r, g, b, 255)).
- *
- * Backward compatibility: older versions of OOpenCAL's Cell.h declare the default alpha of Color as 0,
- * so every model written as Color(r, g, b) would be reported as fully transparent. When such a Cell.h is detected
- * (a Color created without alpha has alpha == 0) alpha == 0 is treated as "alpha not specified" = opaque.
- * In this legacy mode a nearly invisible cell can still be requested with alpha == 1.
- * With the current Cell.h (default alpha = 255) alpha is honored exactly, so Color(r, g, b, 0) is transparent. */
+ * The alpha channel of Color is in the range [0, 255], where 0 means transparent and 255 fully opaque.
+ * Color(r, g, b) created without alpha is fully opaque (the default alpha in OOpenCAL's Cell.h is 255),
+ * so only a color created with an explicit alpha, e.g. Color(255, 255, 255, 0), is transparent. */
 inline double toOpacity(const Color& color)
 {
-    static const bool legacyDefaultAlphaIsZero = (Color(0, 0, 0).getAlpha() == 0);
-
-    const std::uint8_t alpha = color.getAlpha();
-    if (legacyDefaultAlphaIsZero && alpha == 0)
-        return 1.0;
-
-    return alpha / 255.0;
+    return toUnitColor(color.getAlpha());
 }
 
 /** @brief Tells whether the per-cell RGBA colors of a poly data mapper contain a (partially) transparent cell.
