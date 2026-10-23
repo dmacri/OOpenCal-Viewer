@@ -230,3 +230,22 @@ target_include_directories(AppImagePathsTests PRIVATE
 )
 
 add_test(NAME AppImagePathsTests COMMAND AppImagePathsTests)
+
+# ============================================
+# Add test executable for the action plugin mechanism (std only: no Qt, no VTK)
+# ============================================
+add_executable(ActionApiTests
+    ActionApiTests.cpp
+    ${CMAKE_SOURCE_DIR}/plugins/ActionRegistry.cpp
+)
+
+target_link_libraries(ActionApiTests
+    GTest::gtest_main
+)
+
+target_include_directories(ActionApiTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/examples/trajectory_export_plugin
+)
+
+add_test(NAME ActionApiTests COMMAND ActionApiTests)

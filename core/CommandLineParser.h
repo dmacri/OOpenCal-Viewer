@@ -45,6 +45,9 @@ public:
     static constexpr const char ARG_METRICS_MODE[] = "--metricsMode";
     static constexpr const char ARG_AUTO_PLAY[] = "--autoPlay";
     static constexpr const char ARG_BUILD_PRECOMPILED_HEADER[] = "--buildPrecompiledHeader";
+    static constexpr const char ARG_RUN_ACTION[] = "--runAction";
+    static constexpr const char ARG_ACTION_PARAM[] = "--actionParam";
+    static constexpr const char ARG_LIST_ACTIONS[] = "--listActions";
 
     /** @brief Parse command-line arguments.
      * @param argc Number of arguments

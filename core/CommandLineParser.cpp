@@ -70,6 +70,17 @@ bool CommandLineParser::parse(int argc, char* argv[])
                   "(directory defaults to OOPENCAL_PRECOMPILED_HEADER_DIR)")
             .metavar("DIR");
 
+        // Handled by main() before the GUI is created (see ActionCommand.h); registered here so that they are listed in --help
+        program.add_argument(ARG_RUN_ACTION)
+            .help("Run an action of a loaded plugin on the simulation without GUI and exit")
+            .metavar("ID");
+        program.add_argument(ARG_ACTION_PARAM)
+            .help("Parameter of the action, name=value (can be repeated)")
+            .metavar("NAME=VALUE");
+        program.add_argument(ARG_LIST_ACTIONS)
+            .help("List actions of the loaded plugins and their parameters and exit")
+            .flag();
+
         try
         {
             program.parse_args(argc, argv);
@@ -175,6 +186,9 @@ void CommandLineParser::printHelp() const
               << std::format("  {: <{}} Enable performance metrics (default)\n", ARG_METRICS, WIDTH)
               << std::format("  {: <{}} Disable performance metrics reporting\n", ARG_DISABLE_METRICS, WIDTH)
               << std::format("  {: <{}} Build the precompiled header for model compilation and exit\n", ARG_BUILD_PRECOMPILED_HEADER, WIDTH)
+              << std::format("  {: <{}} Run an action of a plugin (without GUI), see --listActions\n", std::string(ARG_RUN_ACTION) + " ID", WIDTH)
+              << std::format("  {: <{}} Parameter of the action (can be repeated)\n", std::string(ARG_ACTION_PARAM) + " NAME=VALUE", WIDTH)
+              << std::format("  {: <{}} List actions of loaded plugins and exit\n", ARG_LIST_ACTIONS, WIDTH)
               << std::format("  {: <{}} Show this help message\n\n", "-h, --help", WIDTH)
               << "Examples:\n"
               << std::format("  {} /path/to/model/directory\n", appName)
