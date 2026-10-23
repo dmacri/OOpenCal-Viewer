@@ -635,6 +635,7 @@ MainWindow::MainWindow(QWidget* parent)
     // Initialize substate dock widget from UI
     ui->substatesDockWidget->initializeFromUI();
     ui->substatesDockWidget->hide();  // Hidden by default until simulation data is loaded
+    createSubstatesPanelAction();
 
     setupConnections();
     configureButtons();
@@ -1521,12 +1522,32 @@ void MainWindow::clearActiveSubstates()
     activeSubstatesFor3D.clear();
 }
 
+void MainWindow::createSubstatesPanelAction()
+{
+    // The panel normally appears when a cell is clicked. When nothing is visible yet (a 3D model shows nothing
+    // until a substate is chosen to be drawn) there is nothing to click, so it can be opened from the menu too.
+    // The action of the dock widget is checked as long as the panel is visible, whichever way it was opened.
+    QAction* action = ui->substatesDockWidget->toggleViewAction();
+    action->setText(tr("Substate parameters"));
+    action->setToolTip(tr("Show the panel with the parameters of the substates (Min/Max, colours, what to draw)"));
+    action->setEnabled(false); // until a model is loaded
+
+    ui->menuView->insertAction(ui->actionGridLines, action);
+    ui->menuView->insertSeparator(ui->actionGridLines);
+
+    // Only a click of the user (not hiding by a click on the scene) keeps the panel open
+    connect(action, &QAction::triggered, this, [this](bool checked) { ui->substatesDockWidget->setKeptOpen(checked); });
+}
+
 void MainWindow::updateSubstateDockeWidget()
 {
     if (ui->substatesDockWidget && ui->sceneWidget->getSettingParameter())
     {
         auto settingParam = const_cast<SettingParameter*>(ui->sceneWidget->getSettingParameter());
         settingParam->initializeSubstateInfo();
+        ui->substatesDockWidget->toggleViewAction()->setEnabled(!settingParam->substateInfo.empty());
+        // In a native 3D model the substates are drawn in the volume, in a 2D model they are altitudes
+        ui->substatesDockWidget->setNative3DVolumeMode(ui->sceneWidget->isNative3DModel());
         ui->substatesDockWidget->updateSubstates(settingParam);
 
         // TODO: GB: Do we really need to send this to MainWindow? Maybe SubstatesDockWidget can directly control SceneWidget?
@@ -2898,6 +2919,18 @@ void MainWindow::onRecentDirectoryTriggered()
 
 void MainWindow::apply3DSubstateSelection(const std::vector<std::string>& fieldNamesTopToBottom)
 {
+    if (ui->sceneWidget->isNative3DModel())
+    {
+        // Every cell of a native 3D model has its own place in 3D, so the checked substates are not heights:
+        // they are what the voxels of the volume are made of. There is no mode to switch, only to redraw.
+        WaitCursorGuard waitCursor("Updating 3D volume...");
+        activeSubstatesFor3D = fieldNamesTopToBottom;
+        ui->sceneWidget->setActiveSubstatesFor3D(fieldNamesTopToBottom);
+        ui->substatesDockWidget->setActiveSubstates(fieldNamesTopToBottom);
+        ui->sceneWidget->refreshVisualization();
+        return;
+    }
+
     if (fieldNamesTopToBottom.empty())
     {
         // Show wait cursor during view mode change
@@ -2992,6 +3025,14 @@ void MainWindow::onDeactivateRequested()
     
     // Uncheck all use2D checkboxes
     ui->substatesDockWidget->uncheckAllUse2DCheckboxes();
+
+    // The substates shown in the volume of a native 3D model are deactivated too
+    if (ui->sceneWidget->isNative3DModel())
+    {
+        ui->substatesDockWidget->uncheckAllUse3DCheckboxes();
+        ui->sceneWidget->setActiveSubstatesFor3D({});
+        activeSubstatesFor3D.clear();
+    }
     
     // Immediately refresh visualization to show the change
     ui->sceneWidget->refreshVisualization();

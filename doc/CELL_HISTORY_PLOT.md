@@ -6,8 +6,8 @@ over **all** simulation steps.
 
 ## How to use it
 
-1. Open a model and click a cell (in the 2D view, in the 3D view of a 2D model, or in a cross-section of
-   a 3D model).
+1. Open a model and click a cell (in the 2D view, in the 3D view of a 2D model, in a cross-section of
+   a 3D model, or in the complete volume of a native 3D model).
 2. In the *Substate Parameters* panel press **Plot over time...**.
 3. A window opens with the plot of one substate versus the step number:
    - choose the substate in the **Substate** combo box (the one highlighted in the panel is preselected),
@@ -50,8 +50,9 @@ shows the steps read so far.
 | Reading one cell at many steps | `ModelReader::readCellAcrossSteps()` in `data/ModelReader.hpp` |
 | Result type, number parsing, CSV | `visualiserProxy/CellHistory.h` |
 | Cell of a cross-section -> cell of the grid | `gridIndexFromSliceView()` in `visualiserProxy/ContiguousGrid.h` |
-| Entry point for the UI | `ISceneWidgetVisualizer::cellHistory()` |
+| Entry point for the UI | `ISceneWidgetVisualizer::cellHistory()` (displayed plane), `cellHistoryOfVolumeCell()` (cell clicked in the 3D volume) |
+| Cell of the 3D volume under the cursor | `visualiser/VolumePicking.h`, `ISceneWidgetVisualizer::pickNative3DVolumeCell()` |
 | Plot widget (`vtkChartXY`, VTK modules `ChartsCore` and `ViewsContext2D`) | `widgets/TimeSeriesPlot.*` |
 | Window | `widgets/CellHistoryDialog.*` |
 | Button and wiring | `widgets/SubstatesDockWidget.*` |
-| Tests | `tests/CellHistoryTests.cpp` |
+| Tests | `tests/CellHistoryTests.cpp`, `tests/VolumePickingTests.cpp` |

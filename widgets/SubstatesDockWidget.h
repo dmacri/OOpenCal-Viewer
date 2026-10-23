@@ -12,6 +12,7 @@
 #include <vector>
 #include <QDockWidget>
 #include "core/types.h" // StepIndex
+#include "visualiserProxy/ContiguousGrid.h" // GridCellIndex
 #include <QScrollArea>
 #include <QVBoxLayout>
 
@@ -59,6 +60,17 @@ public:
      * @param col Grid column index
      * @param visualizer Optional visualizer to get cell values from */
     void updateCellValues(SettingParameter* settingParameter, int row, int col, class ISceneWidgetVisualizer* visualizer = nullptr);
+
+    /** @brief Update cell values for a cell clicked in the complete 3D volume of a native 3D model.
+     *
+     *  Like updateCellValues(), but the cell is given by its position in the whole grid (row, column
+     *  and layer), not in the displayed plane: the volume is not a cross-section. The header shows
+     *  all three coordinates and the plot of the history follows the same cell.
+     *
+     *  @param settingParameter The setting parameter
+     *  @param cell Position of the cell in the whole 3D grid
+     *  @param visualizer Visualizer to get cell values from */
+    void updateVolumeCellValues(SettingParameter* settingParameter, const GridCellIndex& cell, class ISceneWidgetVisualizer* visualizer);
 
     /** @brief Save current parameter values to SettingParameter.
      * 
@@ -196,6 +208,25 @@ public slots:
     /// @brief Uncheck all use2D checkboxes. */
     void uncheckAllUse2DCheckboxes();
 
+    /** @brief Whether the panel stays open when the scene is clicked outside of any cell.
+     *
+     *  A panel opened by clicking a cell is hidden again by a click on the background. A panel opened from the
+     *  menu (View -> Substate parameters) is not: it is needed to set up the substates, e.g. when nothing is
+     *  visible yet to click on, and is closed from the menu or with its close button. */
+    bool isKeptOpen() const { return m_keptOpen; }
+
+    /// @brief Sets whether the panel stays open when the background of the scene is clicked (see isKeptOpen())
+    void setKeptOpen(bool keptOpen) { m_keptOpen = keptOpen; }
+
+    /** @brief Uncheck all "3D" checkboxes without notifying anybody (the caller redraws the scene itself). */
+    void uncheckAllUse3DCheckboxes();
+
+    /** @brief Whether the substates of a native 3D model are shown (see SubstateDisplayWidget::setNative3DVolumeMode()).
+     *
+     *  Applies to the widgets which exist now and to the ones created by updateSubstates() later.
+     *  @param enabled true for a native 3D model */
+    void setNative3DVolumeMode(bool enabled);
+
     /// @brief Informs about changes in substat colloring
     void onUseSubstateColorringRequested(const std::string& fieldName);
 
@@ -244,5 +275,8 @@ private:
     bool m_hasSelectedCell = false;  ///< A cell was clicked since the data were (re)loaded
     int m_selectedRow = 0;           ///< Row of the clicked cell in the displayed plane
     int m_selectedCol = 0;           ///< Column of the clicked cell in the displayed plane
+    bool m_keptOpen = false; ///< Opened from the menu, a click on the background does not hide it
+    bool m_native3DVolumeMode = false; ///< The substates are shown in a 3D volume, not as altitude
+    std::optional<GridCellIndex> m_selectedVolumeCell; ///< Set when the cell was clicked in the complete 3D volume (then it is the position in the whole grid)
     std::optional<StepIndex> m_currentStep;
 };
