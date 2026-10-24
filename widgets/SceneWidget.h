@@ -18,6 +18,7 @@
 #include <vtkTextMapper.h>
 
 #include "core/types.h"
+#include "data/StepTimeMap.h"
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
 #include "widgets/GridWorldMapping.h"
@@ -139,6 +140,23 @@ public:
     void setToolTipEnabled(bool enabled);
 
     /// @brief Get the current tooltip enabled state
+    /** @brief Choose how the simulated time is written under the step number.
+     *  @param pretty true: `1 d 2 h 3 min 4 s` (seconds roll over to minutes, hours and days),
+     *                false: plain seconds `93784 s`
+     *  @note Has an effect only when the model provides a time file (see StepTimeMap). */
+    void setPrettyTimeFormat(bool pretty);
+
+    bool getPrettyTimeFormat() const
+    {
+        return prettyTimeFormat;
+    }
+
+    /// @brief Mapping step -> simulated time of the loaded model (not available when the model has no `*-time.txt` file)
+    const StepTimeMap& getStepTimeMap() const
+    {
+        return stepTimeMap;
+    }
+
     bool getToolTipEnabled() const
     {
         return toolTipEnabled;
@@ -349,6 +367,11 @@ signals:
      *  @param totalSteps Total number of steps available */
     void totalNumberOfStepsReadFromConfigFile(StepIndex totalSteps);
 
+    /** @brief Signal emitted when the optional file with the simulated time of the steps exists, but can not be understood.
+     *  The viewer then shows the step number only.
+     *  @param message Description of the problem (with the line number) */
+    void stepTimeFileInvalid(const QString& message);
+
     /** @brief Signal emitted when available steps are read from config file.
      *  @param availableSteps Vector of available step numbers */
     void availableStepsReadFromConfigFile(std::vector<StepIndex> availableSteps);
@@ -417,6 +440,9 @@ protected:
     /// @brief Reads settings from a configuration file
     /// @param filename Path to the configuration file
     void readSettingsFromConfigFile(const std::string& filename);
+
+    /// @brief Reads the optional `<output_file_name>-time.txt` (needs settingParameter->outputFileName to be set)
+    void loadStepTimeMap();
 
     /// @brief Sets up the VTK scene, it is called when reading config file
     void setupVtkScene();
@@ -722,8 +748,17 @@ protected:
      *  @note: The type is vtkSmartPointer instead of auto-maintained vtkNew because we need to be able to reset the object */
     vtkSmartPointer<vtkActor> gridLinesOnSurfaceActor;
 
-    /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number in the scene.
+    /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number (and the simulated time, if known) in the scene.
     vtkNew<vtkTextMapper> singleLineTextStep;
+
+    /// @brief Simulated time of the steps of the loaded model (optional file `<output_file_name>-time.txt`)
+    StepTimeMap stepTimeMap;
+
+    /// @brief Whether the time is shown as "1 d 2 h 3 min 4 s" (true) or as plain seconds (false)
+    bool prettyTimeFormat = true;
+
+    /// @brief Second line of the step text for the current step, e.g. "Time: 1 h 0 min 0.0 s"; empty when the model has no time file
+    std::string timeLineForCurrentStep() const;
 
     /// @brief Rotation pivot in world coordinates: the scene centre (see updateCameraPivotFromBounds()).
     /// The focal point moves on zoom and pan; the pivot does not.

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <string>
 #include <vector>
 #include <vtkActor2D.h>
 #include <vtkCellArray.h>
@@ -245,8 +246,14 @@ public:
                                      int nRows,
                                      const GridWorldMapping::Bounds2D& sceneBounds,
                                      vtkActor2D* lineActor);
-    vtkTextProperty* buildStepLine(StepIndex step, vtkSmartPointer<vtkTextMapper> singleLineTextB);
-    vtkNew<vtkActor2D> buildStepText(StepIndex step, int font_size, vtkSmartPointer<vtkTextMapper> stepLineTextMapper, vtkSmartPointer<vtkRenderer> renderer);
+
+    /** @brief Text shown in the corner of the scene: "Step N" and, when @p timeLine is not empty, the simulated time under it.
+     *  @param step Current step
+     *  @param timeLine Optional second line, e.g. "Time: 1 h 0 min 0.0 s" (empty when the model has no time information) */
+    static std::string stepLabel(StepIndex step, const std::string& timeLine = {});
+
+    vtkTextProperty* buildStepLine(StepIndex step, vtkSmartPointer<vtkTextMapper> singleLineTextB, const std::string& timeLine = {});
+    vtkNew<vtkActor2D> buildStepText(StepIndex step, int font_size, vtkSmartPointer<vtkTextMapper> stepLineTextMapper, vtkSmartPointer<vtkRenderer> renderer, const std::string& timeLine = {});
 
 private:
     /// @brief Apply grid color settings to 3D grid lines actor.

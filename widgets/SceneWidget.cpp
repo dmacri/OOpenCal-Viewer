@@ -40,6 +40,7 @@
 #include "widgets/ColorSettings.h"
 #include "widgets/GridWorldMapping.h"
 #include "widgets/NumberFormatting.h"
+#include "widgets/TimeFormatting.h"
 #include "widgets/SubstatesDockWidget.h"
 #include "widgets/CustomInteractorStyle.h"
 #include "widgets/CameraPivotMath.h"
@@ -464,7 +465,7 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
     }
 
     // Update step number display
-    sceneWidgetVisualizerProxy->getVisualizer().buildStepLine(settingParameter->step, singleLineTextStep);
+    sceneWidgetVisualizerProxy->getVisualizer().buildStepLine(settingParameter->step, singleLineTextStep, timeLineForCurrentStep());
 }
 
 void SceneWidget::prepareStageWithCurrentNodeConfiguration()
@@ -921,6 +922,7 @@ void SceneWidget::readSettingsFromConfigFile(const std::string& filename)
         ConfigCategory* generalContext = config.getConfigCategory(ConfigConstants::CATEGORY_GENERAL);
         const std::string outputFileNameFromCfg = generalContext->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME)->getValue<std::string>();
         settingParameter->outputFileName = prepareOutputFileName(filename, outputFileNameFromCfg);
+        loadStepTimeMap();
         settingParameter->numberOfColumnX = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_COLUMNS)->getValue<int>();
         settingParameter->numberOfRowsY = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_ROWS)->getValue<int>();
         
@@ -1380,7 +1382,8 @@ void SceneWidget::renderVtkScene()
     sceneWidgetVisualizerProxy->getVisualizer().buildStepText(settingParameter->step,
                                                               settingParameter->font_size,
                                                               singleLineTextStep,
-                                                              renderer);
+                                                              renderer,
+                                                              timeLineForCurrentStep());
 
     updateCameraPivotFromBounds();
     // Reset camera to fit the new scene properly
@@ -1766,6 +1769,7 @@ void SceneWidget::clearScene()
 
     // Reset setting parameters to avoid stale data
     settingParameter = std::make_unique<SettingParameter>();
+    stepTimeMap = StepTimeMap{};
 
     // Reset VTK actors
     gridActor = vtkSmartPointer<vtkActor>::New();
@@ -1815,6 +1819,45 @@ void SceneWidget::refreshBackgroundColorFromSettings()
     const auto color = ColorSettings::instance().backgroundColor();
     renderer->SetBackground(toVtkColor(color).GetData());
     triggerRenderUpdate();
+}
+
+void SceneWidget::loadStepTimeMap()
+{
+    stepTimeMap = StepTimeMap(StepTimeMap::pathForOutput(settingParameter->outputFileName));
+
+    if (! stepTimeMap.errorMessage().empty())
+    {
+        std::cerr << stepTimeMap.errorMessage() << std::endl;
+        emit stepTimeFileInvalid(QString::fromStdString(stepTimeMap.errorMessage()));
+    }
+    else if (stepTimeMap.isAvailable())
+    {
+        std::cout << "Loaded simulated time for " << stepTimeMap.size() << " steps from "
+                  << stepTimeMap.filePath().string() << std::endl;
+    }
+}
+
+std::string SceneWidget::timeLineForCurrentStep() const
+{
+    if (! stepTimeMap.isAvailable() || ! settingParameter)
+        return {};
+
+    const auto seconds = stepTimeMap.secondsForStep(settingParameter->step);
+    return "Time: " + (seconds ? TimeFormatting::format(*seconds, prettyTimeFormat) : std::string("n/a"));
+}
+
+void SceneWidget::setPrettyTimeFormat(bool pretty)
+{
+    if (prettyTimeFormat == pretty)
+        return;
+
+    prettyTimeFormat = pretty;
+
+    if (settingParameter && stepTimeMap.isAvailable())
+    {
+        sceneWidgetVisualizerProxy->getVisualizer().buildStepLine(settingParameter->step, singleLineTextStep, timeLineForCurrentStep());
+        triggerRenderUpdate();
+    }
 }
 
 void SceneWidget::refreshStepNumberTextColorFromSettings()
@@ -2576,7 +2619,7 @@ void SceneWidget::initializeAndDraw3DSubstateVisualization()
     }
 
     // Update step number display
-    sceneWidgetVisualizerProxy->getVisualizer().buildStepLine(settingParameter->step, singleLineTextStep);
+    sceneWidgetVisualizerProxy->getVisualizer().buildStepLine(settingParameter->step, singleLineTextStep, timeLineForCurrentStep());
 
     // Trigger render update
     triggerRenderUpdate();

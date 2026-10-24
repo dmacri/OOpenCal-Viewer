@@ -101,10 +101,17 @@ void Visualizer::refreshBuildLoadBalanceLine(const std::vector<Line>& lines,
     lineActor->GetMapper()->Update();
 }
 
-vtkTextProperty* Visualizer::buildStepLine(StepIndex step, vtkSmartPointer<vtkTextMapper> singleLineTextB)
+std::string Visualizer::stepLabel(StepIndex step, const std::string& timeLine)
 {
-    std::string stepText = "Step " + std::to_string(step);
-    singleLineTextB->SetInput(stepText.c_str());
+    std::string label = "Step " + std::to_string(step);
+    if (! timeLine.empty())
+        label += "\n" + timeLine;
+    return label;
+}
+
+vtkTextProperty* Visualizer::buildStepLine(StepIndex step, vtkSmartPointer<vtkTextMapper> singleLineTextB, const std::string& timeLine)
+{
+    singleLineTextB->SetInput(stepLabel(step, timeLine).c_str());
 
     vtkTextProperty* singleLineTextProp = singleLineTextB->GetTextProperty();
     singleLineTextProp->SetVerticalJustificationToBottom();
@@ -118,9 +125,10 @@ vtkTextProperty* Visualizer::buildStepLine(StepIndex step, vtkSmartPointer<vtkTe
 vtkNew<vtkActor2D> Visualizer::buildStepText(StepIndex step,
                                              int font_size,
                                              vtkSmartPointer<vtkTextMapper> stepLineTextMapper,
-                                             vtkSmartPointer<vtkRenderer> renderer)
+                                             vtkSmartPointer<vtkRenderer> renderer,
+                                             const std::string& timeLine)
 {
-    stepLineTextMapper->SetInput(("Step " + std::to_string(step)).c_str());
+    stepLineTextMapper->SetInput(stepLabel(step, timeLine).c_str());
 
     auto textProp = stepLineTextMapper->GetTextProperty();
     textProp->SetFontSize(font_size);
