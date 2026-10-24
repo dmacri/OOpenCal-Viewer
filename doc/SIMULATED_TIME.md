@@ -8,6 +8,9 @@ Step 3500
 Time: 4 h 52 min 5.0 s
 ```
 
+The time line is a separate text under the step number, in the same color, written with a slightly smaller
+font (about 80% of the step font).
+
 ## The time file
 
 The model writes an optional text file `<output_file_name>-time.txt` into the same directory as the other
@@ -36,7 +39,7 @@ Behaviour:
 |---|---|
 | no time file | `Step N` only (as before) |
 | time file, the step is listed | `Step N` and `Time: ...` |
-| time file, the step is not listed | `Step N` and `Time: n/a` |
+| time file, the step is not listed | `Step N` and `Time: -` (nothing fails, it is a normal situation) |
 | time file that can not be parsed | a warning with the line number, `Step N` only |
 
 ## Pretty time format
@@ -58,5 +61,5 @@ are always shown so the text does not change its shape while the simulation is p
 
 - `data/StepTimeMap.h/.cpp` - reading of the file (Qt-free),
 - `widgets/TimeFormatting.h` - the formatting (Qt-free, locale independent),
-- `SceneWidget::setPrettyTimeFormat()` / `timeLineForCurrentStep()` - glue with the scene,
+- `SceneWidget::setPrettyTimeFormat()` / `timeLineForCurrentStep()` / `updateTimeText()` and `Visualizer::buildTimeText()` - glue with the scene,
 - tests: `tests/StepTimeMapTests.cpp`, `tests/TimeFormattingTests.cpp`.

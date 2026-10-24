@@ -101,17 +101,10 @@ void Visualizer::refreshBuildLoadBalanceLine(const std::vector<Line>& lines,
     lineActor->GetMapper()->Update();
 }
 
-std::string Visualizer::stepLabel(StepIndex step, const std::string& timeLine)
+vtkTextProperty* Visualizer::buildStepLine(StepIndex step, vtkSmartPointer<vtkTextMapper> singleLineTextB)
 {
-    std::string label = "Step " + std::to_string(step);
-    if (! timeLine.empty())
-        label += "\n" + timeLine;
-    return label;
-}
-
-vtkTextProperty* Visualizer::buildStepLine(StepIndex step, vtkSmartPointer<vtkTextMapper> singleLineTextB, const std::string& timeLine)
-{
-    singleLineTextB->SetInput(stepLabel(step, timeLine).c_str());
+    std::string stepText = "Step " + std::to_string(step);
+    singleLineTextB->SetInput(stepText.c_str());
 
     vtkTextProperty* singleLineTextProp = singleLineTextB->GetTextProperty();
     singleLineTextProp->SetVerticalJustificationToBottom();
@@ -125,10 +118,9 @@ vtkTextProperty* Visualizer::buildStepLine(StepIndex step, vtkSmartPointer<vtkTe
 vtkNew<vtkActor2D> Visualizer::buildStepText(StepIndex step,
                                              int font_size,
                                              vtkSmartPointer<vtkTextMapper> stepLineTextMapper,
-                                             vtkSmartPointer<vtkRenderer> renderer,
-                                             const std::string& timeLine)
+                                             vtkSmartPointer<vtkRenderer> renderer)
 {
-    stepLineTextMapper->SetInput(stepLabel(step, timeLine).c_str());
+    stepLineTextMapper->SetInput(("Step " + std::to_string(step)).c_str());
 
     auto textProp = stepLineTextMapper->GetTextProperty();
     textProp->SetFontSize(font_size);
@@ -147,6 +139,35 @@ vtkNew<vtkActor2D> Visualizer::buildStepText(StepIndex step,
     stepLineTextActor->GetPositionCoordinate()->SetValue(0.05, 0.85);
     renderer->AddViewProp(stepLineTextActor);
     return stepLineTextActor;
+}
+
+vtkNew<vtkActor2D> Visualizer::buildTimeText(int stepFontSize,
+                                             vtkSmartPointer<vtkTextMapper> timeLineTextMapper,
+                                             vtkActor2D* stepLineTextActor,
+                                             vtkSmartPointer<vtkRenderer> renderer)
+{
+    auto textProp = timeLineTextMapper->GetTextProperty();
+    textProp->SetFontSize(timeFontSize(stepFontSize));
+    textProp->SetFontFamilyToArial();
+    textProp->BoldOn();
+    textProp->ItalicOff();
+    textProp->ShadowOff();
+    textProp->SetVerticalJustificationToTop(); // the text hangs below its position, the step text stands above it
+
+    const QColor textColorFromSettings = ColorSettings::instance().textColor();
+    textProp->SetColor(toVtkColor(textColorFromSettings).GetData());
+
+    constexpr double gapInPixelsUnderStepText = 6.0;
+
+    vtkNew<vtkActor2D> timeLineTextActor;
+    timeLineTextActor->SetMapper(timeLineTextMapper);
+    // Offset (in pixels) from the position of the step text, so the line stays under it whatever the window size is
+    auto position = timeLineTextActor->GetPositionCoordinate();
+    position->SetCoordinateSystemToDisplay();
+    position->SetReferenceCoordinate(stepLineTextActor->GetPositionCoordinate());
+    position->SetValue(0.0, -gapInPixelsUnderStepText);
+    renderer->AddViewProp(timeLineTextActor);
+    return timeLineTextActor;
 }
 
 void Visualizer::drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor)

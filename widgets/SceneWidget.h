@@ -748,8 +748,17 @@ protected:
      *  @note: The type is vtkSmartPointer instead of auto-maintained vtkNew because we need to be able to reset the object */
     vtkSmartPointer<vtkActor> gridLinesOnSurfaceActor;
 
-    /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number (and the simulated time, if known) in the scene.
+    /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number in the scene.
     vtkNew<vtkTextMapper> singleLineTextStep;
+
+    /// @brief Text mapper for the simulated time shown under the step number (smaller font than the step).
+    vtkNew<vtkTextMapper> singleLineTextTime;
+
+    /// @brief Actor of the step number text (needed to place the time text under it); null until the scene is rendered
+    vtkSmartPointer<vtkActor2D> stepTextActor;
+
+    /// @brief Actor of the time text; null until the scene is rendered, hidden when the model has no time file
+    vtkSmartPointer<vtkActor2D> timeTextActor;
 
     /// @brief Simulated time of the steps of the loaded model (optional file `<output_file_name>-time.txt`)
     StepTimeMap stepTimeMap;
@@ -757,8 +766,13 @@ protected:
     /// @brief Whether the time is shown as "1 d 2 h 3 min 4 s" (true) or as plain seconds (false)
     bool prettyTimeFormat = true;
 
-    /// @brief Second line of the step text for the current step, e.g. "Time: 1 h 0 min 0.0 s"; empty when the model has no time file
+    /// @brief Text of the time line for the current step, e.g. "Time: 1 h 0 min 0.0 s", "Time: -" when the file does
+    ///        not list the step; empty when the model has no time file
     std::string timeLineForCurrentStep() const;
+
+    /// @brief Puts the time of the current step into the time text (and hides it when the model has no time file).
+    ///        Does not trigger rendering.
+    void updateTimeText();
 
     /// @brief Rotation pivot in world coordinates: the scene centre (see updateCameraPivotFromBounds()).
     /// The focal point moves on zoom and pan; the pivot does not.
