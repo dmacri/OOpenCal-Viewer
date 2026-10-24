@@ -1855,7 +1855,7 @@ std::string SceneWidget::timeLineForCurrentStep() const
         return {};
 
     const auto seconds = stepTimeMap.secondsForStep(settingParameter->step);
-    return "Time: " + (seconds ? TimeFormatting::format(*seconds, prettyTimeFormat) : std::string("-"));
+    return "Time: " + (seconds ? TimeFormatting::format(*seconds, prettyTimeFormat) : std::string("n/a"));
 }
 
 void SceneWidget::updateTimeText()

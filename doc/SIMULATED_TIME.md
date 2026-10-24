@@ -39,7 +39,7 @@ Behaviour:
 |---|---|
 | no time file | `Step N` only (as before) |
 | time file, the step is listed | `Step N` and `Time: ...` |
-| time file, the step is not listed | `Step N` and `Time: -` (nothing fails, it is a normal situation) |
+| time file, the step is not listed | `Step N` and `Time: n/a` (nothing fails, it is a normal situation) |
 | time file that can not be parsed | a warning with the line number, `Step N` only |
 
 ## Pretty time format

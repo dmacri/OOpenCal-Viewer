@@ -766,7 +766,7 @@ protected:
     /// @brief Whether the time is shown as "1 d 2 h 3 min 4 s" (true) or as plain seconds (false)
     bool prettyTimeFormat = true;
 
-    /// @brief Text of the time line for the current step, e.g. "Time: 1 h 0 min 0.0 s", "Time: -" when the file does
+    /// @brief Text of the time line for the current step, e.g. "Time: 1 h 0 min 0.0 s", "Time: n/a" when the file does
     ///        not list the step; empty when the model has no time file
     std::string timeLineForCurrentStep() const;
 
