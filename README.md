@@ -60,6 +60,7 @@ The generated documentation will be available in the `doc/html` directory.
 - **[doc/PLUGIN_ARCHITECTURE.md](doc/PLUGIN_ARCHITECTURE.md)** - Technical implementation details
 - **[doc/VIEW_MODES.md](doc/VIEW_MODES.md)** - 2D/3D view modes documentation
 - **[doc/CELL_HISTORY_PLOT.md](doc/CELL_HISTORY_PLOT.md)** - Plot of the substates of a clicked cell over the whole simulation
+- **[doc/SIMULATED_TIME.md](doc/SIMULATED_TIME.md)** - Showing the simulated time (optional `*-time.txt` file) next to the step number
 - **[doc/Build-VTK.md](doc/Build-VTK.md)** - VTK compilation instructions
 - **[examples/custom_model_plugin/](examples/custom_model_plugin/)** - Working example of a plugin
 - **[examples/model_header_example/](examples/model_header_example/)** - Example Header.txt configuration file

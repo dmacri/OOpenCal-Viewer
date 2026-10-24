@@ -248,6 +248,26 @@ public:
     vtkTextProperty* buildStepLine(StepIndex step, vtkSmartPointer<vtkTextMapper> singleLineTextB);
     vtkNew<vtkActor2D> buildStepText(StepIndex step, int font_size, vtkSmartPointer<vtkTextMapper> stepLineTextMapper, vtkSmartPointer<vtkRenderer> renderer);
 
+    /** @brief Builds the line with the simulated time, placed directly under the step text.
+     *
+     *  The text is a bit smaller than the step text (see timeFontSize()). It follows the position of @p stepLineTextActor,
+     *  so it stays under it when the window is resized.
+     *  @param stepFontSize Font size of the step text
+     *  @param timeLineTextMapper Mapper of the time text (its input is set later by the caller)
+     *  @param stepLineTextActor Actor of the step text, as returned by buildStepText()
+     *  @param renderer Renderer to which the new actor is added
+     *  @return The new actor (it is already added to the renderer) */
+    vtkNew<vtkActor2D> buildTimeText(int stepFontSize,
+                                     vtkSmartPointer<vtkTextMapper> timeLineTextMapper,
+                                     vtkActor2D* stepLineTextActor,
+                                     vtkSmartPointer<vtkRenderer> renderer);
+
+    /// @brief Font size of the time text for the given font size of the step text (about 80%, never below 8)
+    static int timeFontSize(int stepFontSize)
+    {
+        return std::max(8, static_cast<int>(std::lround(stepFontSize * 0.8)));
+    }
+
 private:
     /// @brief Apply grid color settings to 3D grid lines actor.
     /// @note This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
