@@ -4,6 +4,8 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <memory>
+#include <new>
 #include <string>
 #include <vector>
 #include "core/types.h"
@@ -270,10 +272,15 @@ TEST(ReadCellAcrossSteps, BinaryFormatSeeksStraightToTheCellRecord)
                 for (int row = 0; row < 2; ++row)
                     for (int col = 0; col < 3; ++col)
                     {
-                        HistoryCell cell;
-                        cell.a = expectedA(step, row, col, slice);
-                        cell.b = 1.25 * step;
-                        data.write(reinterpret_cast<const char*>(&cell), sizeof(cell));
+                        // Build the record in zeroed storage: HistoryCell has padding bytes (after `a` and after
+                        // `lastStep`) that a plain local object leaves uninitialised, and writing those bytes to
+                        // the file makes valgrind report "Syscall param write(buf) points to uninitialised byte(s)".
+                        alignas(HistoryCell) unsigned char record[sizeof(HistoryCell)] = {};
+                        auto* cell = new (record) HistoryCell;
+                        cell->a = expectedA(step, row, col, slice);
+                        cell->b = 1.25 * step;
+                        data.write(reinterpret_cast<const char*>(record), sizeof(record));
+                        std::destroy_at(cell);
                     }
         }
     }
