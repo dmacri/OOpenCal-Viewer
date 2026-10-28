@@ -112,7 +112,8 @@ copy_dlls "$PKG/compiler/bin" "${compiler_binaries[@]}"
 
 # ------------------------------------------------------------------------------------------------------------------------------
 echo "== Headers for compiling models"
-VTK_INCLUDE=$(find "$PREFIX/include" -maxdepth 1 -type d -name 'vtk-*' | sort -V | tail -n1)
+# MSYS2 installs the headers of VTK to include/vtk (older packaging and other distributions: include/vtk-<version>)
+VTK_INCLUDE=$(find "$PREFIX/include" -maxdepth 1 -type d \( -name 'vtk' -o -name 'vtk-*' \) | sort -V | tail -n1)
 [[ -n "$VTK_INCLUDE" ]] || { echo "error: VTK headers not found in $PREFIX/include" >&2; exit 1; }
 "$HERE/package-headers.sh" "$REPO" "$OOPENCAL_PARENT" "$VTK_INCLUDE" "$PREFIX/include" "$PKG" "$PKG/compiler/bin/g++.exe"
 

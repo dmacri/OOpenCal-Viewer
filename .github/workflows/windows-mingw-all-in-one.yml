@@ -52,7 +52,9 @@ jobs:
           msystem: UCRT64
           update: true
           # libogg, libtheora and gl2ps are optional dependencies of the VTK package, but the modules which this project uses
-          # (IOOggTheora, RenderingGL2PSOpenGL2) cannot work without them
+          # (IOOggTheora, RenderingGL2PSOpenGL2) cannot work without them.
+          # nlohmann-json: VTK-targets.cmake links its VTK::nlohmannjson target to nlohmann_json::nlohmann_json and CMake fails
+          # with "target was not found" when the package is not there (even though no used module needs it)
           install: >-
             git
             mingw-w64-ucrt-x86_64-gcc
@@ -64,6 +66,7 @@ jobs:
             mingw-w64-ucrt-x86_64-libtheora
             mingw-w64-ucrt-x86_64-gl2ps
             mingw-w64-ucrt-x86_64-libpng
+            mingw-w64-ucrt-x86_64-nlohmann-json
 
       - name: Show toolchain versions
         shell: msys2 {0}
