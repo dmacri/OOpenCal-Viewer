@@ -38,8 +38,10 @@ set "OOPENCAL_VIEWER_ROOT=%OOPENCAL_PACKAGE_ROOT_FS%/include/oopencal-viewer"
 set "VTK_INCLUDES=%OOPENCAL_PACKAGE_ROOT_FS%/include/vtk"
 
 rem Libraries which are linked into every model (a Windows DLL cannot have unresolved symbols):
-rem the import library of OOpenCal-Viewer.exe (models register themselves in it) and the import libraries of VTK (lib\plugin-libs.rsp)
-set "OOPENCAL_LINK_FLAGS=-L"%OOPENCAL_PACKAGE_ROOT_FS%/lib" -lOOpenCal-Viewer @"%OOPENCAL_PACKAGE_ROOT_FS%/lib/plugin-libs.rsp""
+rem the import library of OOpenCal-Viewer.exe (models register themselves in it) and the import libraries of VTK (lib\plugin-libs.rsp).
+rem -idirafter: the C and third party headers of compiler\include are also looked up at the very end of the include path, so they are
+rem found even when the relocated g++ does not search that directory by itself (a directory it does search is not added twice).
+set "OOPENCAL_LINK_FLAGS=-L"%OOPENCAL_PACKAGE_ROOT_FS%/lib" -lOOpenCal-Viewer @"%OOPENCAL_PACKAGE_ROOT_FS%/lib/plugin-libs.rsp" -idirafter "%OOPENCAL_PACKAGE_ROOT_FS%/compiler/include""
 
 exit /b 0
 

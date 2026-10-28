@@ -107,15 +107,38 @@ echo "   $(wc -l < "$file_list") files"
 tar -C "$PREFIX" -cf - -T "$file_list" | tar -C "$PKG/compiler" -xf -
 
 [[ -f "$PKG/compiler/bin/g++.exe" ]] || { echo "error: g++.exe is not in the package" >&2; exit 1; }
+for header in include/wchar.h include/stdio.h include/windows.h; do
+    [[ -f "$PKG/compiler/$header" ]] || { echo "error: compiler/$header was not copied from ${MINGW_PACKAGE_PREFIX}-headers" >&2; exit 1; }
+done
+compgen -G "$PKG/compiler/include/c++/*/iostream" > /dev/null || { echo "error: the libstdc++ headers were not copied" >&2; exit 1; }
 mapfile -t compiler_binaries < <(find "$PKG/compiler/bin" "$PKG/compiler/lib/gcc" -name '*.exe' 2>/dev/null)
 copy_dlls "$PKG/compiler/bin" "${compiler_binaries[@]}"
+
+# Where does the relocated compiler look for headers? (shown to make a failure below easy to understand)
+echo "   include search path of the packaged g++:"
+"$PKG/compiler/bin/g++.exe" -x c++ -E -v - < /dev/null 2>&1 > /dev/null | sed -n '/search starts here/,/End of search list/p' | sed 's/^/   | /' || true
 
 # ------------------------------------------------------------------------------------------------------------------------------
 echo "== Headers for compiling models"
 # MSYS2 installs the headers of VTK to include/vtk (older packaging and other distributions: include/vtk-<version>)
 VTK_INCLUDE=$(find "$PREFIX/include" -maxdepth 1 -type d \( -name 'vtk' -o -name 'vtk-*' \) | sort -V | tail -n1)
 [[ -n "$VTK_INCLUDE" ]] || { echo "error: VTK headers not found in $PREFIX/include" >&2; exit 1; }
-"$HERE/package-headers.sh" "$REPO" "$OOPENCAL_PARENT" "$VTK_INCLUDE" "$PREFIX/include" "$PKG" "$PKG/compiler/bin/g++.exe"
+# The headers which a model needs are found with the compiler of the build environment, whose include path is known to be right
+# (the packaged one is tested right below and by the smoke test)
+"$HERE/package-headers.sh" "$REPO" "$OOPENCAL_PARENT" "$VTK_INCLUDE" "$PREFIX/include" "$PKG" g++
+
+echo "== The packaged compiler preprocesses a model wrapper (with the flags of compiler-env.bat)"
+if ! "$PKG/compiler/bin/g++.exe" -std=c++23 -DBUILDING_DLL -fsyntax-only -idirafter "$PKG/compiler/include" \
+        -I"$PKG/include" -I"$PKG/include/OOpenCAL" -I"$PKG/include/oopencal-viewer" \
+        -I"$PKG/include/oopencal-viewer/visualiserProxy" -I"$PKG/include/oopencal-viewer/config" -I"$PKG/include/vtk" \
+        "$HERE/smoke-test/SmokePlugin.cpp" -I"$REPO/examples/custom_model_plugin" 2> "$file_list.syntax"; then
+    head -n 40 "$file_list.syntax"
+    echo "error: the packaged g++ cannot compile a model wrapper - see above (and the include search path printed earlier)" >&2
+    rm -f "$file_list.syntax"
+    exit 1
+fi
+rm -f "$file_list.syntax"
+echo "   ok"
 
 # ------------------------------------------------------------------------------------------------------------------------------
 echo "== Libraries which models are linked with"

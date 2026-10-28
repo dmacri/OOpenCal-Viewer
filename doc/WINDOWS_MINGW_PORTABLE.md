@@ -61,6 +61,10 @@ executable). A Windows DLL cannot be linked with unresolved symbols. Therefore, 
   `-L<package>/lib -lOOpenCal-Viewer @<package>/lib/plugin-libs.rsp` (the import libraries of the shipped VTK DLLs);
 * the default compilation flags on MinGW are `-shared -DBUILDING_DLL` (`CompilationConfig`), on MSVC `/LD ...` as before.
 
+The flags also contain `-idirafter <package>/compiler/include`: the C headers and third party headers of the package are looked up
+at the very end of the include path even if the relocated g++ does not search that directory by itself (a directory which it does
+search is not added twice).
+
 `OOPENCAL_LINK_FLAGS` is empty on other platforms, so nothing changes there.
 
 ## Checking a package
