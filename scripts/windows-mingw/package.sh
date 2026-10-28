@@ -12,7 +12,7 @@
 #
 # Layout of the result (OOpenCal-Viewer.bat is what the user double-clicks):
 #   OOpenCal-Viewer.bat, compiler-env.bat, README.txt, THIRD-PARTY-NOTICES.txt
-#   bin/       OOpenCal-Viewer.exe, Qt and VTK DLLs, runtime of the compiler, Qt plugins (bin/plugins)
+#   bin/       OOpenCal-Viewer.exe, Qt and VTK DLLs, runtime of the compiler, Qt plugins (bin/plugins, found through bin/qt.conf)
 #   compiler/  MinGW-w64 g++ with its headers and libraries (prefix layout: bin, lib, include, ...)
 #   include/   headers for compiling models: oopencal-viewer/, OOpenCAL/base/, vtk/
 #   lib/       libOOpenCal-Viewer.dll.a, import libraries of VTK, plugin-libs.rsp (see compiler-env.bat)
@@ -79,6 +79,9 @@ for dir in platforms styles imageformats iconengines generic networkinformation 
         cp -r "$QT_PLUGINS/$dir" "$PKG/bin/plugins/"
     fi
 done
+# Qt looks for its plugins relative to its own installation prefix, which does not exist in the package: say where they are
+# (the same thing which the MSVC package does)
+printf '[Paths]\r\nPrefix = .\r\nPlugins = plugins\r\n' > "$PKG/bin/qt.conf"
 [[ -f "$PKG/bin/plugins/platforms/qwindows.dll" ]] || { echo "error: qwindows.dll (Qt platform plugin) is missing" >&2; exit 1; }
 # the plugins have their own dependencies
 mapfile -t plugin_dlls < <(find "$PKG/bin/plugins" -name '*.dll')

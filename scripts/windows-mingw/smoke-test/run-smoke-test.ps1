@@ -56,6 +56,10 @@ function Invoke-Program([string]$File, [string]$Arguments, [int]$TimeoutSeconds 
     $stderr = $process.StandardError.ReadToEndAsync()
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
         $process.Kill()
+        [void]$process.WaitForExit(10000)
+        # what the program printed before it hung is the only hint
+        if ($stdout.Wait(5000)) { Write-Host '--- stdout'; Write-Host $stdout.Result }
+        if ($stderr.Wait(5000)) { Write-Host '--- stderr'; Write-Host $stderr.Result }
         Fail "$File did not finish in $TimeoutSeconds s"
     }
     [pscustomobject]@{ ExitCode = $process.ExitCode; StdOut = $stdout.Result; StdErr = $stderr.Result }
@@ -88,7 +92,10 @@ if (Get-Command g++ -ErrorAction SilentlyContinue | Where-Object { $_.Source -no
 # ---------------------------------------------------------------------------------------------------------------------------
 Write-Step '1. The program starts (--help, Qt offscreen)'
 $env:QT_QPA_PLATFORM = 'offscreen'
-$help = Invoke-Program (Join-Path $Package 'bin\OOpenCal-Viewer.exe') '--help' 120
+$env:QT_DEBUG_PLUGINS = '1'   # lists where Qt looks for its plugins: the first thing to read when the program does not start
+Get-ChildItem -LiteralPath (Join-Path $Package 'bin') -Filter 'qt.conf' | ForEach-Object { Write-Host ("qt.conf: " + (Get-Content -LiteralPath $_.FullName -Raw)) }
+$help = Invoke-Program (Join-Path $Package 'bin\OOpenCal-Viewer.exe') '--help' 60
+Remove-Item Env:QT_DEBUG_PLUGINS
 Write-Host $help.StdOut
 Write-Host $help.StdErr
 if ($help.ExitCode -ne 0) { Fail "OOpenCal-Viewer.exe --help exited with $($help.ExitCode) (0xC0000135 / STATUS_DLL_NOT_FOUND means a DLL is missing in the package)" }
