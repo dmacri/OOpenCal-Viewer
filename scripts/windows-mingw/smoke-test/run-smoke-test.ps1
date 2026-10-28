@@ -110,7 +110,7 @@ $plugin = ($work -replace '\\', '/') + '/SmokePlugin.dll'
 # The same command which CppModuleBuilder::buildCompileCommand() builds: flags, standard, include paths, VTK, source, output, link flags
 $compiler = $env:OOPENCAL_COMPILER
 $command = @(
-    '-shared -DBUILDING_DLL',
+    '-shared -DBUILDING_DLL -O1',
     '-std=c++23',
     "-I`"$env:OOPENCAL_DIR/OOpenCAL/base`"",
     "-I`"$env:OOPENCAL_DIR`"",

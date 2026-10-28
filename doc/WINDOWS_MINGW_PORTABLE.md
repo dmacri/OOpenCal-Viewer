@@ -59,7 +59,9 @@ executable). A Windows DLL cannot be linked with unresolved symbols. Therefore, 
   `--export-all-symbols`);
 * the compile command ends with `OOPENCAL_LINK_FLAGS` (`CppModuleBuilder::buildCompileCommand`):
   `-L<package>/lib -lOOpenCal-Viewer @<package>/lib/plugin-libs.rsp` (the import libraries of the shipped VTK DLLs);
-* the default compilation flags on MinGW are `-shared -DBUILDING_DLL` (`CompilationConfig`), on MSVC `/LD ...` as before.
+* the default compilation flags on MinGW are `-shared -DBUILDING_DLL -O1` (`CompilationConfig`), on MSVC `/LD ...` as before.
+  `-O1` is needed: VTK declares its array templates `extern` and the VTK DLLs do not export their inline members (e.g.
+  `vtkAOSDataArrayTemplate<double>::SetValue`), so without inlining the link fails with "undefined reference".
 
 The flags also contain `-idirafter <package>/compiler/include`: the C headers and third party headers of the package are looked up
 at the very end of the include path even if the relocated g++ does not search that directory by itself (a directory which it does
