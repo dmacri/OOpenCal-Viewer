@@ -53,9 +53,12 @@ bool isGeneratedModuleStale(const std::filesystem::path& moduleFile,
 
     const std::vector<fs::path> templateDependencies = {
         viewerRoot / "visualiserProxy/SceneWidgetVisualizerProxy.h",
+        viewerRoot / "visualiserProxy/ISceneWidgetVisualizer.h", // virtual methods: a plugin built against another set has another vtable
         viewerRoot / "data/ModelReader.hpp",
         viewerRoot / "data/CompressedStepReader.hpp",
         viewerRoot / "visualiser/Visualizer.hpp"
+        viewerRoot / "visualiser/VolumeLayers.h",
+        viewerRoot / "visualiser/VolumePicking.h"
     };
 
     return std::ranges::any_of(templateDependencies, [&](const fs::path& dependency)

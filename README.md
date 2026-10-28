@@ -62,6 +62,7 @@ The generated documentation will be available in the `doc/html` directory.
 - **[doc/PLUGIN_USER_GUIDE.md](doc/PLUGIN_USER_GUIDE.md)** - Complete guide to creating and using plugins
 - **[doc/PLUGIN_ARCHITECTURE.md](doc/PLUGIN_ARCHITECTURE.md)** - Technical implementation details
 - **[doc/VIEW_MODES.md](doc/VIEW_MODES.md)** - 2D/3D view modes documentation
+- **[doc/CELL_HISTORY_PLOT.md](doc/CELL_HISTORY_PLOT.md)** - Plot of the substates of a clicked cell over the whole simulation
 - **[doc/Build-VTK.md](doc/Build-VTK.md)** - VTK compilation instructions
 - **[examples/custom_model_plugin/](examples/custom_model_plugin/)** - Working example of a plugin
 - **[examples/model_header_example/](examples/model_header_example/)** - Example Header.txt configuration file

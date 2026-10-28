@@ -501,6 +501,9 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         }
 
         const auto colorSubstateInfos = getColorSubstateInfos();
+        // The substates checked with "Show in 3D volume" (only the volume uses them, not a cross-section)
+        sceneWidgetVisualizerProxy->setNative3DVolumeSubstates(sliceView ? std::vector<const SubstateInfo*>{}
+                                                                         : getNative3DVolumeSubstateInfos());
         sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY,
                                                 settingParameter->numberOfColumnX,
                                                 renderer,
@@ -680,6 +683,25 @@ std::vector<const SubstateInfo*> SceneWidget::getColorSubstateInfos()
     return colorSubstateInfos;
 }
 
+std::vector<const SubstateInfo*> SceneWidget::getNative3DVolumeSubstateInfos() const
+{
+    std::vector<const SubstateInfo*> layers;
+    if (!settingParameter || !isNative3DModel())
+        return layers;
+
+    for (const auto& fieldName : activeSubstatesFor3D)
+    {
+        const auto it = settingParameter->substateInfo.find(fieldName);
+        if (it == settingParameter->substateInfo.end())
+            continue;
+
+        const auto& info = it->second;
+        if (!std::isnan(info.minValue) && !std::isnan(info.maxValue) && info.minValue < info.maxValue)
+            layers.push_back(&info);
+    }
+    return layers;
+}
+
 std::vector<const SubstateInfo*> SceneWidget::get3DSubstateInfosTopToBottom() const
 {
     std::vector<const SubstateInfo*> heightSubstateInfos;
@@ -759,6 +781,7 @@ void SceneWidget::refreshVisualizationWithOptional3DSubstate()
         }
 
         const auto colorSubstateInfos = getColorSubstateInfos();
+        sceneWidgetVisualizerProxy->setNative3DVolumeSubstates(getNative3DVolumeSubstateInfos());
         sceneWidgetVisualizerProxy->refreshWindowsVTK(settingParameter->numberOfRowsY,
                                                       settingParameter->numberOfColumnX,
                                                       gridActor,
@@ -1285,6 +1308,17 @@ void SceneWidget::mouseCallbackFunction(vtkObject* caller, long unsigned int eve
 
     self->m_lastMousePickedGrid = false;
     self->m_lastMouseOnBasePlane = false;
+    self->m_lastVolumeCell.reset();
+
+    // 2b) The complete volume of a native 3D model is not a polygonal actor: its cells are found with the view ray
+    if (self->isNative3DVolumeDisplayed())
+    {
+        // While a button is held the user rotates or zooms the volume: no tooltip, no picking
+        if (QApplication::mouseButtons() == Qt::NoButton)
+            self->m_lastVolumeCell = self->pickVolumeCell(vtkX, vtkY);
+        self->updateVolumeToolTip(lastMousePos);
+        return;
+    }
 
     // 3) Use a picker restricted to the data grid actor. Picking any visible prop
     // would also hit ruler axes or load-balancing helper lines, which can make a
@@ -1636,9 +1670,18 @@ QString SceneWidget::cellValueAtThisPositionAsText() const
     if (! convertWorldToGridCoordinates(m_lastWorldPos.data(), row, col))
         return {};
 
+    return cellValuesAsText([this, row, col](const char* field)
+                            { return sceneWidgetVisualizerProxy->getCellStringEncoding(row, col, field); });
+}
+
+QString SceneWidget::cellValuesAsText(const std::function<std::string(const char*)>& valueOf) const
+{
+    if (!settingParameter)
+        return {};
+
     QString tooltipText;
     // Get default cell value
-    std::string cellValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col);
+    std::string cellValue = valueOf(nullptr);
     if (! cellValue.empty())
     {
         const std::string shownCellValue = NumberFormatting::withoutZeroFractionsInListIfNeeded(cellValue);
@@ -1652,7 +1695,7 @@ QString SceneWidget::cellValueAtThisPositionAsText() const
         tooltipText += "\nSubstates:";
         for (const auto& field : substateFields)
         {
-            std::string fieldValue = sceneWidgetVisualizerProxy->getCellStringEncoding(row, col, field.c_str());
+            std::string fieldValue = valueOf(field.c_str());
             if (!fieldValue.empty())
             {
                 // The model prints e.g. "1008.000000"; show "1008" when there is nothing after the separator
@@ -1662,6 +1705,47 @@ QString SceneWidget::cellValueAtThisPositionAsText() const
         }
     }
     return tooltipText;
+}
+
+bool SceneWidget::isNative3DVolumeDisplayed() const
+{
+    return sceneWidgetVisualizerProxy && isNative3DModel() && ! isNative3DSliceView();
+}
+
+std::optional<GridCellIndex> SceneWidget::pickVolumeCell(int vtkX, int vtkY) const
+{
+    if (! renderer || ! isNative3DVolumeDisplayed())
+        return std::nullopt;
+
+    // The view ray under the cursor: from the near to the far clipping plane
+    GridWorldMapping::Point3D onNearPlane;
+    GridWorldMapping::Point3D onFarPlane;
+    if (! unprojectDisplayPoint(renderer, vtkX, vtkY, 0.0, onNearPlane)
+        || ! unprojectDisplayPoint(renderer, vtkX, vtkY, 1.0, onFarPlane))
+    {
+        return std::nullopt;
+    }
+
+    return sceneWidgetVisualizerProxy->pickNative3DVolumeCell({onNearPlane.x, onNearPlane.y, onNearPlane.z},
+                                                              {onFarPlane.x, onFarPlane.y, onFarPlane.z});
+}
+
+void SceneWidget::updateVolumeToolTip(const QPoint& lastMousePos)
+{
+    if (! toolTipEnabled || ! renderer || ! renderWindow())
+        return;
+
+    if (! m_lastVolumeCell || ! sceneWidgetVisualizerProxy)
+    {
+        QToolTip::hideText();
+        return;
+    }
+
+    const GridCellIndex cell = *m_lastVolumeCell;
+    QString tooltipText = QString("Cell Coordinates: (X=%1, Y=%2, Z=%3)").arg(cell.column).arg(cell.row).arg(cell.layer);
+    tooltipText += cellValuesAsText([this, &cell](const char* field)
+                                    { return sceneWidgetVisualizerProxy->getVolumeCellStringEncoding(cell, field); });
+    QToolTip::showText(mapToGlobal(lastMousePos), tooltipText, this, QRect(lastMousePos, QSize(1, 1)), 0);
 }
 
 void SceneWidget::selectedStepParameter(StepIndex stepNumber)
@@ -2249,6 +2333,15 @@ void SceneWidget::mousePressEvent(QMouseEvent* event)
     // Call parent implementation first
     QVTKOpenGLNativeWidget::mousePressEvent(event);
 
+    // The complete 3D volume is rotated with the left button: the cell is taken when the button is released
+    if (isNative3DVolumeDisplayed())
+    {
+        m_volumePressPosition.reset();
+        if (event->button() == Qt::LeftButton && ! (event->modifiers() & Qt::ShiftModifier))
+            m_volumePressPosition = event->pos();
+        return;
+    }
+
     // Update substate dock widget if available (for left clicks without Shift)
     if (m_substatesDockWidget && sceneWidgetVisualizerProxy && event->button() == Qt::LeftButton && !(event->modifiers() & Qt::ShiftModifier))
     {
@@ -2266,9 +2359,48 @@ void SceneWidget::mousePressEvent(QMouseEvent* event)
         }
         else
         {
-            // Click was outside grid (on background) - hide the dock widget
-            m_substatesDockWidget->hide();
+            // Click was outside grid (on background) - hide the dock widget,
+            // unless the user opened it from the menu and wants to keep it
+            if (!m_substatesDockWidget->isKeptOpen())
+                m_substatesDockWidget->hide();
         }
+    }
+}
+
+void SceneWidget::mouseReleaseEvent(QMouseEvent* event)
+{
+    QVTKOpenGLNativeWidget::mouseReleaseEvent(event);
+
+    if (! m_volumePressPosition || event->button() != Qt::LeftButton)
+        return;
+
+    const QPoint pressPosition = *m_volumePressPosition;
+    m_volumePressPosition.reset();
+
+    if (! m_substatesDockWidget || ! sceneWidgetVisualizerProxy || ! isNative3DVolumeDisplayed())
+        return;
+
+    // A drag rotates the volume - that is not a click
+    constexpr int maxClickMovementInPixels = 4;
+    if ((event->pos() - pressPosition).manhattanLength() > maxClickMovementInPixels)
+        return;
+
+    auto* interactor = this->interactor();
+    if (! interactor)
+        return;
+    const auto cell = pickVolumeCell(interactor->GetEventPosition()[0], interactor->GetEventPosition()[1]);
+    if (cell)
+    {
+        m_lastVolumeCell = cell;
+        m_substatesDockWidget->updateVolumeCellValues(settingParameter.get(), *cell, sceneWidgetVisualizerProxy.get());
+        m_substatesDockWidget->show();
+    }
+    else
+    {
+        // Click on the background - hide the dock widget (like in the flat view),
+        // unless the user opened it from the menu and wants to keep it
+        if (!m_substatesDockWidget->isKeptOpen())
+            m_substatesDockWidget->hide();
     }
 }
 

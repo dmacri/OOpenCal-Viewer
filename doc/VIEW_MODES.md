@@ -64,6 +64,53 @@ The OOpenCal-Viewer now supports switching between **2D** and **3D** view modes,
   - **Right-click + drag**: Zoom
   - **Scroll wheel**: Zoom in/out
 
+### Clicking a cell of a native 3D model
+
+A model with more than one Z plane (`number_of_slices` > 1) is drawn as a **volume**. Like in the 2D view,
+the *Substate Parameters* panel opens when you **click a cell** of the volume:
+
+- The cell is the **first visible cell along the line of sight** under the cursor, i.e. the one you see
+  there. Cells with a transparent value (the lowest value of the colour range) cannot be clicked, and
+  neither can the empty planes inserted by the **Z spacing** option.
+- The panel header shows all three coordinates, e.g. `Cell: (x=47, y=53, z=59)`, because in the volume
+  there is no displayed plane they could refer to. **Plot over time...** plots exactly this cell.
+- Hovering the mouse over the volume shows a ToolTip with the coordinates and the values of the cell.
+  No ToolTip is shown while a mouse button is held (rotating, panning, zooming).
+- Because the left button rotates the volume, the cell is taken when the button is **released**, and only
+  if the mouse has not been dragged (more than a few pixels) in between. A click on the background hides
+  the panel, unless it was opened from the menu (see below).
+- In a cross-section of a native 3D model the click works as before (the panel shows the position in the
+  displayed plane).
+
+### Substates in the volume of a native 3D model
+
+Every cell of a native 3D model already has its own place in 3D and its own value of every substate, so
+"Use as 3D altitude" (a height, as in a 2D model) makes no sense there. In a native 3D model the checkbox of
+a substate in the *Substate Parameters* panel is **Show in 3D volume** instead (it is enabled once both Min
+and Max are set):
+
+- A checked substate is drawn **in the volume**: every cell with a value is a voxel, coloured by the
+  **intensity** of the value, i.e. by where it lies between Min and Max, from the Min colour to the Max
+  colour of the substate (the *Colors* buttons). Without colours of its own a substate is coloured like the
+  model colours its lowest and highest value (including the transparency of those colours), or - when the
+  model does not tell them apart - by a default gradient which differs from substate to substate.
+- A cell is drawn when **Min < value <= Max** (and the value is not the *No value* of the substate); otherwise
+  it has no value and is transparent. Min is the background, Max itself is still drawn.
+- **Several substates** can be checked, all of them are drawn. Where more than one has a value in the same
+  cell, only the **highest one in the panel is shown** - drag the substates to change their order. A cell
+  where the highest substate has no value shows the next one.
+- Without any substate checked the volume is drawn as before (by the first substate used for coloring, or by
+  the default cell value). **Deactivate Substate** unchecks them all.
+- Changing Min, Max, the colours or the order redraws the volume. The substates shown in the volume do not
+  affect a cross-section, which is coloured with *Use substate for coloring*.
+- Clicking or hovering a voxel shows the values of all substates of that cell (see above), also of those
+  which are not shown.
+- **Opening the panel without a cell to click:** until a substate is chosen the volume can be completely
+  transparent, so there may be nothing to click. Use **View -> Substate parameters**: it shows the panel
+  (with the substates and their Min/Max/colours) without selecting a cell. The panel opened this way stays
+  open when the background of the scene is clicked and is closed from the same menu item or with its close
+  button.
+
 ## Technical Details
 
 ### Camera Behavior

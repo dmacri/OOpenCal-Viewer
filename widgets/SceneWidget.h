@@ -4,7 +4,11 @@
 
 #pragma once
 
+#include <functional>
+#include <optional>
+#include <string>
 #include <QMouseEvent>
+#include <QPoint>
 #include <QTimer>
 #include <QToolTip>
 
@@ -523,6 +527,24 @@ protected:
     /// @brief Returns part of ToolTip for specific position (it contains cell value with substates)
     QString cellValueAtThisPositionAsText() const;
 
+    /** @brief Returns part of ToolTip with the cell value and the substates of a cell, whatever way it was picked.
+     *  @param valueOf returns the string encoding of the cell for a substate name (nullptr: the default value) */
+    QString cellValuesAsText(const std::function<std::string(const char*)>& valueOf) const;
+
+    /** @brief Whether the complete volume of a native 3D model is displayed (not a cross-section of it).
+     *
+     *  The volume is not a polygonal actor, so its cells are picked with the view ray (see pickVolumeCell()). */
+    bool isNative3DVolumeDisplayed() const;
+
+    /** @brief Cell of the displayed 3D volume under a display position.
+     *  @param vtkX X of the cursor in VTK display coordinates (origin: bottom-left)
+     *  @param vtkY Y of the cursor in VTK display coordinates (origin: bottom-left)
+     *  @return the first visible cell along the view ray, nothing if the cursor is not over any of them */
+    std::optional<GridCellIndex> pickVolumeCell(int vtkX, int vtkY) const;
+
+    /// @brief Shows (or hides) the ToolTip with the coordinates and the values of the volume cell under the cursor
+    void updateVolumeToolTip(const QPoint& lastMousePos);
+
     /** @brief Convert world coordinates to grid indices.
      * 
      * Converts VTK world coordinates to grid row and column indices.
@@ -625,8 +647,22 @@ protected:
      * @param event The mouse event */
     void mousePressEvent(QMouseEvent* event) override;
 
+    /** @brief Handle mouse release events: a click in the complete 3D volume shows the substates of the cell.
+     *
+     *  The volume is rotated with the left button, so (unlike in the flat view) the cell is not taken on
+     *  the press but on the release, and only when the cursor has not been dragged in between.
+     *
+     *  @param event The mouse event */
+    void mouseReleaseEvent(QMouseEvent* event) override;
+
     /// @brief Returns color substate infos
     std::vector<const SubstateInfo*> getColorSubstateInfos();
+
+    /** @brief Substates to draw in the volume of a native 3D model, the one on top of the panel first.
+     *
+     *  These are the substates checked with "Show in 3D volume" which can be drawn (Min and Max set).
+     *  Empty for a model which is not a native 3D model. */
+    std::vector<const SubstateInfo*> getNative3DVolumeSubstateInfos() const;
 
     /// @brief Get active 3D altitude substate infos in dock display order (top-to-bottom).
     std::vector<const SubstateInfo*> get3DSubstateInfosTopToBottom() const;
@@ -701,6 +737,12 @@ protected:
     /** @brief Whether m_lastWorldPos lies on the flat base plane under the 3D height surface (the "chessboard"):
      *         the cursor was above the grid but not above the surface. Reset together with m_lastMousePickedGrid. */
     bool m_lastMouseOnBasePlane = false;
+
+    /** @brief Cell of the 3D volume under the cursor (set by the last mouse move, only in the complete 3D volume view). */
+    std::optional<GridCellIndex> m_lastVolumeCell;
+
+    /** @brief Position of the left button press in the complete 3D volume view, to tell a click from a rotation. */
+    std::optional<QPoint> m_volumePressPosition;
 
     /// @brief VTK renderer for the scene: This renderer is responsible for rendering the 3D scene.
     vtkNew<vtkRenderer> renderer;
