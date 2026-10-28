@@ -10,6 +10,8 @@
 
 #include "widgets/RulerLabelFit.h"
 
+class vtkTextMapper;
+
 /** @brief Ruler axis that keeps its tick labels from overlapping when the scene is zoomed out.
  *
  *  A plain vtkAxisActor2D draws the same 5-8 labels whatever the camera distance and sizes their
@@ -119,6 +121,18 @@ private:
     /** Builds the axis for @p labelFactor and measures the labels into `current`. */
     void buildLayout(vtkViewport* viewport, double labelFactor);
     std::vector<RulerLabelFit::LabelBox> measureLabelBoxes(vtkViewport* viewport);
+
+    /** The text mappers of the labels built last (NumberOfLabelsBuilt of them).
+     *
+     *  Hides the difference between VTK versions: up to 9.5 the mappers are a protected array of
+     *  vtkAxisActor2D, in 9.6 they are private and have to be taken from GetLabelMappers(). */
+    std::vector<vtkTextMapper*> labelMappers();
+
+    /** Lower-left corner (viewport pixels) of label @p index, as vtkAxisActor2D placed it.
+     *
+     *  VTK 9.6 made the label actors private, so there the position is computed exactly like
+     *  vtkAxisActor2D::BuildAxis() does it. */
+    void labelCorner(vtkViewport* viewport, int index, double corner[2]);
     void publish(const Layout& layout, std::size_t stride);
 
     /** The end of the axis that carries the origin of the scale, i.e. the smaller label value. */

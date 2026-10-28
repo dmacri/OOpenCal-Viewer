@@ -5,9 +5,13 @@
 
 #include <vtkActor2D.h>
 #include <vtkCoordinate.h>
+#include <vtkNew.h>
 #include <vtkObjectFactory.h>
 #include <vtkTextMapper.h>
+#include <vtkPoints.h>
+#include <vtkPolyData.h>
 #include <vtkTextProperty.h>
+#include <vtkVersion.h>
 #include <vtkViewport.h>
 #include <vtkWindow.h>
 
@@ -72,7 +76,7 @@ int RulerAxisActor2D::windowDpi(vtkViewport* viewport)
 
 bool RulerAxisActor2D::canFit(vtkViewport* viewport)
 {
-    return AutoFitLabels && LabelVisibility && LabelTextProperty && viewport->GetVTKWindow();
+    return AutoFitLabels && LabelVisibility && GetLabelTextProperty() && viewport->GetVTKWindow();
 }
 
 void RulerAxisActor2D::BuildAxis(vtkViewport* viewport)
@@ -132,7 +136,7 @@ RulerAxisActor2D::FitStamp RulerAxisActor2D::stampWith(vtkViewport* viewport, Ru
     stamp.pixels[6] = windowDpi(viewport);
 
     stamp.modifiedTimes[0] = GetMTime();
-    stamp.modifiedTimes[1] = LabelTextProperty->GetMTime();
+    stamp.modifiedTimes[1] = GetLabelTextProperty()->GetMTime();
 
     if (peer)
     {
@@ -145,7 +149,7 @@ RulerAxisActor2D::FitStamp RulerAxisActor2D::stampWith(vtkViewport* viewport, Ru
         stamp.peerPixels[3] = peerEnd[1];
 
         stamp.modifiedTimes[2] = peer->GetMTime();
-        stamp.modifiedTimes[3] = peer->LabelTextProperty->GetMTime();
+        stamp.modifiedTimes[3] = peer->GetLabelTextProperty()->GetMTime();
     }
     return stamp;
 }
@@ -208,22 +212,80 @@ void RulerAxisActor2D::buildLayout(vtkViewport* viewport, double labelFactor)
     vtkAxisActor2D::BuildAxis(viewport);
 
     current.factor = labelFactor;
-    current.fontSize = NumberOfLabelsBuilt > 0 ? LabelMappers[0]->GetTextProperty()->GetFontSize() : 0;
+    const std::vector<vtkTextMapper*> mappers = labelMappers();
+    current.fontSize = mappers.empty() ? 0 : mappers.front()->GetTextProperty()->GetFontSize();
     current.fontPixels = current.fontSize * windowDpi(viewport) / 72.0; // a point is 1/72 inch
     current.boxes = measureLabelBoxes(viewport);
 }
 
+std::vector<vtkTextMapper*> RulerAxisActor2D::labelMappers()
+{
+    std::vector<vtkTextMapper*> mappers;
+    const int count = std::max(NumberOfLabelsBuilt, 0);
+    mappers.reserve(static_cast<std::size_t>(count));
+
+#if VTK_VERSION_NUMBER >= VTK_VERSION_CHECK(9, 6, 0)
+    const auto all = GetLabelMappers(); // a copy of the vector of smart pointers
+    for (int i = 0; i < count && static_cast<std::size_t>(i) < all.size(); ++i)
+        mappers.push_back(all[static_cast<std::size_t>(i)]);
+#else
+    for (int i = 0; i < count; ++i)
+        mappers.push_back(LabelMappers[i]);
+#endif
+    return mappers;
+}
+
+void RulerAxisActor2D::labelCorner(vtkViewport* viewport, int index, double corner[2])
+{
+#if VTK_VERSION_NUMBER >= VTK_VERSION_CHECK(9, 6, 0)
+    corner[0] = corner[1] = 0.0;
+
+    // The same steps as the end of vtkAxisActor2D::BuildAxis(): the first point of the axis is its
+    // start, then come two points per tick, and the label hangs off the outer one.
+    const vtkIdType tickId = static_cast<vtkIdType>(NumberOfMinorTicks + 1) * index;
+    const vtkIdType endPointId = tickId * 2 + 2;
+    vtkPoints* points = Axis->GetPoints();
+    if (! points || endPointId >= points->GetNumberOfPoints())
+        return;
+
+    double tick[3];
+    points->GetPoint(endPointId, tick);
+
+    // vtkAxisActor2D::GetAxisAngle() is private.
+    const int* start = PositionCoordinate->GetComputedViewportValue(viewport);
+    const int* end = Position2Coordinate->GetComputedViewportValue(viewport);
+    const double deltaX = end[0] - start[0];
+    const double deltaY = end[1] - start[1];
+    const double theta = (deltaX == 0.0 && deltaY == 0.0) ? 0.0 : std::atan2(deltaY, deltaX);
+
+    // SetOffsetPosition() only needs an actor to put the result into.
+    vtkNew<vtkActor2D> scratch;
+    vtkAxisActor2D::SetOffsetPosition(tick, theta, LastMaxLabelSize[0], LastMaxLabelSize[1], TickOffset, scratch);
+    const double* position = scratch->GetPosition();
+    corner[0] = position[0];
+    corner[1] = position[1];
+#else
+    (void) viewport;
+    const double* position = LabelActors[index]->GetPosition();
+    corner[0] = position[0];
+    corner[1] = position[1];
+#endif
+}
+
 std::vector<LabelBox> RulerAxisActor2D::measureLabelBoxes(vtkViewport* viewport)
 {
-    std::vector<LabelBox> boxes;
-    boxes.reserve(static_cast<std::size_t>(NumberOfLabelsBuilt));
+    const std::vector<vtkTextMapper*> mappers = labelMappers();
 
-    for (int i = 0; i < NumberOfLabelsBuilt; ++i)
+    std::vector<LabelBox> boxes;
+    boxes.reserve(mappers.size());
+
+    for (std::size_t i = 0; i < mappers.size(); ++i)
     {
         // vtkAxisActor2D positions every label by its lower-left corner.
-        const double* corner = LabelActors[i]->GetPosition();
+        double corner[2];
+        labelCorner(viewport, static_cast<int>(i), corner);
         int size[2] = { 0, 0 };
-        LabelMappers[i]->GetSize(viewport, size);
+        mappers[i]->GetSize(viewport, size);
 
         boxes.push_back({ corner[0], corner[1], corner[0] + size[0], corner[1] + size[1] });
     }
@@ -235,11 +297,12 @@ void RulerAxisActor2D::publish(const Layout& layout, std::size_t stride)
     // vtkAxisActor2D draws every label that has a text, so a hidden label is an empty one. The
     // ticks stay, which is what makes the remaining labels still readable as a scale.
     const Anchor anchor = labelAnchor();
-    const std::size_t count = static_cast<std::size_t>(NumberOfLabelsBuilt);
+    const std::vector<vtkTextMapper*> mappers = labelMappers();
+    const std::size_t count = mappers.size();
     for (std::size_t i = 0; i < count; ++i)
     {
         if (! isShown(i, count, stride, anchor))
-            LabelMappers[i]->SetInput("");
+            mappers[i]->SetInput("");
     }
 
     fittedFontSize = layout.fontSize;
