@@ -16,13 +16,22 @@
 
 #pragma once
 
+#include <array>
+#include <optional>
 #include <string>
 #include <vector>
+#include <vtkAbstractVolumeMapper.h>
+#include <vtkDataArray.h>
+#include <vtkImageData.h>
+#include <vtkPiecewiseFunction.h>
+#include <vtkPointData.h>
 #include <vtkVolume.h>
+#include <vtkVolumeProperty.h>
 #include "ISceneWidgetVisualizer.h"
 #include "data/ModelReader.hpp"
 #include "visualiserProxy/ContiguousGrid.h"
 #include "visualiser/Visualizer.hpp"
+#include "visualiser/VolumePicking.h"
 
 struct Line;
 struct SettingParameter;
@@ -126,7 +135,8 @@ public:
                                            renderer,
                                            nativeVolumeActor,
                                            colorSubstateInfos,
-                                           nativeVolumeZGap);
+                                           nativeVolumeZGap,
+                                           nativeVolumeLayerPointers());
             return;
         }
 
@@ -161,7 +171,8 @@ public:
                                            nativeVolumeRenderer,
                                            nativeVolumeActor,
                                            colorSubstateInfos,
-                                           nativeVolumeZGap);
+                                           nativeVolumeZGap,
+                                           nativeVolumeLayerPointers());
             return;
         }
         visualiser.refreshWindowsVTK(p, nRows, nCols, gridActor, colorSubstateInfos);
@@ -424,12 +435,8 @@ public:
                             const std::vector<std::string>& fields,
                             const CellHistoryProgress& progress = {}) override
     {
-        CellHistory history;
-        history.fields = fields;
-        history.values.assign(fields.size(), {});
-
         if (viewRow < 0 || viewCol < 0)
-            return history;
+            return emptyHistory(fields);
 
         // Position of the cell in the whole grid (in a cross-section the view is only one plane of it)
         GridCellIndex index{static_cast<std::size_t>(viewRow), static_cast<std::size_t>(viewCol), 0};
@@ -439,7 +446,7 @@ public:
             if (static_cast<std::size_t>(viewRow) >= slice.rowCount() ||
                 static_cast<std::size_t>(viewCol) >= slice.columnCount())
             {
-                return history;
+                return emptyHistory(fields);
             }
             index = gridIndexFromSliceView(nativeSliceAxis,
                                            nativeSliceIndex,
@@ -447,6 +454,130 @@ public:
                                            static_cast<std::size_t>(viewRow),
                                            static_cast<std::size_t>(viewCol));
         }
+        return readCellHistory(sp, index, fields, progress);
+    }
+
+    CellHistory cellHistoryOfVolumeCell(const SettingParameter& sp,
+                                        const GridCellIndex& cell,
+                                        const std::vector<std::string>& fields,
+                                        const CellHistoryProgress& progress = {}) override
+    {
+        if (! isInsideGrid(cell))
+            return emptyHistory(fields);
+        return readCellHistory(sp, cell, fields, progress);
+    }
+
+    void setNative3DVolumeSubstates(const std::vector<const SubstateInfo*>& layersTopToBottom) override
+    {
+        nativeVolumeLayers.clear();
+        for (const SubstateInfo* info : layersTopToBottom)
+        {
+            if (info)
+                nativeVolumeLayers.push_back(*info);
+        }
+    }
+
+    std::optional<GridCellIndex> pickNative3DVolumeCell(const std::array<double, 3>& rayStart,
+                                                        const std::array<double, 3>& rayEnd) const override
+    {
+        if (p.layerCount() <= 1 || nativeSliceEnabled || ! nativeVolumeActor)
+            return std::nullopt;
+
+        // What is on the screen is the image the volume was drawn from, so the pick sees exactly the voxels
+        // which are visible: those whose scalar has a non-zero opacity in the transfer function.
+        vtkAbstractVolumeMapper* mapper = nativeVolumeActor->GetMapper();
+        auto* image = mapper ? vtkImageData::SafeDownCast(mapper->GetDataSetInput()) : nullptr;
+        vtkVolumeProperty* property = nativeVolumeActor->GetProperty();
+        vtkPiecewiseFunction* opacity = property ? property->GetScalarOpacity() : nullptr;
+        vtkDataArray* scalars = image ? image->GetPointData()->GetScalars() : nullptr;
+        if (! scalars || ! opacity)
+            return std::nullopt;
+
+        int dims[3];
+        image->GetDimensions(dims);
+        constexpr double minimalPickableOpacity = 0.1;
+        const auto isVisible = [&](int x, int y, int z)
+        {
+            const vtkIdType index = (static_cast<vtkIdType>(z) * dims[1] + y) * dims[0] + x;
+            return opacity->GetValue(scalars->GetComponent(index, 0)) >= minimalPickableOpacity;
+        };
+
+        const auto voxel = VolumePicking::firstVisibleVoxelOnRay({rayStart[0], rayStart[1], rayStart[2]},
+                                                                 {rayEnd[0], rayEnd[1], rayEnd[2]},
+                                                                 {dims[0], dims[1], dims[2]},
+                                                                 isVisible);
+        if (! voxel)
+            return std::nullopt;
+
+        const auto cell = VolumePicking::voxelToCell(*voxel, static_cast<int>(p.rowCount()), nativeVolumeZGap);
+        if (! cell || ! isInsideGrid(*cell))
+            return std::nullopt;
+        return cell;
+    }
+
+    std::string getVolumeCellStringEncoding(const GridCellIndex& cell, const char* details = nullptr) const override
+    {
+        if (! isInsideGrid(cell))
+            return {};
+        return p.get(cell.row, cell.column, cell.layer).stringEncoding(details);
+    }
+
+    std::string getCellStringEncoding(int row, int col, const char* details = nullptr) const override
+    {
+        if (nativeSliceEnabled && p.layerCount() > 1)
+        {
+            const ContiguousGridSliceView<Cell> slice(p, nativeSliceAxis, nativeSliceIndex);
+            if (row < 0 || col < 0 ||
+                row >= static_cast<int>(slice.rowCount()) ||
+                col >= static_cast<int>(slice.columnCount()))
+            {
+                return {};
+            }
+            return slice[static_cast<std::size_t>(row)][static_cast<std::size_t>(col)]
+                .stringEncoding(details);
+        }
+
+        if (row < 0 || col < 0 || row >= static_cast<int>(p.size()))
+            return {};
+        if (col >= static_cast<int>(p[row].size()))
+            return {};
+        
+        return p[row][col].stringEncoding(details);
+    }
+
+private:
+    std::vector<const SubstateInfo*> nativeVolumeLayerPointers() const
+    {
+        std::vector<const SubstateInfo*> pointers;
+        pointers.reserve(nativeVolumeLayers.size());
+        for (const SubstateInfo& info : nativeVolumeLayers)
+            pointers.push_back(&info);
+        return pointers;
+    }
+
+    /// Substates shown in the volume, the one on top of the panel first (see setNative3DVolumeSubstates())
+    std::vector<SubstateInfo> nativeVolumeLayers;
+
+    static CellHistory emptyHistory(const std::vector<std::string>& fields)
+    {
+        CellHistory history;
+        history.fields = fields;
+        history.values.assign(fields.size(), {});
+        return history;
+    }
+
+    bool isInsideGrid(const GridCellIndex& cell) const
+    {
+        return cell.row < p.rowCount() && cell.column < p.columnCount() && cell.layer < p.layerCount();
+    }
+
+    /// Read the values of the given substates of the cell at @p index of the whole grid at all available steps
+    CellHistory readCellHistory(const SettingParameter& sp,
+                                const GridCellIndex& index,
+                                const std::vector<std::string>& fields,
+                                const CellHistoryProgress& progress)
+    {
+        CellHistory history = emptyHistory(fields);
         history.row = static_cast<int>(index.row);
         history.column = static_cast<int>(index.column);
         history.slice = static_cast<int>(index.layer);
@@ -485,30 +616,6 @@ public:
         return history;
     }
 
-    std::string getCellStringEncoding(int row, int col, const char* details = nullptr) const override
-    {
-        if (nativeSliceEnabled && p.layerCount() > 1)
-        {
-            const ContiguousGridSliceView<Cell> slice(p, nativeSliceAxis, nativeSliceIndex);
-            if (row < 0 || col < 0 ||
-                row >= static_cast<int>(slice.rowCount()) ||
-                col >= static_cast<int>(slice.columnCount()))
-            {
-                return {};
-            }
-            return slice[static_cast<std::size_t>(row)][static_cast<std::size_t>(col)]
-                .stringEncoding(details);
-        }
-
-        if (row < 0 || col < 0 || row >= static_cast<int>(p.size()))
-            return {};
-        if (col >= static_cast<int>(p[row].size()))
-            return {};
-        
-        return p[row][col].stringEncoding(details);
-    }
-
-private:
     const std::string m_modelName;
 
     Visualizer visualiser;           ///< The visualizer instance for rendering the model

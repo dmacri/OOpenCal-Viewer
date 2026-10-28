@@ -60,6 +60,13 @@ void SubstatesDockWidget::initializeFromUI()
     m_plotHistoryButton = findChild<QPushButton*>("plotHistoryButton");
     if (m_plotHistoryButton)
         connect(m_plotHistoryButton, &QPushButton::clicked, this, &SubstatesDockWidget::onPlotHistoryClicked);
+
+    // Once the panel is closed (menu, close button) it is an ordinary panel again
+    connect(this, &QDockWidget::visibilityChanged, this, [this](bool visible)
+            {
+                if (!visible)
+                    m_keptOpen = false;
+            });
 }
 
 void SubstatesDockWidget::setCurrentStep(StepIndex step)
@@ -72,6 +79,9 @@ void SubstatesDockWidget::setCurrentStep(StepIndex step)
 void SubstatesDockWidget::resetSelectedCell()
 {
     m_hasSelectedCell = false;
+    m_selectedVolumeCell.reset();
+    if (auto headerLabel = findChild<QLabel*>("cellHeaderLabel"))
+        headerLabel->setText(m_native3DVolumeMode ? "Cell: (x=-, y=-, z=-)" : "Cell: (x=-, y=-)");
     if (m_plotHistoryButton)
         m_plotHistoryButton->setEnabled(false);
     if (m_historyDialog)
@@ -107,11 +117,9 @@ void SubstatesDockWidget::showHistoryOfSelectedCell(bool showWindow)
         return ! progressDialog.wasCanceled();
     };
 
-    const CellHistory history = m_currentVisualizer->cellHistory(*m_currentSettingParameter,
-                                                                 m_selectedRow,
-                                                                 m_selectedCol,
-                                                                 fields,
-                                                                 progress);
+    const CellHistory history = m_selectedVolumeCell
+        ? m_currentVisualizer->cellHistoryOfVolumeCell(*m_currentSettingParameter, *m_selectedVolumeCell, fields, progress)
+        : m_currentVisualizer->cellHistory(*m_currentSettingParameter, m_selectedRow, m_selectedCol, fields, progress);
     progressDialog.close();
 
     if (history.empty())
@@ -179,6 +187,8 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
             widget->setNoValueEnabled(it->second.noValueEnabled);
         }
 
+        widget->setNative3DVolumeMode(m_native3DVolumeMode);
+
         // Connect signals
         connect(widget, &SubstateDisplayWidget::use3dStateChanged, this, &SubstatesDockWidget::onUse3DStateChanged);
         connect(widget, &SubstateDisplayWidget::useSubstateColorringRequested, this, &SubstatesDockWidget::onUseSubstateColorringRequested);
@@ -241,6 +251,7 @@ void SubstatesDockWidget::updateCellValues(SettingParameter* settingParameter, i
     m_hasSelectedCell = true;
     m_selectedRow = row;
     m_selectedCol = col;
+    m_selectedVolumeCell.reset();
     if (m_plotHistoryButton)
         m_plotHistoryButton->setEnabled(true);
 
@@ -263,6 +274,38 @@ void SubstatesDockWidget::updateCellValues(SettingParameter* settingParameter, i
         {
             widget->setCellValue(cellValue);
         }
+    }
+
+    // When the history window is open it follows the clicked cell
+    showHistoryOfSelectedCell(false);
+}
+
+void SubstatesDockWidget::updateVolumeCellValues(SettingParameter* settingParameter, const GridCellIndex& cell, class ISceneWidgetVisualizer* visualizer)
+{
+    if (!settingParameter || !visualizer)
+        return;
+
+    m_currentVisualizer = visualizer;
+
+    // Remember the cell for the plot of its history
+    m_hasSelectedCell = true;
+    m_selectedRow = static_cast<int>(cell.row);
+    m_selectedCol = static_cast<int>(cell.column);
+    m_selectedVolumeCell = cell;
+    if (m_plotHistoryButton)
+        m_plotHistoryButton->setEnabled(true);
+
+    // The whole 3D grid: all three coordinates identify the cell (x=col, y=row, z=layer)
+    if (auto headerLabel = findChild<QLabel*>("cellHeaderLabel"))
+    {
+        headerLabel->setText(QString("Cell: (x=%1, y=%2, z=%3)").arg(cell.column).arg(cell.row).arg(cell.layer));
+    }
+
+    for (auto& pair : m_substateWidgets)
+    {
+        const std::string cellValue = visualizer->getVolumeCellStringEncoding(cell, pair.first.c_str());
+        if (!cellValue.empty())
+            pair.second->setCellValue(cellValue);
     }
 
     // When the history window is open it follows the clicked cell
@@ -603,6 +646,22 @@ void SubstatesDockWidget::uncheckAllUse2DCheckboxes()
     {
         widget->setUse2DChecked(false);
     }
+}
+
+void SubstatesDockWidget::uncheckAllUse3DCheckboxes()
+{
+    for (auto& [name, widget] : m_substateWidgets)
+    {
+        QSignalBlocker blocker(widget);
+        widget->setUse3DChecked(false);
+    }
+}
+
+void SubstatesDockWidget::setNative3DVolumeMode(bool enabled)
+{
+    m_native3DVolumeMode = enabled;
+    for (auto& [name, widget] : m_substateWidgets)
+        widget->setNative3DVolumeMode(enabled);
 }
 
 void SubstatesDockWidget::dragEnterEvent(QDragEnterEvent* event)
