@@ -706,6 +706,16 @@ void MainWindow::connectMenuActions()
         ui->actionShowToolTip->setChecked(showToolTip);
     }
     connect(ui->actionShowToolTip, &QAction::toggled, this, &MainWindow::onToolTipToggled);
+
+    {
+        // Simulated time: written as days/hours/minutes/seconds by default; the choice is persisted
+        const QSettings settings;
+        const bool prettyTime = settings.value("time/prettyFormat", true).toBool();
+        ui->actionPrettyTimeFormat->setChecked(prettyTime);
+        ui->sceneWidget->setPrettyTimeFormat(prettyTime);
+    }
+    connect(ui->actionPrettyTimeFormat, &QAction::toggled, this, &MainWindow::onPrettyTimeFormatToggled);
+    connect(ui->sceneWidget, &SceneWidget::stepTimeFileInvalid, this, &MainWindow::onStepTimeFileInvalid);
     connect(ui->actionShow_reduction, &QAction::triggered, this, &MainWindow::onShowReductionRequested);
 
     // View mode actions
@@ -1091,6 +1101,22 @@ void MainWindow::onToolTipToggled(bool checked)
     {
         ui->sceneWidget->setToolTipEnabled(checked);
     }
+}
+
+void MainWindow::onPrettyTimeFormatToggled(bool checked)
+{
+    QSettings settings;
+    settings.setValue("time/prettyFormat", checked);
+
+    ui->sceneWidget->setPrettyTimeFormat(checked);
+}
+
+void MainWindow::onStepTimeFileInvalid(const QString& message)
+{
+    QMessageBox::warning(this,
+                         tr("Invalid time file"),
+                         tr("The file with the simulated time of the steps can not be used, only the step number will be shown.\n\n%1")
+                             .arg(message));
 }
 
 void MainWindow::syncToolTipCheckbox()

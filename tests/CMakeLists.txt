@@ -266,6 +266,36 @@ target_include_directories(AppImagePathsTests PRIVATE
 add_test(NAME AppImagePathsTests COMMAND AppImagePathsTests)
 
 # ============================================
+# Add test executable for the simulated time (step -> seconds file and its formatting, no Qt/VTK)
+# ============================================
+add_executable(StepTimeMapTests
+    StepTimeMapTests.cpp
+    ${CMAKE_SOURCE_DIR}/data/StepTimeMap.cpp
+)
+
+target_link_libraries(StepTimeMapTests
+    GTest::gtest_main
+)
+
+target_include_directories(StepTimeMapTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME StepTimeMapTests COMMAND StepTimeMapTests)
+
+add_executable(TimeFormattingTests
+    TimeFormattingTests.cpp
+)
+
+target_link_libraries(TimeFormattingTests
+    GTest::gtest_main
+)
+
+target_include_directories(TimeFormattingTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME TimeFormattingTests COMMAND TimeFormattingTests)
 # Add test executable for ReductionManager (Qt Core only)
 # ============================================
 add_executable(ReductionManagerTests

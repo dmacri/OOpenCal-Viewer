@@ -851,6 +851,7 @@
     <addaction name="actionCellRendering"/>
     <addaction name="actionPausePlaybackOnRotation"/>
     <addaction name="actionShowToolTip"/>
+    <addaction name="actionPrettyTimeFormat"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuModel"/>
@@ -1089,6 +1090,20 @@
    </property>
    <property name="toolTip">
     <string>Show/hide tooltip when hovering over the VTK widget</string>
+   </property>
+  </action>
+  <action name="actionPrettyTimeFormat">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Pretty Time Format</string>
+   </property>
+   <property name="toolTip">
+    <string>Show the simulated time as days, hours, minutes and seconds instead of plain seconds (used when the model provides a *-time.txt file)</string>
    </property>
   </action>
   <action name="actionSilentMode">
