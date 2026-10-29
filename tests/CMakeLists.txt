@@ -264,3 +264,23 @@ target_include_directories(AppImagePathsTests PRIVATE
 )
 
 add_test(NAME AppImagePathsTests COMMAND AppImagePathsTests)
+
+# ============================================
+# Add test executable for ReductionManager (Qt Core only)
+# ============================================
+add_executable(ReductionManagerTests
+    ReductionManagerTests.cpp
+    ${CMAKE_SOURCE_DIR}/data/ReductionManager.cpp
+)
+
+target_link_libraries(ReductionManagerTests
+    GTest::gtest_main
+    ${QT_TARGET_PREFIX}::Core
+)
+
+target_include_directories(ReductionManagerTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/data
+)
+
+add_test(NAME ReductionManagerTests COMMAND ReductionManagerTests)

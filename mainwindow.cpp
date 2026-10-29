@@ -2671,6 +2671,7 @@ void MainWindow::initializeReductionManager(const QString& configFileName, std::
     {
         reductionManager.reset();
         ui->actionShow_reduction->setEnabled(false);
+        ui->reductionWidget->showError(QString::fromStdString(e.what()));
         std::cerr << "Error initializing ReductionManager: " << e.what() << std::endl;
     }
 }

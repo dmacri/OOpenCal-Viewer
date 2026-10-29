@@ -6,8 +6,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <limits>
 #include <optional>
+#include <string>
 #include <vector>
 #include <vtkActor2D.h>
 #include <vtkCellArray.h>
@@ -128,6 +130,27 @@ public:
                              const std::vector<const SubstateInfo*>& volumeLayersTopToBottom = {});
 
 private:
+    /** @brief Warns (once per Visualizer) that the native 3D volume has no value range.
+     *
+     * Called when Cell::stringEncoding() could not be parsed as a number for any cell. Every value is then 0,
+     * so min == max == 0 and the volume is drawn fully transparent - without this message the scene just looks empty.
+     * @param fieldName substate name passed to stringEncoding() (nullptr when no substate is selected)
+     * @param sample text returned by stringEncoding() for the first cell
+     * @param cellCount number of cells in the volume */
+    void warnVolumeValuesNotNumeric(const char* fieldName, const std::string& sample, std::size_t cellCount)
+    {
+        if (warnedVolumeValuesNotNumeric)
+            return;
+        warnedVolumeValuesNotNumeric = true;
+        std::cerr << "WARNING: native 3D volume is drawn fully transparent: Cell::stringEncoding("
+                  << (fieldName ? std::string("\"") + fieldName + "\"" : std::string("nullptr"))
+                  << ") returned text that is not a number for all " << cellCount << " cells (first cell: '" << sample
+                  << "'). The model must return a plain number from stringEncoding() for the substate it is coloured by."
+                  << std::endl;
+    }
+
+    bool warnedVolumeValuesNotNumeric = false; ///< see warnVolumeValuesNotNumeric()
+
     /// @brief Draws the volume from the chosen substates (see the last parameter of drawWithVTK3DVolume())
     /// @return false when none of the layers can be drawn (no usable Min/Max): nothing was drawn then
     template<class Volume>
@@ -530,6 +553,9 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
     Color minColor(255, 255, 255);
     Color maxColor(255, 255, 255);
 
+    std::size_t unparsableCells = 0; // cells whose stringEncoding() is not a number (their value is taken as 0)
+    std::string firstUnparsableText;
+
     for (int slice = 0; slice < nSlices; ++slice)
     {
         for (int row = 0; row < nRows; ++row)
@@ -537,13 +563,17 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
             for (int col = 0; col < nCols; ++col)
             {
                 double value = 0.0;
+                std::string encoded;
                 try
                 {
-                    value = std::stod(p.get(row, col, slice).stringEncoding(fieldName));
+                    encoded = p.get(row, col, slice).stringEncoding(fieldName);
+                    value = std::stod(encoded);
                 }
                 catch (...)
                 {
                     value = 0.0;
+                    if (unparsableCells++ == 0)
+                        firstUnparsableText = encoded;
                 }
 
                 const Color color = p.get(row, col, slice).outputValue(fieldName, gvm);
@@ -574,6 +604,12 @@ void Visualizer::drawWithVTK3DVolume(const Volume& p,
 
     if (!std::isfinite(minValue) || !std::isfinite(maxValue))
         return;
+
+    const std::size_t cellCount = static_cast<std::size_t>(nSlices) * nRows * nCols;
+    if (unparsableCells == cellCount)
+    {
+        warnVolumeValuesNotNumeric(fieldName, firstUnparsableText, cellCount);
+    }
 
     // Empty planes between the data planes must be fully transparent. The opacity transfer function
     // below maps `minValue` to opacity 0 (and, when all values are equal, `minValue - 1`).
