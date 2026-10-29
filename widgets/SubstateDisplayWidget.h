@@ -141,6 +141,16 @@ public:
     void setUse2DChecked(bool checked);
 
     /// @brief Check if "Use as 3D" checkbox is checked.
+    /** @brief Switches the "3D" checkbox between the two meanings it has.
+     *
+     *  In a 2D model the checkbox is "Use as 3D altitude": the values become a height and several checked
+     *  substates are stacked. In a native 3D model every cell already has its own place in 3D and its own value
+     *  of every substate, so a height makes no sense: the checkbox is "Show in 3D volume" - the substate is
+     *  drawn in the volume, coloured by the value, and the substate higher in the panel hides the ones below
+     *  it on a cell where it has a value. The altitude scale is not used then and is hidden.
+     *  @param enabled true for a native 3D model */
+    void setNative3DVolumeMode(bool enabled);
+
     /// @return True if checkbox is checked
     bool isUse3DChecked() const;
 
@@ -291,6 +301,7 @@ private:
     QPoint m_dragStartPosition;
 
     Ui::SubstateDisplayWidget *ui;
+    bool m_native3DVolumeMode = false; ///< The "3D" checkbox means "Show in 3D volume" (see setNative3DVolumeMode())
     
     // Current colors (empty string = inactive)
     std::string m_minColor;

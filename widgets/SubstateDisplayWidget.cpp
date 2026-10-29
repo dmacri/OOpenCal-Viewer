@@ -68,6 +68,8 @@ SubstateDisplayWidget::SubstateDisplayWidget(const std::string& fieldName, QWidg
     
     setUpSpinBoxWithNoValue(ui->minSpinBox);
     setUpSpinBoxWithNoValue(ui->maxSpinBox);
+    // A no-value is usually negative (-1, -9999): the default range of a spin box starts at 0, which turned it into 0
+    setUpSpinBoxWithNoValue(ui->noValueDoubleSpinBox);
 
     auto altitudeScaleValidator = new QDoubleValidator(0.0, 1e9, 6, ui->altitudeScaleLineEdit);
     altitudeScaleValidator->setNotation(QDoubleValidator::StandardNotation);
@@ -281,7 +283,15 @@ void SubstateDisplayWidget::updateButtonState()
     
     // Update "Use as 3D" checkbox state
     ui->use3dCheckBox->setEnabled(isEnabled);
-    if (isEnabled)
+    if (m_native3DVolumeMode)
+    {
+        ui->use3dCheckBox->setToolTip(isEnabled
+            ? tr("Draw this substate in the 3D volume, coloured by its value between the Min and Max colours.\n"
+                 "A cell is drawn when Min < value <= Max (and the value is not the \"No value\"); Max itself is drawn.\n"
+                 "When several substates are checked, the one higher in this panel hides the ones below it on a cell.")
+            : tr("Set both Min and Max values to show this substate in the 3D volume"));
+    }
+    else if (isEnabled)
     {
         ui->use3dCheckBox->setToolTip("Use this field as a 3D altitude layer. Multiple checked fields are stacked in dock order.");
     }
@@ -657,6 +667,18 @@ void SubstateDisplayWidget::startDrag()
     
     // Execute the drag operation
     drag->exec(Qt::MoveAction);
+}
+
+void SubstateDisplayWidget::setNative3DVolumeMode(bool enabled)
+{
+    m_native3DVolumeMode = enabled;
+    ui->use3dCheckBox->setText(enabled ? tr("Show in 3D volume") : tr("Use as 3D altitude"));
+
+    // A height has no meaning in a volume
+    ui->altitudeScaleLabel->setVisible(!enabled);
+    ui->altitudeScaleLineEdit->setVisible(!enabled);
+
+    updateButtonState();
 }
 
 bool SubstateDisplayWidget::isUse3DChecked() const

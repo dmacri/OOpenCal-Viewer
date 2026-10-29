@@ -184,6 +184,9 @@ private:
     void enterNoConfigurationFileMode();
 
     void updateSubstateDockeWidget();
+
+    /// @brief Adds "Substate parameters" to the View menu, to show the panel without clicking a cell
+    void createSubstatesPanelAction();
     void switchToModel(const QString &modelName);
     void recreateModelMenuActions();
     void createViewModeActionGroup();

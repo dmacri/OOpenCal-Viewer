@@ -67,6 +67,9 @@ private:
      *  @return True if parsing was successful */
     bool parseLine(const QString& line, int& stepNumber, std::map<QString, QString>& values) const;
 
+    /** @brief Explains in one sentence why parseLine() rejected the line (for the error message). */
+    static QString describeParseFailure(const QString& line);
+
     std::map<int, ReductionData> reductionDataByStep; ///< Map of step number to reduction data
     bool dataLoaded = false;                          ///< Flag indicating if data was loaded successfully
     QString errorMessage;                             ///< Error message if loading failed

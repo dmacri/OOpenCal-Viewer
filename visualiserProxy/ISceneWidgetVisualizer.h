@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <array>
+#include <optional>
 #include <string>
 #include <vector>
 #include <vtkRenderer.h>
@@ -106,6 +108,72 @@ public:
         static_cast<void>(sp);
         static_cast<void>(viewRow);
         static_cast<void>(viewCol);
+        static_cast<void>(fields);
+        static_cast<void>(progress);
+        return {};
+    }
+
+    /** @brief Choose the substates drawn in the volume of a native 3D model ("Show in 3D volume").
+     *
+     *  Every cell of a native 3D model has its own value of every substate, so the substates are not heights
+     *  but what the voxels are made of. A voxel shows the highest of the layers which has a value in the cell
+     *  (see VolumeLayers.h), coloured by the intensity of the value. With no layers the volume is coloured as
+     *  before (by the first coloring substate). The choice is remembered until it is changed and is used by
+     *  the next drawWithVTK() / refreshWindowsVTK().
+     *
+     *  @param layersTopToBottom substates to show, the one on top of the Substate Parameters panel first
+     *         (the values are copied, the pointers need not outlive the call) */
+    virtual void setNative3DVolumeSubstates(const std::vector<const SubstateInfo*>& layersTopToBottom)
+    {
+        static_cast<void>(layersTopToBottom);
+    }
+
+    /** @brief Find the cell of the native 3D volume under a view ray.
+     *
+     *  The complete volume is not a polygonal actor, so it cannot be picked with a vtkPropPicker. The ray (two
+     *  points of the line under the cursor, the first one nearer to the camera) is followed through the voxels
+     *  of the volume and the first one which is not transparent is returned. The default implementation
+     *  (visualizers without a native 3D volume) finds nothing.
+     *
+     *  @param rayStart point under the cursor on the near clipping plane (world coordinates)
+     *  @param rayEnd   point under the cursor on the far clipping plane (world coordinates)
+     *  @return the cell in the whole grid, nothing if the ray misses the volume or the volume is not displayed
+     *          (e.g. a cross-section is shown) */
+    virtual std::optional<GridCellIndex> pickNative3DVolumeCell(const std::array<double, 3>& rayStart,
+                                                                const std::array<double, 3>& rayEnd) const
+    {
+        static_cast<void>(rayStart);
+        static_cast<void>(rayEnd);
+        return std::nullopt;
+    }
+
+    /** @brief String encoding of a cell given by its position in the whole 3D grid.
+     *  @param cell    row, column and layer (Z plane) of the cell
+     *  @param details optional field name, like in getCellStringEncoding()
+     *  @return the encoding, or an empty string for a cell outside of the grid */
+    virtual std::string getVolumeCellStringEncoding(const GridCellIndex& cell, const char* details = nullptr) const
+    {
+        static_cast<void>(cell);
+        static_cast<void>(details);
+        return {};
+    }
+
+    /** @brief Read the values of substates of one cell of the 3D grid at all available simulation steps.
+     *
+     *  Same as cellHistory(), but the cell is given by its position in the whole grid, not in the displayed plane
+     *  (used when the cell was clicked in the complete 3D volume view).
+     *
+     *  @param sp       setting parameters of the loaded model
+     *  @param cell     row, column and layer (Z plane) of the cell
+     *  @param fields   substates to read
+     *  @param progress optional progress callback; return false from it to cancel */
+    virtual CellHistory cellHistoryOfVolumeCell(const SettingParameter& sp,
+                                                const GridCellIndex& cell,
+                                                const std::vector<std::string>& fields,
+                                                const CellHistoryProgress& progress = {})
+    {
+        static_cast<void>(sp);
+        static_cast<void>(cell);
         static_cast<void>(fields);
         static_cast<void>(progress);
         return {};

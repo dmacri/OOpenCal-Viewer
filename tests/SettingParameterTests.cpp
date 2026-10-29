@@ -462,3 +462,20 @@ TEST(SettingParameterParseSubstates, AllHexColorVariations)
     EXPECT_EQ(result["test"].minColor, "#000000");
     EXPECT_EQ(result["test"].maxColor, "#FFFFFF");
 }
+
+// ============================================================================
+// A no-value written in the substates line is switched on (the checkbox of the panel is not in Header.txt)
+// ============================================================================
+TEST(SettingParameterParseSubstates, NoValueInTheLineIsEnabled)
+{
+    SettingParameter sp;
+    sp.substates = "(psi,%f,0,0.1,-9999),(tmp,%f,-1),(h,%f,1,100),(g,%f,1,100,nan),plain";
+    const auto result = sp.parseSubstates();
+
+    EXPECT_TRUE(result.at("psi").noValueEnabled);
+    EXPECT_EQ(result.at("psi").noValue, -9999.0);
+    EXPECT_TRUE(result.at("tmp").noValueEnabled);
+    EXPECT_FALSE(result.at("h").noValueEnabled);     // no no-value at all
+    EXPECT_FALSE(result.at("g").noValueEnabled);     // "nan" is not a no-value
+    EXPECT_FALSE(result.at("plain").noValueEnabled);
+}

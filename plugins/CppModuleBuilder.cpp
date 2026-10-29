@@ -509,6 +509,15 @@ std::string CppModuleBuilder::buildCompileCommand(const std::string& sourceFile,
 
     cmd << " \"" << sourceFile << "\"" << " -o \"" << outputFile << "\"";
 
+    // Libraries have to follow the source file: GNU ld takes symbols only from libraries listed after the object which needs them.
+    // Unlike an ELF shared object, a PE DLL cannot be linked with unresolved symbols, so the bundled Windows (MinGW) package
+    // passes here the import library of this executable (the plugin calls SceneWidgetVisualizerFactory::registerModel)
+    // and of the VTK DLLs. On other platforms the variable is simply not set.
+    if (const char* linkFlags = std::getenv("OOPENCAL_LINK_FLAGS"); linkFlags && *linkFlags != '\0')
+    {
+        cmd << " " << linkFlags;
+    }
+
     return cmd.str();
 }
 

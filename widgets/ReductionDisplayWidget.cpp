@@ -42,6 +42,15 @@ ReductionDisplayWidget::ReductionDisplayWidget(QWidget *parent)
 void ReductionDisplayWidget::setReductionManager(ReductionManager* manager)
 {
     reductionManager = manager;
+    configurationError.clear();
+    updateLabel();
+}
+
+/// @brief Shows the reason why the reduction could not be loaded.
+void ReductionDisplayWidget::showError(const QString& message)
+{
+    reductionManager = nullptr;
+    configurationError = message;
     updateLabel();
 }
 
@@ -56,6 +65,7 @@ void ReductionDisplayWidget::updateDisplay(int step)
 void ReductionDisplayWidget::clear()
 {
     reductionManager = nullptr;
+    configurationError.clear();
     currentStep = 0;
     label->setText("No reduction configured");
     label->setStyleSheet("color: gray;");
@@ -65,6 +75,16 @@ void ReductionDisplayWidget::clear()
 /// @brief Updates label text, color, and tooltip based on reduction data or errors.
 void ReductionDisplayWidget::updateLabel()
 {
+    if (! reductionManager && ! configurationError.isEmpty())
+    {
+        label->setText("Reduction error");
+        label->setStyleSheet("color: red;");
+        label->setToolTip(
+            QString("<span style='color: #FF6B6B;'><b>Reduction Error:</b></span><br/>%1")
+                .arg(configurationError.toHtmlEscaped()));
+        return;
+    }
+
     if (! reductionManager)
     {
         label->setText("No reduction configured");
