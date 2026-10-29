@@ -31,6 +31,7 @@
 #include <vtkProperty2D.h>
 #include <vtkRenderer.h>
 #include <vtkStructuredGrid.h>
+#include <vtkTexture.h>
 #include <vtkTextMapper.h>
 #include <vtkTextProperty.h>
 #include <vtkUnsignedCharArray.h>
@@ -102,7 +103,7 @@ class Visualizer
 {
 public:
     template<class Matrix>
-    void drawWithVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos={}, bool useCellRendering=false);
+    void drawWithVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos={}, GridWorldMapping::GridRenderingMode renderingMode=GridWorldMapping::GridRenderingMode::Points);
     template<class Matrix>
     void refreshWindowsVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
@@ -303,6 +304,14 @@ private:
     template<class Matrix>
     bool buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matrix& p, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
+    /// @brief Writes the colour of every cell as one RGBA pixel of @p image (Texture rendering mode, issue #138).
+    /// @details The image has nCols x nRows pixels; row 0 of the image is the bottom of the scene, so the cell (r, c)
+    ///          lands at pixel (c, nRows - 1 - r), the same place the lookup table modes use (see buidColor()).
+    /// @return true when at least one cell is (partially) transparent - the actor has to be told about it,
+    ///         like for the lookup table modes
+    template<class Matrix>
+    bool fillColorImage(vtkImageData* image, int nCols, int nRows, const Matrix& p, const std::vector<const SubstateInfo*>& colorSubstateInfos);
+
     /// @brief The method is calculating color for specific cell with substateInfo considered
     template<class Matrix>
     Color calculateCellColor(int row, int column, const Matrix &p, const std::vector<const SubstateInfo*>& colorSubstateInfos);
@@ -381,13 +390,67 @@ private:
 ////////////////////////////////////////////////////////////////////
 
 template <class Matrix>
-void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos, bool useCellRendering)
+void Visualizer::drawWithVTK(const Matrix &p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos, GridWorldMapping::GridRenderingMode renderingMode)
 {
-    // Runtime switch between high-quality cell rendering (true)
-    // and faster point-based rendering (false).
-    // This parameter is passed from the GUI to allow user control.
+    // Runtime switch between point-based rendering (fast, blurred), cell-based rendering (sharp, slower)
+    // and texture rendering (sharp and fast). This parameter is passed from the GUI to allow user control.
+    const auto mode = GridWorldMapping::effectiveRenderingMode(renderingMode, nRows, nCols);
 
-    if (useCellRendering)
+    // The actor is reused by all modes (and by the 3D ones): do not leave the texture of a previous draw on it.
+    gridActor->SetTexture(nullptr);
+    gridActor->GetProperty()->LightingOn();
+
+    if (mode == GridWorldMapping::GridRenderingMode::Texture)
+    {
+        // One RGB pixel per cell, shown on one quad covering [0, nCols] x [0, nRows] (the same extent as the Cells mode).
+        // With nearest-neighbour magnification every cell is a sharp square, and a new step only rewrites the pixels:
+        // there is no lookup table of nRows * nCols entries, no per-cell scalars and no extra points (issue #138).
+        vtkNew<vtkImageData> image;
+        image->SetDimensions(nCols, nRows, 1);
+        image->AllocateScalars(VTK_UNSIGNED_CHAR, 4); // RGBA: the alpha channel makes transparent cells see-through
+        const bool hasTransparentCells = fillColorImage(image, nCols, nRows, p, colorSubstateInfos);
+
+        vtkNew<vtkPoints> corners;
+        corners->InsertNextPoint(0.0,   0.0,   GridWorldMapping::flatSceneZ);
+        corners->InsertNextPoint(nCols, 0.0,   GridWorldMapping::flatSceneZ);
+        corners->InsertNextPoint(nCols, nRows, GridWorldMapping::flatSceneZ);
+        corners->InsertNextPoint(0.0,   nRows, GridWorldMapping::flatSceneZ);
+
+        vtkNew<vtkCellArray> quad;
+        const vtkIdType quadCorners[4] = {0, 1, 2, 3};
+        quad->InsertNextCell(4, quadCorners);
+
+        vtkNew<vtkFloatArray> textureCoordinates;
+        textureCoordinates->SetNumberOfComponents(2);
+        textureCoordinates->InsertNextTuple2(0.0, 0.0);
+        textureCoordinates->InsertNextTuple2(1.0, 0.0);
+        textureCoordinates->InsertNextTuple2(1.0, 1.0);
+        textureCoordinates->InsertNextTuple2(0.0, 1.0);
+
+        vtkNew<vtkPolyData> quadData;
+        quadData->SetPoints(corners);
+        quadData->SetPolys(quad);
+        quadData->GetPointData()->SetTCoords(textureCoordinates);
+
+        vtkNew<vtkTexture> texture;
+        texture->SetInputData(image);
+        texture->InterpolateOff(); // nearest neighbour: sharp cell boundaries
+        texture->MipmapOff();
+        texture->RepeatOff();
+        texture->EdgeClampOn();
+
+        vtkNew<vtkPolyDataMapper> gridMapper;
+        gridMapper->SetInputData(quadData);
+        gridMapper->ScalarVisibilityOff();
+
+        gridActor->SetMapper(gridMapper);
+        gridActor->SetTexture(texture);
+        gridActor->GetProperty()->LightingOff(); // show the colours of the cells exactly as they are
+        // Cells with alpha < 255 must go through the translucent rendering pass, otherwise VTK ignores the alpha.
+        gridActor->SetForceTranslucent(hasTransparentCells);
+        renderer->AddActor(gridActor);
+    }
+    else if (mode == GridWorldMapping::GridRenderingMode::Cells)
     {
         const auto numberOfCells = nRows * nCols;
         vtkNew<vtkDoubleArray> cellValues;
@@ -498,6 +561,18 @@ void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSma
     // there is nothing to refresh yet, so return instead of dereferencing a null mapper.
     if (!gridActor || !gridActor->GetMapper())
         return;
+
+    // Texture rendering mode: only the pixels change, the quad and the texture stay.
+    if (vtkTexture* texture = gridActor->GetTexture())
+    {
+        if (auto* image = vtkImageData::SafeDownCast(texture->GetInput()))
+        {
+            const bool hasTransparentCells = fillColorImage(image, nCols, nRows, p, colorSubstateInfos);
+            gridActor->SetForceTranslucent(hasTransparentCells);
+            texture->Modified();
+            return;
+        }
+    }
 
     if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(gridActor->GetMapper()->GetLookupTable()))
     {
@@ -901,6 +976,36 @@ bool Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matr
             );
         }
     }
+    return anyTransparent;
+}
+
+template<class Matrix>
+bool Visualizer::fillColorImage(vtkImageData* image, int nCols, int nRows, const Matrix &p, const std::vector<const SubstateInfo*>& colorSubstateInfos)
+{
+    // The same conversion as the lookup table gets (toUnitColor / toOpacity), so that all modes show the same colours.
+    const auto toByte = [](double unit)
+    {
+        return static_cast<std::uint8_t>(std::lround(std::clamp(unit, 0.0, 1.0) * 255.0));
+    };
+
+    bool anyTransparent = false;
+    auto* pixels = static_cast<std::uint8_t*>(image->GetScalarPointer());
+    for (int r = 0; r < nRows; ++r)
+    {
+        std::uint8_t* pixel = pixels + 4 * static_cast<std::size_t>(nRows - 1 - r) * static_cast<std::size_t>(nCols);
+        for (int c = 0; c < nCols; ++c, pixel += 4)
+        {
+            const auto color = calculateCellColor(r, c, p, colorSubstateInfos);
+            const double opacity = toOpacity(color);
+            anyTransparent = anyTransparent || opacity < 1.0;
+            pixel[0] = toByte(toUnitColor(color.getRed()));
+            pixel[1] = toByte(toUnitColor(color.getGreen()));
+            pixel[2] = toByte(toUnitColor(color.getBlue()));
+            pixel[3] = toByte(opacity);
+        }
+    }
+    image->GetPointData()->GetScalars()->Modified();
+    image->Modified();
     return anyTransparent;
 }
 

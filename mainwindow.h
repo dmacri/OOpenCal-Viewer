@@ -82,6 +82,7 @@ private slots: // menu actions
     void onCompilationSettingsRequested();
     void onPerformanceSettingsRequested();
     void onCellRenderingToggled(bool checked);
+    void onTextureRenderingToggled(bool checked);
     void syncCellRenderingCheckbox();
     void onPausePlaybackOnRotationToggled(bool checked);
     void onToolTipToggled(bool checked);

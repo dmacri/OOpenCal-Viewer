@@ -235,6 +235,44 @@ constexpr Bounds2D cellGridBounds(int nRows, int nCols) noexcept
     return Bounds2D{ 0.0, static_cast<double>(nCols), 0.0, static_cast<double>(nRows) };
 }
 
+/** @brief How the data grid of the flat (2D) view is drawn (View menu).
+ *
+ *  - Points:  one vertex per cell on a vtkStructuredGrid. Fast, but the colours of neighbouring vertices are
+ *             interpolated over the quads between them (Gouraud shading), so cells look blurred.
+ *  - Cells:   one quad per cell (cell data). Sharp, but slower: needs (rows+1)*(cols+1) points and per-cell scalars.
+ *  - Texture: one pixel per cell in a texture drawn on a single quad, magnified with nearest-neighbour
+ *             filtering. Sharp and the fastest one (issue #138); the colours are written straight into the
+ *             pixels, without a lookup table of rows*cols entries.
+ *
+ *  Cells and Texture place the quad corners at integer positions, so both span cellGridBounds(). */
+enum class GridRenderingMode
+{
+    Points,
+    Cells,
+    Texture,
+};
+
+/** @brief Largest texture side (in pixels) that Texture mode relies on.
+ *
+ *  Every GPU used for desktop OpenGL 3.3+ accepts at least this. A grid with more rows or columns is drawn
+ *  as Cells instead (see effectiveRenderingMode()), because a texture that is too large is not shown at all. */
+inline constexpr int maxTextureSide = 8192;
+
+/** @brief Mode that is really used to draw a grid of the given size: Texture falls back to Cells
+ *         when one of the sides does not fit in a texture. Both of them have the same extent. */
+constexpr GridRenderingMode effectiveRenderingMode(GridRenderingMode requested, int nRows, int nCols) noexcept
+{
+    if (requested == GridRenderingMode::Texture && (nRows > maxTextureSide || nCols > maxTextureSide))
+        return GridRenderingMode::Cells;
+    return requested;
+}
+
+/// @brief Extent of the flat (2D) scene for the given rendering mode: pointGridBounds() for Points, cellGridBounds() otherwise.
+constexpr Bounds2D flatSceneBoundsFor(GridRenderingMode mode, int nRows, int nCols) noexcept
+{
+    return mode == GridRenderingMode::Points ? pointGridBounds(nRows, nCols) : cellGridBounds(nRows, nCols);
+}
+
 /** @brief World Z of the data grid in the flat (2D) view, drawn with a quad or with a point per cell
  *         (Visualizer::drawWithVTK).
  *

@@ -690,6 +690,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
     connect(ui->actionPerformance_settings, &QAction::triggered, this, &MainWindow::onPerformanceSettingsRequested);
     connect(ui->actionCellRendering, &QAction::triggered, this, &MainWindow::onCellRenderingToggled);
+    connect(ui->actionTextureRendering, &QAction::triggered, this, &MainWindow::onTextureRenderingToggled);
 
     {
         // Restore persisted state (enabled by default) before connecting, to avoid a needless save
@@ -1695,7 +1696,21 @@ void MainWindow::onCellRenderingToggled(bool checked)
 {
     if (ui->sceneWidget)
     {
-        ui->sceneWidget->setUseCellRendering(checked);
+        // The two actions are mutually exclusive; none of them checked means point-based rendering
+        ui->sceneWidget->setGridRenderingMode(checked ? GridWorldMapping::GridRenderingMode::Cells
+                                                      : GridWorldMapping::GridRenderingMode::Points);
+        syncCellRenderingCheckbox();
+        ui->sceneWidget->setViewMode2D(); // this is to refresh visualization
+    }
+}
+
+void MainWindow::onTextureRenderingToggled(bool checked)
+{
+    if (ui->sceneWidget)
+    {
+        ui->sceneWidget->setGridRenderingMode(checked ? GridWorldMapping::GridRenderingMode::Texture
+                                                      : GridWorldMapping::GridRenderingMode::Points);
+        syncCellRenderingCheckbox();
         ui->sceneWidget->setViewMode2D(); // this is to refresh visualization
     }
 }
@@ -1704,8 +1719,11 @@ void MainWindow::syncCellRenderingCheckbox()
 {
     if (ui->sceneWidget)
     {
-        bool useCellRendering = ui->sceneWidget->getUseCellRendering();
-        ui->actionCellRendering->setChecked(useCellRendering);
+        const auto mode = ui->sceneWidget->getGridRenderingMode();
+        const QSignalBlocker cellBlocker(ui->actionCellRendering);
+        const QSignalBlocker textureBlocker(ui->actionTextureRendering);
+        ui->actionCellRendering->setChecked(mode == GridWorldMapping::GridRenderingMode::Cells);
+        ui->actionTextureRendering->setChecked(mode == GridWorldMapping::GridRenderingMode::Texture);
     }
 }
 

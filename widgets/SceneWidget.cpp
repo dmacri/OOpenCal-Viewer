@@ -57,7 +57,7 @@ public:
     void clearStage() override {}
     void readStepsOffsetsForAllNodesFromFiles(int, int, int, const std::string&) override {}
     void readStageStateFromFilesForStep(SettingParameter*, Line*) override {}
-    void drawWithVTK(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, bool) override {}
+    void drawWithVTK(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, GridWorldMapping::GridRenderingMode) override {}
     void refreshWindowsVTK(int, int, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&) override {}
     void setNative3DSlice(GridSliceAxis, int) override {}
     void clearNative3DSlice() override {}
@@ -480,6 +480,13 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     {
         renderer->RemoveActor(gridActor);
     }
+    if (gridActor)
+    {
+        // The actor is shared by all drawing modes: drop what the Texture rendering mode put on it,
+        // otherwise the texture would be painted over the 3D surfaces too.
+        gridActor->SetTexture(nullptr);
+        gridActor->GetProperty()->LightingOn();
+    }
     if (backgroundActor && renderer)
     {
         renderer->RemoveActor(backgroundActor);
@@ -509,7 +516,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                 renderer,
                                                 gridActor,
                                                 colorSubstateInfos,
-                                                useCellRendering);
+                                                gridRenderingMode);
 
         if (!sliceView)
         {
@@ -663,7 +670,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
 
     // Fallback to regular 2D visualization
     const auto colorSubstateInfos = getColorSubstateInfos();
-    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, colorSubstateInfos, useCellRendering);
+    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, colorSubstateInfos, gridRenderingMode);
     updateCameraPivotFromBounds();
 }
 
@@ -2240,7 +2247,13 @@ void SceneWidget::setFlatSceneBackgroundVisible(bool visible)
 
 void SceneWidget::setUseCellRendering(bool useCellRenderingMode)
 {
-    useCellRendering = useCellRenderingMode;
+    setGridRenderingMode(useCellRenderingMode ? GridWorldMapping::GridRenderingMode::Cells
+                                              : GridWorldMapping::GridRenderingMode::Points);
+}
+
+void SceneWidget::setGridRenderingMode(GridWorldMapping::GridRenderingMode mode)
+{
+    gridRenderingMode = mode;
     // No need to trigger render update here - caller will call refreshVisualization
 }
 
@@ -2509,7 +2522,7 @@ GridWorldMapping::Bounds2D SceneWidget::flatSceneBounds() const
 {
     const int rows = settingParameter->numberOfRowsY;
     const int columns = settingParameter->numberOfColumnX;
-    return useCellRendering ? GridWorldMapping::cellGridBounds(rows, columns) : GridWorldMapping::pointGridBounds(rows, columns);
+    return GridWorldMapping::flatSceneBoundsFor(gridRenderingMode, rows, columns);
 }
 
 bool SceneWidget::pickBasePlane(int displayX, int displayY, std::array<double, 3>& outWorldPos) const

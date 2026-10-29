@@ -849,6 +849,7 @@
     <addaction name="actionPerformance_settings"/>
     <addaction name="separator"/>
     <addaction name="actionCellRendering"/>
+    <addaction name="actionTextureRendering"/>
     <addaction name="actionPausePlaybackOnRotation"/>
     <addaction name="actionShowToolTip"/>
    </widget>
@@ -1117,6 +1118,20 @@
    </property>
    <property name="toolTip">
     <string>Use cell-based rendering for better quality (slower for large grids). Uncheck for faster point-based rendering.</string>
+   </property>
+  </action>
+  <action name="actionTextureRendering">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Texture Rendering (Fast, Sharp)</string>
+   </property>
+   <property name="toolTip">
+    <string>Draw the grid as one texture with a pixel per cell: sharp cells like in cell rendering, but faster than both cell and point-based rendering. Uncheck for point-based rendering.</string>
    </property>
   </action>
   <action name="actionPausePlaybackOnRotation">

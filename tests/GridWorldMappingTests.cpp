@@ -153,6 +153,52 @@ TEST(GridWorldMappingFlatView, CellRenderingBoundsMapEveryCellCentreBack)
     }
 }
 
+/** Test Suite: GridRenderingModes
+ *
+ * Issue #138: besides Points and Cells there is the Texture mode (one pixel per cell on a single quad).
+ * It has to cover the same world extent as Cells, so that the picking, the tooltip and the lines between
+ * the nodes work in it unchanged. */
+TEST(GridRenderingModes, TextureHasTheSameExtentAsCells)
+{
+    constexpr int nRows = 496;
+    constexpr int nCols = 610;
+    const auto cells = flatSceneBoundsFor(GridRenderingMode::Cells, nRows, nCols);
+    const auto texture = flatSceneBoundsFor(GridRenderingMode::Texture, nRows, nCols);
+    EXPECT_EQ(texture.xMin, cells.xMin);
+    EXPECT_EQ(texture.xMax, cells.xMax);
+    EXPECT_EQ(texture.yMin, cells.yMin);
+    EXPECT_EQ(texture.yMax, cells.yMax);
+    EXPECT_EQ(texture.xMax, nCols);
+    EXPECT_EQ(texture.yMax, nRows);
+}
+
+TEST(GridRenderingModes, PointsKeepTheirSmallerExtent)
+{
+    const auto points = flatSceneBoundsFor(GridRenderingMode::Points, 30, 50);
+    const auto expected = pointGridBounds(30, 50);
+    EXPECT_EQ(points.xMax, expected.xMax);
+    EXPECT_EQ(points.yMax, expected.yMax);
+    EXPECT_EQ(points.xMax, 49);
+    EXPECT_EQ(points.yMax, 29);
+}
+
+TEST(GridRenderingModes, TextureFallsBackToCellsWhenTooLargeForTexture)
+{
+    EXPECT_EQ(effectiveRenderingMode(GridRenderingMode::Texture, 496, 610), GridRenderingMode::Texture);
+    EXPECT_EQ(effectiveRenderingMode(GridRenderingMode::Texture, maxTextureSide, maxTextureSide), GridRenderingMode::Texture);
+    EXPECT_EQ(effectiveRenderingMode(GridRenderingMode::Texture, maxTextureSide + 1, 10), GridRenderingMode::Cells);
+    EXPECT_EQ(effectiveRenderingMode(GridRenderingMode::Texture, 10, maxTextureSide + 1), GridRenderingMode::Cells);
+}
+
+TEST(GridRenderingModes, OtherModesAreNeverChanged)
+{
+    for (const auto mode : {GridRenderingMode::Points, GridRenderingMode::Cells})
+    {
+        EXPECT_EQ(effectiveRenderingMode(mode, 10, 10), mode);
+        EXPECT_EQ(effectiveRenderingMode(mode, maxTextureSide * 2, maxTextureSide * 2), mode);
+    }
+}
+
 TEST(GridWorldMappingFlatView, RejectsDegenerateInput)
 {
     int r = 0, c = 0;

@@ -210,12 +210,24 @@ public:
 
     /// @brief Set cell rendering mode (high quality vs fast point-based)
     /// @param useCellRendering If true, uses cell-based rendering (better quality); if false, uses point-based (faster)
+    /// @note Shortcut for setGridRenderingMode(Cells / Points)
     void setUseCellRendering(bool useCellRendering);
 
     /// @brief Get the current cell rendering mode
+    /// @return true only for GridRenderingMode::Cells
     bool getUseCellRendering() const
     {
-        return useCellRendering;
+        return gridRenderingMode == GridWorldMapping::GridRenderingMode::Cells;
+    }
+
+    /// @brief Set how the grid of the flat (2D) view is drawn: Points, Cells or Texture (see GridWorldMapping::GridRenderingMode)
+    /// @note No render update is triggered here - the caller refreshes the visualization
+    void setGridRenderingMode(GridWorldMapping::GridRenderingMode mode);
+
+    /// @brief Get the requested grid rendering mode (Texture is drawn as Cells for grids that are too large for a texture)
+    GridWorldMapping::GridRenderingMode getGridRenderingMode() const
+    {
+        return gridRenderingMode;
     }
 
     /// @brief Set camera roll (rotation around X axis) in degrees
@@ -591,8 +603,8 @@ protected:
 
     /** @brief World extent of the flat (2D) scene, to which the lines between the nodes are fitted.
      *
-     *  The grid is drawn with one quad per cell (useCellRendering) or with one point per cell; the second
-     *  one ends one unit earlier on the right and at the top (see GridWorldMapping::pointGridBounds()). */
+     *  The grid is drawn with one quad per cell (Cells and Texture modes) or with one point per cell (Points);
+     *  the last one ends one unit earlier on the right and at the top (see GridWorldMapping::pointGridBounds()). */
     GridWorldMapping::Bounds2D flatSceneBounds() const;
 
     /** @brief Converts VTK world coordinates to display/pixel coordinates shown to users.
@@ -702,8 +714,8 @@ protected:
     /// @brief Flat scene background visibility state (shown in 3D mode)
     bool flatSceneBackgroundVisible = true;
 
-    /// @brief Cell rendering mode (true = high quality cell-based, false = fast point-based)
-    bool useCellRendering = false;
+    /// @brief How the flat (2D) grid is drawn: points (blurred), cells (sharp, slower) or texture (sharp, fastest)
+    GridWorldMapping::GridRenderingMode gridRenderingMode = GridWorldMapping::GridRenderingMode::Points;
 
     /// @brief Name of the topmost substate field currently used for 3D visualization (empty if none)
     std::string activeSubstateFor3D;
