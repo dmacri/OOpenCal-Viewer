@@ -25,7 +25,7 @@ std::vector<std::string> splitOnWhitespace(const std::string& text)
 }
 
 /// Locale independent (std::from_chars), accepts both '.' and ',' as the decimal separator.
-bool parseSeconds(std::string token, double& value)
+bool parseNumber(std::string token, double& value)
 {
     std::replace(token.begin(), token.end(), ',', '.');
     if (!token.empty() && token.front() == '+') // from_chars does not accept a leading '+'
@@ -73,6 +73,10 @@ StepTimeMap::StepTimeMap(std::istream& stream)
 void StepTimeMap::parse(std::istream& stream)
 {
     std::map<StepIndex, double> parsed;
+    TimeUnit parsedUnit = TimeUnit::Seconds;
+    bool unitLineSeen = false;
+
+    const auto describeFile = [this] { return path.empty() ? std::string{} : " '" + path.string() + "'"; };
 
     std::string line;
     for (int lineNumber = 1; std::getline(stream, line); ++lineNumber)
@@ -84,26 +88,63 @@ void StepTimeMap::parse(std::istream& stream)
         if (tokens.empty())
             continue;
 
-        StepIndex step = 0;
-        double seconds = 0.0;
-        if (tokens.size() < 2 || !parseStep(tokens[0], step) || !parseSeconds(tokens[1], seconds))
+        const std::string trimmed = [&line] {
+            const auto first = line.find_first_not_of(" \t\r\n");
+            const auto last = line.find_last_not_of(" \t\r\n");
+            return line.substr(first, last - first + 1); // the line has a token, so it is not blank
+        }();
+
+        if (trimmed.front() == '[') // unit line, e.g. "[ms]"
         {
-            error = "Invalid line " + std::to_string(lineNumber) + " in time file"
-                    + (path.empty() ? std::string{} : " '" + path.string() + "'")
-                    + " (expected: <step> <time in seconds>): " + line;
+            const bool isUnitLineAllowed = parsed.empty() && !unitLineSeen && trimmed.size() >= 2 && trimmed.back() == ']';
+            if (!isUnitLineAllowed)
+            {
+                error = "Invalid line " + std::to_string(lineNumber) + " in time file" + describeFile()
+                        + " (the unit, e.g. [ms], may be given once, before the first step): " + line;
+                return;
+            }
+
+            const auto unitName = trimmed.substr(1, trimmed.size() - 2);
+            const auto unitFromFile = parseTimeUnit(unitName);
+            if (!unitFromFile)
+            {
+                error = "Unknown time unit [" + unitName + "] in line " + std::to_string(lineNumber) + " of time file" + describeFile()
+                        + " (supported: [s], [ms])";
+                return;
+            }
+
+            parsedUnit = *unitFromFile;
+            unitLineSeen = true;
+            continue;
+        }
+
+        StepIndex step = 0;
+        double time = 0.0;
+        if (tokens.size() < 2 || !parseStep(tokens[0], step) || !parseNumber(tokens[1], time))
+        {
+            error = "Invalid line " + std::to_string(lineNumber) + " in time file" + describeFile()
+                    + " (expected: <step> <time>): " + line;
             return; // keep the map empty: half of a file would give misleading times
         }
 
-        parsed[step] = seconds;
+        parsed[step] = time;
     }
 
     timeByStep = std::move(parsed);
+    timeUnit = parsedUnit;
 }
 
-std::optional<double> StepTimeMap::secondsForStep(StepIndex step) const
+std::optional<double> StepTimeMap::timeForStep(StepIndex step) const
 {
     const auto it = timeByStep.find(step);
     if (it == timeByStep.end())
         return std::nullopt;
     return it->second;
+}
+
+std::optional<double> StepTimeMap::secondsForStep(StepIndex step) const
+{
+    if (const auto time = timeForStep(step))
+        return *time * timeUnitInSeconds(timeUnit);
+    return std::nullopt;
 }

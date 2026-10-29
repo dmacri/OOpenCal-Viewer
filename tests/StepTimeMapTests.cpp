@@ -115,6 +115,52 @@ TEST(StepTimeMap, LoadsFromFileAndRemembersItsPath)
     EXPECT_DOUBLE_EQ(*map.secondsForStep(1), 3600.0);
 }
 
+TEST(StepTimeMap, FileWithoutUnitLineMeansSeconds)
+{
+    const auto map = fromText("0 0\n500 2500\n");
+    EXPECT_EQ(map.unit(), TimeUnit::Seconds);
+    EXPECT_DOUBLE_EQ(*map.timeForStep(500), 2500.0);
+    EXPECT_DOUBLE_EQ(*map.secondsForStep(500), 2500.0);
+}
+
+TEST(StepTimeMap, ReadsUnitFromTheFirstLine)
+{
+    const auto map = fromText("[ms]\n0 0\n500 2500\n3999 19995\n");
+
+    ASSERT_TRUE(map.isAvailable());
+    EXPECT_TRUE(map.errorMessage().empty());
+    EXPECT_EQ(map.unit(), TimeUnit::Milliseconds);
+    EXPECT_DOUBLE_EQ(*map.timeForStep(500), 2500.0);      // in the unit of the file
+    EXPECT_DOUBLE_EQ(*map.secondsForStep(500), 2.5);      // converted
+    EXPECT_DOUBLE_EQ(*map.secondsForStep(3999), 19.995);
+}
+
+TEST(StepTimeMap, UnitLineToleratesCommentsBlankLinesWhitespaceCaseAndWindowsLineEndings)
+{
+    EXPECT_EQ(fromText("# times of SciddicaT\n\n  [ MS ]  # unit\r\n0 0\r\n").unit(), TimeUnit::Milliseconds);
+    EXPECT_EQ(fromText("[S]\n0 0\n").unit(), TimeUnit::Seconds);
+}
+
+TEST(StepTimeMap, UnknownUnitIsRejectedWithItsNameAndTheSupportedOnes)
+{
+    const auto map = fromText("[hours]\n0 0\n");
+
+    EXPECT_FALSE(map.isAvailable());
+    EXPECT_NE(map.errorMessage().find("[hours]"), std::string::npos);
+    EXPECT_NE(map.errorMessage().find("[ms]"), std::string::npos);
+    EXPECT_NE(map.errorMessage().find("line 1"), std::string::npos);
+}
+
+TEST(StepTimeMap, UnitLineInTheWrongPlaceIsRejected)
+{
+    for (const char* bad : {"0 0\n[ms]\n1 5\n", "[ms]\n[s]\n0 0\n", "[ms\n0 0\n", "[]\n0 0\n", "[ms] 5\n0 0\n"})
+    {
+        const auto map = fromText(bad);
+        EXPECT_FALSE(map.isAvailable()) << bad;
+        EXPECT_FALSE(map.errorMessage().empty()) << bad;
+    }
+}
+
 TEST(StepTimeMap, PathIsBuiltNextToTheOutputFiles)
 {
     EXPECT_EQ(StepTimeMap::pathForOutput("/data/OutputSciddicaT/sciddicaTout"),

@@ -1854,8 +1854,8 @@ std::string SceneWidget::timeLineForCurrentStep() const
     if (! stepTimeMap.isAvailable() || ! settingParameter)
         return {};
 
-    const auto seconds = stepTimeMap.secondsForStep(settingParameter->step);
-    return "Time: " + (seconds ? TimeFormatting::format(*seconds, prettyTimeFormat) : std::string("n/a"));
+    const auto time = stepTimeMap.timeForStep(settingParameter->step);
+    return "Time: " + (time ? TimeFormatting::format(*time, stepTimeMap.unit(), prettyTimeFormat) : std::string("n/a"));
 }
 
 void SceneWidget::updateTimeText()
