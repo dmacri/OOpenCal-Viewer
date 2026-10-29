@@ -171,6 +171,7 @@ list(APPEND Sources
     config/Config.cpp
     config/ConfigCategory.cpp
     visualiser/SettingParameter.cpp
+    visualiser/SubstateString.cpp
     visualiser/VideoExporter.cpp
     visualiser/Visualiser.cpp
     visualiserProxy/SceneWidgetVisualizerFactory.cpp
@@ -186,6 +187,7 @@ list(APPEND Sources
     widgets/ReductionDisplayWidget.cpp
     widgets/SubstateDisplayWidget.cpp
     widgets/SubstatesDockWidget.cpp
+    widgets/AddSubstateDialog.cpp
     widgets/CustomInteractorStyle.cpp
     widgets/RulerAxisActor2D.cpp
     widgets/CustomDirectoryDialog.cpp

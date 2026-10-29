@@ -264,3 +264,44 @@ target_include_directories(AppImagePathsTests PRIVATE
 )
 
 add_test(NAME AppImagePathsTests COMMAND AppImagePathsTests)
+
+# ============================================
+# Add test executable for ReductionManager (Qt Core only)
+# ============================================
+add_executable(ReductionManagerTests
+    ReductionManagerTests.cpp
+    ${CMAKE_SOURCE_DIR}/data/ReductionManager.cpp
+)
+
+target_link_libraries(ReductionManagerTests
+    GTest::gtest_main
+    ${QT_TARGET_PREFIX}::Core
+)
+
+target_include_directories(ReductionManagerTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/data
+)
+
+add_test(NAME ReductionManagerTests COMMAND ReductionManagerTests)
+
+# ============================================
+# Add test executable for SubstateString (substates line and values of a substate)
+# ============================================
+add_executable(SubstateStringTests
+    SubstateStringTests.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/SubstateString.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/SettingParameter.cpp
+)
+
+target_link_libraries(SubstateStringTests
+    GTest::gtest_main
+)
+
+target_include_directories(SubstateStringTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/visualiser
+    ${CMAKE_SOURCE_DIR}/core
+)
+
+add_test(NAME SubstateStringTests COMMAND SubstateStringTests)
