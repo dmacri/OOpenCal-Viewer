@@ -1,0 +1,6 @@
+# Scripts of the Windows (MinGW) package: cmd.exe needs CRLF (goto labels are unreliable with LF only),
+# bash needs LF (Git for Windows would check *.sh out with CRLF and bash would fail on "\r").
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.sh  text eol=lf

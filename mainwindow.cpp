@@ -1768,7 +1768,7 @@ void MainWindow::recreateModelMenuActions()
             ui->menuModel->addAction(action);
 
             connect(action, &QAction::triggered, this, &MainWindow::onModelSelected);
-            cout << "+ Model: " << modelName << endl;
+            std::cout << "+ Model: " << modelName << std::endl;
         }
     }
 
