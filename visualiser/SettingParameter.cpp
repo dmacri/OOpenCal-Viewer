@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cctype>
+#include <cmath>
 #include <ranges>
 #include <algorithm>
 #include "SettingParameter.h"
@@ -177,6 +178,9 @@ std::map<std::string, SubstateInfo> SettingParameter::parseSubstates() const
             pos = end;
         }
         
+        // A no-value written in the substates line is meant to be used (the checkbox of the panel is not in the file)
+        info.noValueEnabled = ! std::isnan(info.noValue);
+
         if (!info.name.empty())
             result[info.name] = info;
     }

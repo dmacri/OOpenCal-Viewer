@@ -284,3 +284,24 @@ target_include_directories(ReductionManagerTests PRIVATE
 )
 
 add_test(NAME ReductionManagerTests COMMAND ReductionManagerTests)
+
+# ============================================
+# Add test executable for SubstateString (substates line and values of a substate)
+# ============================================
+add_executable(SubstateStringTests
+    SubstateStringTests.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/SubstateString.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/SettingParameter.cpp
+)
+
+target_link_libraries(SubstateStringTests
+    GTest::gtest_main
+)
+
+target_include_directories(SubstateStringTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/visualiser
+    ${CMAKE_SOURCE_DIR}/core
+)
+
+add_test(NAME SubstateStringTests COMMAND SubstateStringTests)

@@ -1802,6 +1802,8 @@ void SceneWidget::switchModel(const std::string& modelName)
     // Create new visualizer with the selected model
     sceneWidgetVisualizerProxy = SceneWidgetVisualizerFactory::create(modelName);
     currentModelName = modelName;
+    if (m_substatesDockWidget)
+        m_substatesDockWidget->setVisualizer(sceneWidgetVisualizerProxy.get()); // the old one is gone
 
     // Reinitialize the matrix with current dimensions
     sceneWidgetVisualizerProxy->initMatrix(settingParameter->numberOfColumnX, settingParameter->numberOfRowsY);
@@ -1863,6 +1865,8 @@ void SceneWidget::releaseVisualizer()
     clearScene();
     sceneWidgetVisualizerProxy = std::make_unique<NullSceneWidgetVisualizer>();
     currentModelName.clear();
+    if (m_substatesDockWidget)
+        m_substatesDockWidget->setVisualizer(sceneWidgetVisualizerProxy.get());
 }
 
 void SceneWidget::loadNewConfiguration(const std::string& configFileName, int stepNumber)
@@ -2326,6 +2330,8 @@ void SceneWidget::resetCameraZoom()
 void SceneWidget::setSubstatesDockWidget(SubstatesDockWidget* dockWidget)
 {
     m_substatesDockWidget = dockWidget;
+    if (m_substatesDockWidget && sceneWidgetVisualizerProxy)
+        m_substatesDockWidget->setVisualizer(sceneWidgetVisualizerProxy.get()); // "Add substate" works before any cell is clicked
 }
 
 void SceneWidget::mousePressEvent(QMouseEvent* event)

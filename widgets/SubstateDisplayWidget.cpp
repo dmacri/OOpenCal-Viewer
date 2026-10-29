@@ -68,6 +68,8 @@ SubstateDisplayWidget::SubstateDisplayWidget(const std::string& fieldName, QWidg
     
     setUpSpinBoxWithNoValue(ui->minSpinBox);
     setUpSpinBoxWithNoValue(ui->maxSpinBox);
+    // A no-value is usually negative (-1, -9999): the default range of a spin box starts at 0, which turned it into 0
+    setUpSpinBoxWithNoValue(ui->noValueDoubleSpinBox);
 
     auto altitudeScaleValidator = new QDoubleValidator(0.0, 1e9, 6, ui->altitudeScaleLineEdit);
     altitudeScaleValidator->setNotation(QDoubleValidator::StandardNotation);
