@@ -21,7 +21,6 @@
  * - exitAfterLastStep: Exit after last step (useful with generateMoviePath)
  * - step=<number>: Go to specific step directly
  * - generateImagePath=<path>: Generate image for current step and save to file
- * - silent: Suppress error dialogs (default and deprecated)
  * - configFile: Path to simulation directory (positional argument)
  * - --autoPlay: Automatically start playback when simulation data loads
  * - --metrics: Enable performance metrics (default enabled)
@@ -39,7 +38,6 @@ public:
     static constexpr const char ARG_GENERATE_IMAGE[] = "--generateImagePath";
     static constexpr const char ARG_STEP[] = "--step";
     static constexpr const char ARG_EXIT_AFTER_LAST[] = "--exitAfterLastStep";
-    static constexpr const char ARG_SILENT[] = "--silent";
     static constexpr const char ARG_METRICS[] = "--metrics";
     static constexpr const char ARG_DISABLE_METRICS[] = "--disableMetrics";
     static constexpr const char ARG_METRICS_MODE[] = "--metricsMode";

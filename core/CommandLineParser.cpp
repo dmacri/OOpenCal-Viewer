@@ -44,10 +44,6 @@ bool CommandLineParser::parse(int argc, char* argv[])
             .help("Exit after last step (useful with --generateMoviePath)")
             .flag();
 
-        program.add_argument(ARG_SILENT)
-            .help("Silent mode: Skip displaying information dialogs (default behaviour)")
-            .flag();
-
         program.add_argument(ARG_METRICS)
             .help("Enable performance metrics reporting (default)")
             .flag();
@@ -121,11 +117,6 @@ bool CommandLineParser::parse(int argc, char* argv[])
 
         autoPlay = program.is_used(ARG_AUTO_PLAY);
 
-        if (const bool requestedSilent = program.is_used(ARG_SILENT))
-        {
-            std::cerr << "Warning: --silent is already the default mode. Using the flag has no effect." << std::endl;
-        }
-
         // Handle metrics flags
         if (program.is_used(ARG_DISABLE_METRICS))
         {
@@ -171,7 +162,6 @@ void CommandLineParser::printHelp() const
               << std::format("  {: <{}} Generate image for current step\n", ARG_GENERATE_IMAGE, WIDTH)
               << std::format("  {: <{}} Go to specific step directly\n", ARG_STEP, WIDTH)
               << std::format("  {: <{}} Exit after last step\n", ARG_EXIT_AFTER_LAST, WIDTH)
-              << std::format("  {: <{}} Suppress error dialogs and messages (default)\n", ARG_SILENT, WIDTH)
               << std::format("  {: <{}} Enable performance metrics (default)\n", ARG_METRICS, WIDTH)
               << std::format("  {: <{}} Disable performance metrics reporting\n", ARG_DISABLE_METRICS, WIDTH)
               << std::format("  {: <{}} Build the precompiled header for model compilation and exit\n", ARG_BUILD_PRECOMPILED_HEADER, WIDTH)

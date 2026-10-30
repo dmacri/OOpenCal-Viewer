@@ -114,9 +114,6 @@ The application supports various command-line arguments for automated testing, b
 
 # Generate image at specific step
 ./QtVtkViewer /path/to/model/directory --step=100 --generateImagePath=/tmp/step100.png
-
-# Batch processing with silent mode
-./QtVtkViewer /path/to/model/directory --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep --silent
 ```
 
 For complete documentation of all available arguments, see **[doc/COMMAND_LINE_ARGUMENTS.md](doc/COMMAND_LINE_ARGUMENTS.md)**.
