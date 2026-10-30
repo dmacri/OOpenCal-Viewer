@@ -58,6 +58,7 @@ The generated documentation will be available in the `doc/html` directory.
 - **[doc/PRECOMPILED_HEADER.md](doc/PRECOMPILED_HEADER.md)** - Speeding up on-the-fly compilation of models with a precompiled header
 - **[doc/PLUGIN_USER_GUIDE.md](doc/PLUGIN_USER_GUIDE.md)** - Complete guide to creating and using plugins
 - **[doc/PLUGIN_ARCHITECTURE.md](doc/PLUGIN_ARCHITECTURE.md)** - Technical implementation details
+- **[doc/ACTION_PLUGINS.md](doc/ACTION_PLUGINS.md)** - Action plugins: model-specific exports and analyses (e.g. pedestrian trajectories) as shared libraries
 - **[doc/VIEW_MODES.md](doc/VIEW_MODES.md)** - 2D/3D view modes documentation
 - **[doc/CELL_HISTORY_PLOT.md](doc/CELL_HISTORY_PLOT.md)** - Plot of the substates of a clicked cell over the whole simulation
 - **[doc/Build-VTK.md](doc/Build-VTK.md)** - VTK compilation instructions

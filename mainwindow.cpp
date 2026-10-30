@@ -40,6 +40,7 @@
 #include "widgets/SceneWidget.h"
 #include "widgets/SubstatesDockWidget.h"
 #include "widgets/AboutDialog.h"
+#include "widgets/ActionsMenu.h"
 #include "widgets/ColorSettingsDialog.h"
 #include "widgets/CompilationLogWidget.h"
 #include "widgets/CompilationSettingsWidget.h"
@@ -643,6 +644,21 @@ MainWindow::MainWindow(QWidget* parent)
     recreateModelMenuActions();
     createViewModeActionGroup();
     updateRecentDirectoriesMenu();
+
+    // The Actions menu lists the actions of plugins (exports, analyses...) for the current model, see plugins/ActionApi.h
+    actionsMenu = new ActionsMenu(
+        this,
+        [this] { return ui->sceneWidget->getCurrentModelName(); },
+        [this] { return ui->inputFilePathLabel->getFileName(); });
+    menuBar()->insertMenu(ui->menuHelp->menuAction(), actionsMenu->menu());
+    connect(actionsMenu, &ActionsMenu::actionFinished, this,
+            [this]
+            {
+                // An action reads the data with its own reader, but the models keep some state in static members
+                // (e.g. maxima of fields used for colours), so read the displayed step again
+                if (! ui->inputFilePathLabel->getFileName().isEmpty())
+                    setPositionOnWidgets(currentStep);
+            });
 
     enterNoConfigurationFileMode();
 }
@@ -1802,7 +1818,7 @@ void MainWindow::onLoadPluginRequested()
 
         QMessageBox::information(this,
                                  tr("Plugin Loaded"),
-                                 tr("Plugin loaded successfully!\n\nNew models are now available in the Model menu.\n\nPath: %1")
+                                 tr("Plugin loaded successfully!\n\nNew models (Model menu) and actions (Actions menu) provided by the plugin are now available.\n\nPath: %1")
                                      .arg(pluginPath));
     }
     else

@@ -80,6 +80,19 @@ Builds the precompiled header which speeds up on-the-fly compilation of models a
 no display. `<DIR>` defaults to the `OOPENCAL_PRECOMPILED_HEADER_DIR` setting. Exit code: 0 on success, 1 if building failed,
 2 if no directory is known. See [PRECOMPILED_HEADER.md](PRECOMPILED_HEADER.md).
 
+### `--runAction=<ID>`, `--actionParam=<NAME>=<VALUE>` (repeatable), `--listActions`
+
+Runs an action of a loaded action plugin (for example the export of pedestrian trajectories) on the simulation directory
+given as the positional argument, without starting the GUI (no display needed), and exits. `--actionParam` sets a parameter of
+the action; `--listActions` prints the actions of the loaded plugins with their parameters. Load the plugin with `--loadModel`
+(or put it into `./plugins/`). Exit code: 0 on success, 1 if the action failed, 2 if the command line is wrong.
+See [ACTION_PLUGINS.md](ACTION_PLUGINS.md).
+
+```bash
+./OOpenCal-Viewer /path/to/OutputCrowdSimulation --loadModel plugins/libTrajectoryExport.so \
+    --runAction=export-trajectories-julich --actionParam=output_file=trajectories.txt
+```
+
 ## Examples
 
 ### Example 1: Load configuration and start with specific model

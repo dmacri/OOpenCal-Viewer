@@ -17,6 +17,7 @@ class MainWindow;
 class QPushButton;
 class QSlider;
 class QActionGroup;
+class ActionsMenu;
 class ReductionManager;
 class Config;
 class CommandLineParser;
@@ -240,6 +241,7 @@ private:
     bool playbackPausedForCamera = false;
     static constexpr int CAMERA_RESUME_DELAY_MS = 300;
     QActionGroup *modelActionGroup = nullptr;
+    ActionsMenu *actionsMenu = nullptr; ///< menu with the actions of plugins (plugins/ActionApi.h)
     std::unique_ptr<ReductionManager> reductionManager;
 
     StepIndex currentStep;
