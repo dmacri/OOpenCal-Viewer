@@ -74,6 +74,19 @@ Exit the application after processing the last step. This is particularly useful
 ./OOpenCal-Viewer config.txt --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep
 ```
 
+### `--autoPlay`
+Start the playback automatically as soon as the simulation data is loaded, as if the Play button was pressed. Together with
+`--exitAfterLastStep` the application exits when the last step has been played, which makes it usable for performance tests
+without any interaction. Use `--step=<NUMBER>` to start the playback from a chosen step.
+
+**Example:**
+```bash
+./OOpenCal-Viewer /path/to/model/directory --step=100 --autoPlay --exitAfterLastStep
+```
+
+**Note:** The playback is driven by a timer, so the delay between the steps set in the GUI is part of the total time.
+For measuring the speed of reading and rendering use `--benchmark` instead.
+
 ### `--buildPrecompiledHeader[=<DIR>]`
 
 Builds the precompiled header which speeds up on-the-fly compilation of models and exits. It does not start the GUI and needs
@@ -120,8 +133,8 @@ This loads the configuration, jumps to step 75, generates an image, and exits.
 Command-line arguments are parsed using the **argparse** library (https://github.com/p-ranav/argparse), which is automatically downloaded via CMake's FetchContent mechanism.
 
 The parsing is handled by the `CommandLineParser` class located in:
-- Header: `utilities/CommandLineParser.h`
-- Implementation: `utilities/CommandLineParser.cpp`
+- Header: `core/CommandLineParser.h`
+- Implementation: `core/CommandLineParser.cpp`
 
 The parsed arguments are applied in `MainWindow::applyCommandLineOptions()` method in `mainwindow.cpp`.
 
