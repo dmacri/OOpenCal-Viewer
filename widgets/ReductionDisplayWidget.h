@@ -31,6 +31,13 @@ public:
     /// @brief Clears the display and resets internal state.
     void clear();
 
+    /** @brief Shows why the reduction could not be loaded (e.g. the reduction file cannot be parsed).
+     *
+     * The text stays visible while stepping through the simulation, until the next setReductionManager()
+     * or clear(). Without it the widget would say "No reduction configured", which is misleading when the
+     * model does configure a reduction but the file is broken. */
+    void showError(const QString& message);
+
 protected:
     /// @brief Capture mouse double-clicks on the label
     bool eventFilter(QObject* obj, QEvent* event) override;
@@ -45,4 +52,5 @@ private:
     QLabel* label = nullptr;
     ReductionManager* reductionManager = nullptr;
     int currentStep = 0;
+    QString configurationError; ///< Why the reduction could not be loaded; empty when there was no error
 };

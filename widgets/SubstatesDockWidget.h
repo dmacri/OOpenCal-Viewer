@@ -23,6 +23,7 @@ class SubstateDisplayWidget;
 class CellHistoryDialog;
 class QPushButton;
 struct SettingParameter;
+struct SubstateValueSource;
 
 /** @class SubstatesDockWidget
  * @brief Dockable widget for managing substate field display.
@@ -104,6 +105,13 @@ public:
      * @return Checked substate field names in display order */
     std::vector<std::string> checked3DSubstatesInDisplayOrder() const;
 
+    /** @brief Tells the dock which model is shown, so that "Add substate" can ask its cells for values.
+     *
+     * The dock is also given the visualizer when a cell is clicked; this makes the button work before any click.
+     *
+     * @param visualizer The visualizer of the model which is shown (nullptr when there is none); not owned */
+    void setVisualizer(class ISceneWidgetVisualizer* visualizer);
+
     /** @brief Inform the dock which simulation step is shown in the scene.
      *
      * The step is marked on the plot of the cell history, if that window is open.
@@ -163,6 +171,9 @@ private slots:
     void onPlotHistoryClicked();
     /** @brief Handle deactivate button click */
     void onDeactivateClicked();
+
+    /** @brief Handle click of "Add substate...": ask for the name and parameters and add the substate to the panel */
+    void onAddSubstateClicked();
 
     /** @brief Handle color changes from SubstateDisplayWidget.
      * 
@@ -251,6 +262,18 @@ private:
     /// @brief Clear all substate widgets.
     void clearWidgets();
 
+    /** @brief Creates the widget of one substate with its saved parameters and connects its signals (not added to the layout). */
+    SubstateDisplayWidget* createSubstateWidget(const std::string& field, const SettingParameter& settingParameter);
+
+    /** @brief Adds, once, what is at the bottom of the panel: a stretch and the buttons "Add substate..." and "Deactivate Substate". */
+    void ensureFooter();
+
+    /// @brief Position in the layout at which the next substate widget goes (before the footer, if there is one)
+    int substateInsertIndex() const;
+
+    /// @brief The cells of the shown model as the "Add substate" dialog asks for them (all layers of a native 3D model)
+    SubstateValueSource makeValueSource() const;
+
     /** @brief Reorder widgets based on drag and drop operation.
      * 
      * @param draggedField The field name being dragged
@@ -266,6 +289,9 @@ private:
     QWidget* m_containerWidget;
     QVBoxLayout* m_containerLayout;
     class QPushButton* m_deactivateButton;
+    QPushButton* m_addSubstateButton = nullptr;
+    bool m_footerCreated = false;                  ///< The stretch and the buttons at the bottom are in the layout
+    static constexpr int kFooterItems = 3;         ///< Stretch, "Add substate...", "Deactivate Substate"
     std::map<std::string, SubstateDisplayWidget*> m_substateWidgets;
     SettingParameter* m_currentSettingParameter = nullptr;
     class ISceneWidgetVisualizer* m_currentVisualizer = nullptr;

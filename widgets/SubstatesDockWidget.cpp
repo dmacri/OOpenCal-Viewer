@@ -10,11 +10,14 @@
 #include <QPushButton>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QMessageBox>
 #include <QMimeData>
 #include "SubstatesDockWidget.h"
 #include "SubstateDisplayWidget.h"
+#include "widgets/AddSubstateDialog.h"
 #include "widgets/CellHistoryDialog.h"
 #include "visualiser/SettingParameter.h"
+#include "visualiser/SubstateString.h"
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 
 // Helper function to create a separator line
@@ -165,56 +168,80 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
     // Get substate fields
     auto fields = settingParameter->getSubstateFields();
 
-    // Create new widgets for each field
+    // Create new widgets for each field (they go before the footer, which is created once)
     for (size_t i = 0; i < fields.size(); ++i)
     {
         const auto& field = fields[i];
-        
-        auto widget = new SubstateDisplayWidget(field, m_containerWidget);
 
-        // Restore saved parameters if they exist
-        auto it = settingParameter->substateInfo.find(field);
-        if (it != settingParameter->substateInfo.end())
-        {
-            widget->setMinValue(it->second.minValue);
-            widget->setMaxValue(it->second.maxValue);
-            widget->setFormat(it->second.format);
-            widget->setMinColor(it->second.minColor);
-            widget->setMaxColor(it->second.maxColor);
-            widget->setNoValue(it->second.noValue);
-            widget->setAltitudeScale(it->second.altitudeScale);
-            // Restore noValue enabled state from saved configuration
-            widget->setNoValueEnabled(it->second.noValueEnabled);
-        }
-
-        widget->setNative3DVolumeMode(m_native3DVolumeMode);
-
-        // Connect signals
-        connect(widget, &SubstateDisplayWidget::use3dStateChanged, this, &SubstatesDockWidget::onUse3DStateChanged);
-        connect(widget, &SubstateDisplayWidget::useSubstateColorringRequested, this, &SubstatesDockWidget::onUseSubstateColorringRequested);
-        connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged), this, &SubstatesDockWidget::onMinMaxValuesChanged);
-        connect(widget, &SubstateDisplayWidget::calculateMinimumRequested, this, &SubstatesDockWidget::onCalculateMinimumRequested);
-        connect(widget, &SubstateDisplayWidget::calculateMinimumGreaterThanZeroRequested, this, &SubstatesDockWidget::onCalculateMinimumGreaterThanZeroRequested);
-        connect(widget, &SubstateDisplayWidget::calculateMaximumRequested, this, &SubstatesDockWidget::onCalculateMaximumRequested);
-        connect(widget, &SubstateDisplayWidget::colorsChanged, this, &SubstatesDockWidget::onColorsChanged);
-        connect(widget, QOverload<const std::string&, double, bool>::of(&SubstateDisplayWidget::noValueChanged), this, &SubstatesDockWidget::onNoValueChanged);
-        connect(widget, &SubstateDisplayWidget::altitudeScaleChanged, this, &SubstatesDockWidget::onAltitudeScaleChanged);
-        connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested, this, &SubstatesDockWidget::visualizationRefreshRequested);
-
-        m_containerLayout->addWidget(widget);
+        auto widget = createSubstateWidget(field, *settingParameter);
+        m_containerLayout->insertWidget(substateInsertIndex(), widget);
         m_substateWidgets[field] = widget;
-        
+
         // Add separator between widgets (but not after the last one)
         if (i < fields.size() - 1)
         {
-            m_containerLayout->addWidget(createSeparator());
+            m_containerLayout->insertWidget(substateInsertIndex(), createSeparator());
         }
     }
 
-    // Add stretch at the end to push widgets to the top
+    ensureFooter();
+}
+
+SubstateDisplayWidget* SubstatesDockWidget::createSubstateWidget(const std::string& field, const SettingParameter& settingParameter)
+{
+    auto widget = new SubstateDisplayWidget(field, m_containerWidget);
+
+    // Restore saved parameters if they exist
+    auto it = settingParameter.substateInfo.find(field);
+    if (it != settingParameter.substateInfo.end())
+    {
+        widget->setMinValue(it->second.minValue);
+        widget->setMaxValue(it->second.maxValue);
+        widget->setFormat(it->second.format);
+        widget->setMinColor(it->second.minColor);
+        widget->setMaxColor(it->second.maxColor);
+        widget->setNoValue(it->second.noValue);
+        widget->setAltitudeScale(it->second.altitudeScale);
+        // Restore noValue enabled state from saved configuration
+        widget->setNoValueEnabled(it->second.noValueEnabled);
+    }
+
+    widget->setNative3DVolumeMode(m_native3DVolumeMode);
+
+    // Connect signals
+    connect(widget, &SubstateDisplayWidget::use3dStateChanged, this, &SubstatesDockWidget::onUse3DStateChanged);
+    connect(widget, &SubstateDisplayWidget::useSubstateColorringRequested, this, &SubstatesDockWidget::onUseSubstateColorringRequested);
+    connect(widget, QOverload<const std::string&, double, double>::of(&SubstateDisplayWidget::minMaxValuesChanged), this, &SubstatesDockWidget::onMinMaxValuesChanged);
+    connect(widget, &SubstateDisplayWidget::calculateMinimumRequested, this, &SubstatesDockWidget::onCalculateMinimumRequested);
+    connect(widget, &SubstateDisplayWidget::calculateMinimumGreaterThanZeroRequested, this, &SubstatesDockWidget::onCalculateMinimumGreaterThanZeroRequested);
+    connect(widget, &SubstateDisplayWidget::calculateMaximumRequested, this, &SubstatesDockWidget::onCalculateMaximumRequested);
+    connect(widget, &SubstateDisplayWidget::colorsChanged, this, &SubstatesDockWidget::onColorsChanged);
+    connect(widget, QOverload<const std::string&, double, bool>::of(&SubstateDisplayWidget::noValueChanged), this, &SubstatesDockWidget::onNoValueChanged);
+    connect(widget, &SubstateDisplayWidget::altitudeScaleChanged, this, &SubstatesDockWidget::onAltitudeScaleChanged);
+    connect(widget, &SubstateDisplayWidget::visualizationRefreshRequested, this, &SubstatesDockWidget::visualizationRefreshRequested);
+    return widget;
+}
+
+int SubstatesDockWidget::substateInsertIndex() const
+{
+    return m_footerCreated ? m_containerLayout->count() - kFooterItems : m_containerLayout->count();
+}
+
+void SubstatesDockWidget::ensureFooter()
+{
+    if (m_footerCreated)
+        return;
+
+    // Push widgets to the top
     m_containerLayout->addStretch();
-    
-    // Add deactivate button at the bottom (only create once)
+
+    m_addSubstateButton = new QPushButton(tr("Add substate..."));
+    m_addSubstateButton->setMaximumHeight(24);
+    m_addSubstateButton->setStyleSheet("QPushButton { font-size: 9pt; padding: 3px; }");
+    m_addSubstateButton->setToolTip(tr("Add a substate which is not listed in Header.txt (the model has to return a number for its name)"));
+    connect(m_addSubstateButton, &QPushButton::clicked, this, &SubstatesDockWidget::onAddSubstateClicked);
+    m_containerLayout->addWidget(m_addSubstateButton);
+
     if (! m_deactivateButton)
     {
         m_deactivateButton = new QPushButton("Deactivate Substate");
@@ -223,6 +250,90 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
         connect(m_deactivateButton, &QPushButton::clicked, this, &SubstatesDockWidget::onDeactivateClicked);
     }
     m_containerLayout->addWidget(m_deactivateButton);
+
+    m_footerCreated = true;
+}
+
+void SubstatesDockWidget::setVisualizer(ISceneWidgetVisualizer* visualizer)
+{
+    m_currentVisualizer = visualizer;
+}
+
+SubstateValueSource SubstatesDockWidget::makeValueSource() const
+{
+    SubstateValueSource source;
+    if (! m_currentSettingParameter || ! m_currentVisualizer)
+        return source;
+
+    const auto rows = static_cast<std::size_t>(std::max(0, m_currentSettingParameter->numberOfRowsY));
+    const auto columns = static_cast<std::size_t>(std::max(0, m_currentSettingParameter->numberOfColumnX));
+    const auto layers = m_native3DVolumeMode ? static_cast<std::size_t>(std::max(1, m_currentSettingParameter->numberOfSlicesZ)) : std::size_t{1};
+
+    source.cellCount = rows * columns * layers;
+    if (source.cellCount == 0)
+        return source;
+
+    ISceneWidgetVisualizer* visualizer = m_currentVisualizer;
+    const bool volume = m_native3DVolumeMode;
+    source.textOfCell = [visualizer, rows, columns, volume](const std::string& name, std::size_t index)
+    {
+        const std::size_t perLayer = rows * columns;
+        const std::size_t layer = index / perLayer;
+        const std::size_t inLayer = index % perLayer;
+        const std::size_t row = inLayer / columns;
+        const std::size_t column = inLayer % columns;
+        if (volume)
+            return visualizer->getVolumeCellStringEncoding(GridCellIndex{row, column, layer}, name.c_str());
+        return visualizer->getCellStringEncoding(static_cast<int>(row), static_cast<int>(column), name.c_str());
+    };
+    return source;
+}
+
+void SubstatesDockWidget::onAddSubstateClicked()
+{
+    if (! m_currentSettingParameter || ! m_currentVisualizer)
+    {
+        QMessageBox::information(this, tr("Add substate"), tr("Load a simulation first: the name of a substate is checked against its cells."));
+        return;
+    }
+
+    // What the user changed in the panel must be in the line which the dialog writes for Header.txt
+    saveParametersToSettings(m_currentSettingParameter);
+
+    std::vector<SubstateInfo> existing;
+    for (const auto& field : m_currentSettingParameter->getSubstateFields())
+    {
+        auto it = m_currentSettingParameter->substateInfo.find(field);
+        if (it != m_currentSettingParameter->substateInfo.end())
+        {
+            existing.push_back(it->second);
+        }
+        else
+        {
+            SubstateInfo info;
+            info.name = field;
+            existing.push_back(info);
+        }
+    }
+
+    AddSubstateDialog dialog(makeValueSource(), std::move(existing), window());
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    SubstateInfo info = dialog.substate();
+    if (m_substateWidgets.count(info.name) != 0)
+        return; // the dialog does not allow it; never replace a widget which is in use
+
+    // The list of the panel is built from this line, so the new entry goes there too
+    std::string& line = m_currentSettingParameter->substates;
+    line += (line.empty() ? "" : ",") + SubstateString::formatEntry(info);
+    m_currentSettingParameter->substateInfo[info.name] = info;
+
+    auto* widget = createSubstateWidget(info.name, *m_currentSettingParameter);
+    if (! m_substateWidgets.empty())
+        m_containerLayout->insertWidget(substateInsertIndex(), createSeparator());
+    m_containerLayout->insertWidget(substateInsertIndex(), widget);
+    m_substateWidgets[info.name] = widget;
 }
 
 void SubstatesDockWidget::onUseSubstateColorringRequested(const std::string&)
@@ -338,12 +449,9 @@ void SubstatesDockWidget::clearWidgets()
 {
     // Remove all widgets from layout except:
     // - First 2 items: label + separator (header)
-    // - Last 2 items: stretch + deactivate button (footer)
-    // We need to count total items and remove only the middle ones (substates)
-    
-    // Remove items from index 2 to (totalItems - 2)
-    // This preserves header (0-1) and footer (totalItems-2 to totalItems-1)
-    while (m_containerLayout->count() > 4)  // Keep: header (2) + stretch (1) + button (1)
+    // - Last kFooterItems items: stretch + buttons (footer), if it was created
+    const int keep = 2 + (m_footerCreated ? kFooterItems : 0);
+    while (m_containerLayout->count() > keep)
     {
         QLayoutItem* item = m_containerLayout->takeAt(2);
         if (QWidget* widget = item->widget())

@@ -326,9 +326,15 @@ std::string CompilationConfig::getCompilationFlags() const
 
 std::string CompilationConfig::getDefaultCompilationFlags() const
 {
-#ifdef _WIN32
-    // Windows: Use DLL export flags for Visual Studio
+#if defined(_WIN32) && defined(_MSC_VER)
+    // Windows + Visual Studio: Use DLL export flags for cl.exe
     return "/LD /DBUILDING_DLL /EHsc";
+#elif defined(_WIN32)
+    // Windows + MinGW-w64 (g++/clang++): a PE DLL. There is no -fPIC here (all code is position independent already,
+    // the flag would only produce a warning). BUILDING_DLL makes the generated wrapper export its entry points.
+    // -O1: VTK declares its array templates "extern" and the DLLs do not export their inline members (e.g.
+    // vtkAOSDataArrayTemplate<T>::SetValue), so without optimization (no inlining) the linker cannot resolve them.
+    return "-shared -DBUILDING_DLL -O1";
 #else
     // Linux/macOS: Use shared library flags
     return "-shared -fPIC";

@@ -1,0 +1,141 @@
+name: Windows Build (MinGW-w64, portable All-in-One with compiler)
+
+# Counterpart of the Linux AppImage "All-in-One with Compiler" for Windows (issue #129).
+# The program, Qt and VTK are built with MinGW-w64 (UCRT) - the same toolchain which is put into the package, so models compiled on
+# the user's machine are ABI compatible with the program. Unlike Visual Studio, MinGW-w64 can be legally redistributed.
+# The MSVC build (windows-build.yml) is independent and stays as it is.
+#
+# Qt and VTK come as prebuilt MSYS2 packages for the UCRT64 environment (the same GCC ABI as the compiler which is shipped),
+# so there is no need to build VTK from sources.
+#
+# The packaging is done by scripts/windows-mingw/package.sh, the check of the result by scripts/windows-mingw/smoke-test/.
+# Description of the package: doc/WINDOWS_MINGW_PORTABLE.md
+
+on:
+  push:
+    branches:
+      - '**'
+    paths-ignore:
+      - '**/*.md'
+      - 'doc/**'
+  release:
+    types: [created]
+  workflow_dispatch:
+
+env:
+  PROJECT_NAME: OOpenCal-Viewer
+  PACKAGE_NAME: OOpenCal-Viewer-windows-mingw-portable
+
+jobs:
+  build-windows-mingw:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    permissions:
+      contents: write   # uploading the ZIP to a release
+
+    steps:
+      ################### checkout & dependencies ###################
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout OOpenCAL dependency
+        uses: actions/checkout@v4
+        with:
+          repository: alessioderango/OOpenCAL
+          path: deps/OOpenCAL
+          token: ${{ secrets.VisualizerOpenCal }}
+
+      ################### MinGW-w64 (UCRT) + Qt6 + VTK ###################
+      - name: Setup MSYS2 (UCRT64 toolchain, Qt6, VTK)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          # libogg, libtheora and gl2ps are optional dependencies of the VTK package, but the modules which this project uses
+          # (IOOggTheora, RenderingGL2PSOpenGL2) cannot work without them.
+          # nlohmann-json: VTK-targets.cmake links its VTK::nlohmannjson target to nlohmann_json::nlohmann_json and CMake fails
+          # with "target was not found" when the package is not there (even though no used module needs it)
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-vtk
+            mingw-w64-ucrt-x86_64-libogg
+            mingw-w64-ucrt-x86_64-libtheora
+            mingw-w64-ucrt-x86_64-gl2ps
+            mingw-w64-ucrt-x86_64-libpng
+            mingw-w64-ucrt-x86_64-nlohmann-json
+
+      - name: Show toolchain versions
+        shell: msys2 {0}
+        run: |
+          g++ --version | head -n1
+          cmake --version | head -n1
+          qtpaths6 --qt-version || true
+          pacman -Q mingw-w64-ucrt-x86_64-vtk mingw-w64-ucrt-x86_64-qt6-base
+
+      ################### build application ###################
+      - name: Configure CMake
+        shell: msys2 {0}
+        run: |
+          # Examples and tests are not needed in the package (and tests would download GoogleTest)
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUSE_QT6=ON \
+            -DOOPENCAL_DIR="$(cygpath -m "$GITHUB_WORKSPACE/deps")" \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_TESTS=OFF \
+            -DENABLE_SANITIZERS=OFF
+
+      - name: Build application
+        shell: msys2 {0}
+        run: |
+          cmake --build build --target ${PROJECT_NAME}
+
+      - name: Report symbols exported for plugins
+        shell: msys2 {0}
+        run: |
+          # Models are DLLs linked against the import library of the executable, which needs all its symbols exported.
+          # A PE file can export at most 65535 symbols: it is worth knowing how much room is left.
+          test -f "build/lib${PROJECT_NAME}.dll.a" || { echo "::error::import library of the executable was not produced"; exit 1; }
+          count=$(objdump -p "build/${PROJECT_NAME}.exe" | sed -n '/Ordinal\/Name Pointer/,$p' | grep -c '^[[:space:]]*\[' || true)
+          echo "Exported symbols: ${count} (limit 65535)"
+          if [ "${count}" -gt 60000 ]; then echo "::warning::${count} exported symbols: close to the limit of 65535"; fi
+
+      ################### package ###################
+      - name: Create the package (program + Qt + VTK + compiler + headers)
+        shell: msys2 {0}
+        run: |
+          scripts/windows-mingw/package.sh . build deps "dist/${PACKAGE_NAME}"
+
+      ################### check the package as a clean machine would run it ###################
+      - name: Smoke test (clean PATH - program starts, bundled g++ builds a model, program loads it)
+        shell: pwsh
+        run: |
+          & scripts/windows-mingw/smoke-test/run-smoke-test.ps1 -Package "dist/${{ env.PACKAGE_NAME }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      ################### archive ###################
+      - name: Create ZIP archive
+        shell: pwsh
+        working-directory: dist
+        run: |
+          7z a -tzip -mx=5 -bso0 -bsp0 "${{ env.PACKAGE_NAME }}.zip" "${{ env.PACKAGE_NAME }}"
+          Get-Item "${{ env.PACKAGE_NAME }}.zip" | ForEach-Object { "{0}: {1:N0} MB" -f $_.Name, ($_.Length / 1MB) }
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: dist/${{ env.PACKAGE_NAME }}.zip
+          compression-level: 0   # it is a ZIP already
+          if-no-files-found: error
+
+      ################### release upload ###################
+      - name: Upload package to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ env.PACKAGE_NAME }}.zip

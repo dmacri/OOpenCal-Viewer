@@ -1545,7 +1545,8 @@ void MainWindow::updateSubstateDockeWidget()
     {
         auto settingParam = const_cast<SettingParameter*>(ui->sceneWidget->getSettingParameter());
         settingParam->initializeSubstateInfo();
-        ui->substatesDockWidget->toggleViewAction()->setEnabled(!settingParam->substateInfo.empty());
+        // Also without any substate in Header.txt: the panel is where a substate is added ("Add substate...")
+        ui->substatesDockWidget->toggleViewAction()->setEnabled(true);
         // In a native 3D model the substates are drawn in the volume, in a 2D model they are altitudes
         ui->substatesDockWidget->setNative3DVolumeMode(ui->sceneWidget->isNative3DModel());
         ui->substatesDockWidget->updateSubstates(settingParam);
@@ -1767,7 +1768,7 @@ void MainWindow::recreateModelMenuActions()
             ui->menuModel->addAction(action);
 
             connect(action, &QAction::triggered, this, &MainWindow::onModelSelected);
-            cout << "+ Model: " << modelName << endl;
+            std::cout << "+ Model: " << modelName << std::endl;
         }
     }
 
@@ -2671,6 +2672,7 @@ void MainWindow::initializeReductionManager(const QString& configFileName, std::
     {
         reductionManager.reset();
         ui->actionShow_reduction->setEnabled(false);
+        ui->reductionWidget->showError(QString::fromStdString(e.what()));
         std::cerr << "Error initializing ReductionManager: " << e.what() << std::endl;
     }
 }
