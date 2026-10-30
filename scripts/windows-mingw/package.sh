@@ -10,8 +10,8 @@
 #   <oopencal-parent-dir>  directory which contains OOpenCAL/ (OOPENCAL_DIR of the CMake build)
 #   <output-dir>           the package is created here (removed first)
 #
-# Layout of the result (OOpenCal-Viewer.bat is what the user double-clicks):
-#   OOpenCal-Viewer.bat, compiler-env.bat, README.txt, THIRD-PARTY-NOTICES.txt
+# Layout of the result (OOpenCal-Viewer.exe, the launcher without a console window, is what the user double-clicks):
+#   OOpenCal-Viewer.exe, OOpenCal-Viewer-console.bat, compiler-env.bat, README.txt, THIRD-PARTY-NOTICES.txt
 #   bin/       OOpenCal-Viewer.exe, Qt and VTK DLLs, runtime of the compiler, Qt plugins (bin/plugins, found through bin/qt.conf)
 #   compiler/  MinGW-w64 g++ with its headers and libraries (prefix layout: bin, lib, include, ...)
 #   include/   headers for compiling models: oopencal-viewer/, OOpenCAL/base/, vtk/
@@ -162,7 +162,18 @@ echo "   $(wc -l < "$PKG/lib/plugin-libs.rsp") VTK import libraries"
 
 # ------------------------------------------------------------------------------------------------------------------------------
 echo "== Launcher and documents"
-cp "$HERE/OOpenCal-Viewer.bat" "$HERE/compiler-env.bat" "$PKG/"
+cp "$HERE/OOpenCal-Viewer-console.bat" "$HERE/compiler-env.bat" "$PKG/"
+
+# OOpenCal-Viewer.exe: the launcher which is double-clicked. A program of the GUI subsystem with the icon of the application,
+# so that there is no console window next to the window of the program (a .bat file cannot have an icon or hide its console).
+# Linked statically: it must work when everything else in the package is broken.
+command -v windres > /dev/null || { echo "error: windres (binutils) is needed to build the launcher" >&2; exit 1; }
+launcher_dir="$HERE/launcher"
+launcher_resource=$(mktemp --suffix=.o)
+windres -O coff -I "$launcher_dir" "$launcher_dir/launcher.rc" -o "$launcher_resource"
+g++ -std=c++20 -O2 -s -static -mwindows -municode -Wall -Wextra "$launcher_dir/launcher.cpp" "$launcher_resource" -o "$PKG/OOpenCal-Viewer.exe"
+rm -f "$launcher_resource"
+echo "   launcher: $(du -h "$PKG/OOpenCal-Viewer.exe" | cut -f1)"
 [[ -f "$REPO/LICENSE" ]] && cp "$REPO/LICENSE" "$PKG/LICENSE-OOpenCal-Viewer.txt"
 
 cat > "$PKG/README.txt" <<'EOF'
@@ -170,11 +181,14 @@ OOpenCal-Viewer - portable Windows version with a built-in C++ compiler
 =======================================================================
 
 1. Extract the whole ZIP archive to a directory WITHOUT spaces in its path (e.g. C:\OOpenCal-Viewer).
-2. Double-click OOpenCal-Viewer.bat.
+2. Double-click OOpenCal-Viewer.exe.
 3. Open a model directory: the C++ model is compiled automatically by the compiler from the "compiler" directory.
 
 Nothing has to be installed (no Visual Studio, no MinGW, no administrator rights). Command line arguments are passed to the
-program, e.g.:  OOpenCal-Viewer.bat C:\path\to\model\directory
+program, e.g.:  OOpenCal-Viewer.exe C:\path\to\model\directory
+
+The launcher shows no console window. What the program prints (the output of the compiler, warnings) is written to
+%LOCALAPPDATA%\OOpenCal-Viewer\OOpenCal-Viewer.log. To see it live, start OOpenCal-Viewer-console.bat instead.
 
 The compiler is MinGW-w64 (GCC, UCRT runtime). The program, Qt, VTK and the models are all built with it, so they are
 compatible with each other. Do not replace the compiler with another one (e.g. Visual Studio): C++ code built by different

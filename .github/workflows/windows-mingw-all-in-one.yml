@@ -19,7 +19,7 @@ on:
       - '**/*.md'
       - 'doc/**'
   release:
-    types: [created]
+    types: [published]   # not "created": see release--app-image--all-in-one--ubuntu24.04.yml
   workflow_dispatch:
 
 env:
@@ -139,3 +139,21 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/${{ env.PACKAGE_NAME }}.zip
+          fail_on_unmatched_files: true
+
+      - name: Check that the file is attached to the release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          EXPECTED_ASSET: ${{ env.PACKAGE_NAME }}.zip
+        run: |
+          # Fails the job (and so the release gets a red cross) when the upload above did not leave the file in the release
+          assets=$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
+          echo "Files attached to release $TAG_NAME:"
+          echo "$assets"
+          if ! grep -Fxq "$EXPECTED_ASSET" <<< "$assets"; then
+            echo "::error::$EXPECTED_ASSET is not attached to release $TAG_NAME"
+            exit 1
+          fi

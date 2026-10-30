@@ -93,11 +93,12 @@ public:
         MetricsCategory category = MetricsCategory::DataLoading;  ///< Category for summary filtering
     };
 
-    static PerformanceMetrics& instance()
-    {
-        static PerformanceMetrics singleton;
-        return singleton;
-    }
+    /** @brief The one instance of the program.
+     *
+     *  Defined in PerformanceMetrics.cpp, i.e. in the executable, and not inline here: a function-local static of an inline function
+     *  exists once per module on Windows, so a model plugin (a DLL compiled on the fly) would collect its metrics into a copy of its
+     *  own. Out of line, the plugin uses the instance of the executable (like it uses SceneWidgetVisualizerFactory). */
+    static PerformanceMetrics& instance();
 
     // Prevent copying and moving
     PerformanceMetrics(const PerformanceMetrics&) = delete;
