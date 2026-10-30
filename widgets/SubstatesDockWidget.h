@@ -7,9 +7,12 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 #include <QDockWidget>
+#include "core/types.h" // StepIndex
+#include "visualiserProxy/ContiguousGrid.h" // GridCellIndex
 #include <QScrollArea>
 #include <QVBoxLayout>
 
@@ -17,7 +20,10 @@ class QDragEnterEvent;
 class QDropEvent;
 
 class SubstateDisplayWidget;
+class CellHistoryDialog;
+class QPushButton;
 struct SettingParameter;
+struct SubstateValueSource;
 
 /** @class SubstatesDockWidget
  * @brief Dockable widget for managing substate field display.
@@ -56,6 +62,17 @@ public:
      * @param visualizer Optional visualizer to get cell values from */
     void updateCellValues(SettingParameter* settingParameter, int row, int col, class ISceneWidgetVisualizer* visualizer = nullptr);
 
+    /** @brief Update cell values for a cell clicked in the complete 3D volume of a native 3D model.
+     *
+     *  Like updateCellValues(), but the cell is given by its position in the whole grid (row, column
+     *  and layer), not in the displayed plane: the volume is not a cross-section. The header shows
+     *  all three coordinates and the plot of the history follows the same cell.
+     *
+     *  @param settingParameter The setting parameter
+     *  @param cell Position of the cell in the whole 3D grid
+     *  @param visualizer Visualizer to get cell values from */
+    void updateVolumeCellValues(SettingParameter* settingParameter, const GridCellIndex& cell, class ISceneWidgetVisualizer* visualizer);
+
     /** @brief Save current parameter values to SettingParameter.
      * 
      * Saves min, max, and format values from all widgets back to substateInfo.
@@ -87,6 +104,20 @@ public:
      *
      * @return Checked substate field names in display order */
     std::vector<std::string> checked3DSubstatesInDisplayOrder() const;
+
+    /** @brief Tells the dock which model is shown, so that "Add substate" can ask its cells for values.
+     *
+     * The dock is also given the visualizer when a cell is clicked; this makes the button work before any click.
+     *
+     * @param visualizer The visualizer of the model which is shown (nullptr when there is none); not owned */
+    void setVisualizer(class ISceneWidgetVisualizer* visualizer);
+
+    /** @brief Inform the dock which simulation step is shown in the scene.
+     *
+     * The step is marked on the plot of the cell history, if that window is open.
+     *
+     * @param step The step shown in the scene */
+    void setCurrentStep(StepIndex step);
 
 signals:
     /** @brief Signal emitted when a field's 3D state changes.
@@ -136,8 +167,13 @@ private slots:
      * @param fieldName The name of the field */
     void onCalculateMaximumRequested(const std::string& fieldName);
 
+    /** @brief Handle click of "Plot over time...": read the history of the selected cell and show it */
+    void onPlotHistoryClicked();
     /** @brief Handle deactivate button click */
     void onDeactivateClicked();
+
+    /** @brief Handle click of "Add substate...": ask for the name and parameters and add the substate to the panel */
+    void onAddSubstateClicked();
 
     /** @brief Handle color changes from SubstateDisplayWidget.
      * 
@@ -183,6 +219,25 @@ public slots:
     /// @brief Uncheck all use2D checkboxes. */
     void uncheckAllUse2DCheckboxes();
 
+    /** @brief Whether the panel stays open when the scene is clicked outside of any cell.
+     *
+     *  A panel opened by clicking a cell is hidden again by a click on the background. A panel opened from the
+     *  menu (View -> Substate parameters) is not: it is needed to set up the substates, e.g. when nothing is
+     *  visible yet to click on, and is closed from the menu or with its close button. */
+    bool isKeptOpen() const { return m_keptOpen; }
+
+    /// @brief Sets whether the panel stays open when the background of the scene is clicked (see isKeptOpen())
+    void setKeptOpen(bool keptOpen) { m_keptOpen = keptOpen; }
+
+    /** @brief Uncheck all "3D" checkboxes without notifying anybody (the caller redraws the scene itself). */
+    void uncheckAllUse3DCheckboxes();
+
+    /** @brief Whether the substates of a native 3D model are shown (see SubstateDisplayWidget::setNative3DVolumeMode()).
+     *
+     *  Applies to the widgets which exist now and to the ones created by updateSubstates() later.
+     *  @param enabled true for a native 3D model */
+    void setNative3DVolumeMode(bool enabled);
+
     /// @brief Informs about changes in substat colloring
     void onUseSubstateColorringRequested(const std::string& fieldName);
 
@@ -194,8 +249,30 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
+    /** @brief Read the history of the selected cell and show it in the history window.
+     *
+     * A progress dialog with a cancel button is shown while the files are read.
+     *
+     * @param showWindow Show (raise) the window; false only refreshes it when it is already visible */
+    void showHistoryOfSelectedCell(bool showWindow);
+
+    /// @brief Forget the selected cell and close the history window (the data it came from is gone)
+    void resetSelectedCell();
+
     /// @brief Clear all substate widgets.
     void clearWidgets();
+
+    /** @brief Creates the widget of one substate with its saved parameters and connects its signals (not added to the layout). */
+    SubstateDisplayWidget* createSubstateWidget(const std::string& field, const SettingParameter& settingParameter);
+
+    /** @brief Adds, once, what is at the bottom of the panel: a stretch and the buttons "Add substate..." and "Deactivate Substate". */
+    void ensureFooter();
+
+    /// @brief Position in the layout at which the next substate widget goes (before the footer, if there is one)
+    int substateInsertIndex() const;
+
+    /// @brief The cells of the shown model as the "Add substate" dialog asks for them (all layers of a native 3D model)
+    SubstateValueSource makeValueSource() const;
 
     /** @brief Reorder widgets based on drag and drop operation.
      * 
@@ -212,7 +289,20 @@ private:
     QWidget* m_containerWidget;
     QVBoxLayout* m_containerLayout;
     class QPushButton* m_deactivateButton;
+    QPushButton* m_addSubstateButton = nullptr;
+    bool m_footerCreated = false;                  ///< The stretch and the buttons at the bottom are in the layout
+    static constexpr int kFooterItems = 3;         ///< Stretch, "Add substate...", "Deactivate Substate"
     std::map<std::string, SubstateDisplayWidget*> m_substateWidgets;
     SettingParameter* m_currentSettingParameter = nullptr;
     class ISceneWidgetVisualizer* m_currentVisualizer = nullptr;
+
+    QPushButton* m_plotHistoryButton = nullptr;
+    CellHistoryDialog* m_historyDialog = nullptr;
+    bool m_hasSelectedCell = false;  ///< A cell was clicked since the data were (re)loaded
+    int m_selectedRow = 0;           ///< Row of the clicked cell in the displayed plane
+    int m_selectedCol = 0;           ///< Column of the clicked cell in the displayed plane
+    bool m_keptOpen = false; ///< Opened from the menu, a click on the background does not hide it
+    bool m_native3DVolumeMode = false; ///< The substates are shown in a 3D volume, not as altitude
+    std::optional<GridCellIndex> m_selectedVolumeCell; ///< Set when the cell was clicked in the complete 3D volume (then it is the position in the whole grid)
+    std::optional<StepIndex> m_currentStep;
 };

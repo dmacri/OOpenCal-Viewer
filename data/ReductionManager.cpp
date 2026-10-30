@@ -56,7 +56,9 @@ void ReductionManager::loadReductionData(const QString& filePath)
 
         if (! parseLine(line, stepNumber, values))
         {
-            errorMessage = QString("Failed to parse line %1 in reduction file: %2").arg(lineNumber).arg(line);
+            errorMessage = QString("Failed to parse line %1 in reduction file '%2': %3\n%4")
+                               .arg(lineNumber)
+                               .arg(filePath, describeParseFailure(line), line.left(200));
             file.close();
             dataLoaded = false;
             throw std::runtime_error(errorMessage.toStdString());
@@ -68,6 +70,21 @@ void ReductionManager::loadReductionData(const QString& filePath)
     file.close();
     dataLoaded = true;
     std::cout << "Loaded reduction data for " << reductionDataByStep.size() << " steps" << std::endl;
+}
+
+QString ReductionManager::describeParseFailure(const QString& line)
+{
+    const QStringList parts = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+    bool isStepNumber = false;
+    if (! parts.empty())
+        parts[0].toInt(&isStepNumber);
+    if (!isStepNumber)
+        return "the line does not start with a step number";
+    if (parts.size() < 2)
+        return "there are no reduction values after the step number";
+    if (parts[1].contains('=') && ! parts[1].contains(QRegularExpression("=[^,\\s]")))
+        return "every reduction has an empty value (e.g. 'name=,'); the simulation did not write any reduction results";
+    return "expected 'step name=value,name=value,...'";
 }
 
 bool ReductionManager::parseLine(const QString& line, int& stepNumber, std::map<QString, QString>& values) const

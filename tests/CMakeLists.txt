@@ -136,6 +136,67 @@ target_include_directories(VolumeZSpacingTests PRIVATE
 add_test(NAME VolumeZSpacingTests COMMAND VolumeZSpacingTests)
 
 # ============================================
+# Add test executable for VolumePicking (header-only, no Qt/VTK)
+# ============================================
+add_executable(VolumePickingTests
+    VolumePickingTests.cpp
+)
+
+target_link_libraries(VolumePickingTests
+    GTest::gtest_main
+)
+
+target_include_directories(VolumePickingTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME VolumePickingTests COMMAND VolumePickingTests)
+
+# ============================================
+# Add test executable for VolumeLayers (header-only, no Qt/VTK)
+# ============================================
+add_executable(VolumeLayersTests
+    VolumeLayersTests.cpp
+)
+
+target_link_libraries(VolumeLayersTests
+    GTest::gtest_main
+)
+
+target_include_directories(VolumeLayersTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME VolumeLayersTests COMMAND VolumeLayersTests)
+
+# ============================================
+# Add test executable for the history of a cell (reading one cell across steps)
+# ============================================
+add_executable(CellHistoryTests
+    CellHistoryTests.cpp
+    ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
+)
+
+target_link_libraries(CellHistoryTests
+    GTest::gtest_main
+)
+
+target_include_directories(CellHistoryTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/data
+    ${CMAKE_SOURCE_DIR}/core
+    ${CMAKE_SOURCE_DIR}/visualiser
+    ${OOPENCAL_DIR}
+    ${OOPENCAL_DIR}/OOpenCAL
+)
+
+if(OOPENCAL_DIR)
+    target_compile_definitions(CellHistoryTests PRIVATE OOPENCAL_DIR="${OOPENCAL_DIR}")
+endif()
+
+add_test(NAME CellHistoryTests COMMAND CellHistoryTests)
+
+# ============================================
 # Add test executable for NumberFormatting (header-only, no Qt/VTK)
 # ============================================
 add_executable(NumberFormattingTests
@@ -222,3 +283,42 @@ target_include_directories(ActionApiTests PRIVATE
 )
 
 add_test(NAME ActionApiTests COMMAND ActionApiTests)
+# Add test executable for ReductionManager (Qt Core only)
+# ============================================
+add_executable(ReductionManagerTests
+    ReductionManagerTests.cpp
+    ${CMAKE_SOURCE_DIR}/data/ReductionManager.cpp
+)
+
+target_link_libraries(ReductionManagerTests
+    GTest::gtest_main
+    ${QT_TARGET_PREFIX}::Core
+)
+
+target_include_directories(ReductionManagerTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/data
+)
+
+add_test(NAME ReductionManagerTests COMMAND ReductionManagerTests)
+
+# ============================================
+# Add test executable for SubstateString (substates line and values of a substate)
+# ============================================
+add_executable(SubstateStringTests
+    SubstateStringTests.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/SubstateString.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/SettingParameter.cpp
+)
+
+target_link_libraries(SubstateStringTests
+    GTest::gtest_main
+)
+
+target_include_directories(SubstateStringTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/visualiser
+    ${CMAKE_SOURCE_DIR}/core
+)
+
+add_test(NAME SubstateStringTests COMMAND SubstateStringTests)

@@ -171,6 +171,7 @@ list(APPEND Sources
     config/Config.cpp
     config/ConfigCategory.cpp
     visualiser/SettingParameter.cpp
+    visualiser/SubstateString.cpp
     visualiser/VideoExporter.cpp
     visualiser/Visualiser.cpp
     visualiserProxy/SceneWidgetVisualizerFactory.cpp
@@ -188,10 +189,13 @@ list(APPEND Sources
     widgets/ReductionDisplayWidget.cpp
     widgets/SubstateDisplayWidget.cpp
     widgets/SubstatesDockWidget.cpp
+    widgets/AddSubstateDialog.cpp
     widgets/CustomInteractorStyle.cpp
     widgets/RulerAxisActor2D.cpp
     widgets/CustomDirectoryDialog.cpp
     widgets/PerformanceSettingsDialog.cpp
+    widgets/CellHistoryDialog.cpp
+    widgets/TimeSeriesPlot.cpp
     plugins/PluginLoader.cpp
     plugins/ActionRegistry.cpp
     plugins/ActionRunner.cpp
@@ -230,6 +234,7 @@ set(OTHER_FILES
     LICENSE
     .github/workflows/release--app-image--all-in-one--ubuntu24.04.yml
     .github/workflows/windows-build.yml
+    .github/workflows/windows-mingw-all-in-one.yml
     .github/workflows/doxygen-pages.yml
     .github/workflows/test--build-and-run-tests--ubuntu24.04.yml
     .github/workflows/static-analysis-cppcheck.yml
@@ -268,6 +273,7 @@ find_package(freetype QUIET)
 # The 'GUISupportQt' module internally calls find_package(Qt6),
 # so finding VTK first prevents duplicate Qt target definitions.
 find_package(VTK QUIET COMPONENTS
+    ChartsCore
     CommonColor
     CommonCore
     CommonDataModel
@@ -282,6 +288,7 @@ find_package(VTK QUIET COMPONENTS
     RenderingOpenGL2
     RenderingVolume
     RenderingVolumeOpenGL2
+    ViewsContext2D
     IOXML
     IOOggTheora
     GUISupportQt
@@ -516,9 +523,17 @@ if(NOT WIN32)
     target_link_options(${PROJECT_NAME} PRIVATE -rdynamic)
 endif()
 
+# MinGW-w64: the same need, but a PE DLL (a model plugin compiled at run time) can only be linked against an import library, so
+# the executable has to export its symbols and to produce libOOpenCal-Viewer.dll.a (CMake does it for ENABLE_EXPORTS).
+# See scripts/windows-mingw/ and .github/workflows/windows-mingw-all-in-one.yml
+if(MINGW)
+    set_target_properties(${PROJECT_NAME} PROPERTIES ENABLE_EXPORTS ON)
+    target_link_options(${PROJECT_NAME} PRIVATE -Wl,--export-all-symbols)
+endif()
+
 vtk_module_autoinit(
     TARGETS ${PROJECT_NAME}
-    MODULES VTK::GUISupportQt VTK::IOLegacy VTK::RenderingVolumeOpenGL2
+    MODULES VTK::GUISupportQt VTK::IOLegacy VTK::RenderingVolumeOpenGL2 VTK::RenderingContextOpenGL2
 )
 
 # ============================================
