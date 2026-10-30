@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
@@ -165,6 +166,21 @@ private:
                                    int zGapPlanes);
 
 public:
+
+    /// @brief CPU time of colouring the cells during the last refreshWindowsVTK() of the flat view (used by --benchmark).
+    /// @details It is the time of calculating the colour of every cell and of writing it into the lookup table
+    ///          (Points, Cells) or into the pixels of the texture (Texture). Zero until the first refresh.
+    std::chrono::duration<double, std::milli> lastColoringTime() const
+    {
+        return lastColoringDuration;
+    }
+
+    /// @brief Sets lastColoringTime() to zero, so that a refresh which does not colour the flat grid (e.g. the 3D views)
+    ///        does not report the time of an earlier one.
+    void resetLastColoringTime()
+    {
+        lastColoringDuration = {};
+    }
 
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
@@ -385,6 +401,7 @@ private:
     /// @brief This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
     Color flatSceneBackgroundColor() const;
     GlobalValueManager* gvm = nullptr;
+    std::chrono::duration<double, std::milli> lastColoringDuration{}; ///< see lastColoringTime()
 };
 
 ////////////////////////////////////////////////////////////////////
@@ -567,7 +584,9 @@ void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSma
     {
         if (auto* image = vtkImageData::SafeDownCast(texture->GetInput()))
         {
+            const auto coloringStart = std::chrono::steady_clock::now();
             const bool hasTransparentCells = fillColorImage(image, nCols, nRows, p, colorSubstateInfos);
+            lastColoringDuration = std::chrono::steady_clock::now() - coloringStart;
             gridActor->SetForceTranslucent(hasTransparentCells);
             texture->Modified();
             return;
@@ -576,7 +595,9 @@ void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSma
 
     if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(gridActor->GetMapper()->GetLookupTable()))
     {
+        const auto coloringStart = std::chrono::steady_clock::now();
         const bool hasTransparentCells = buidColor(lut, nCols, nRows, p, colorSubstateInfos);
+        lastColoringDuration = std::chrono::steady_clock::now() - coloringStart;
         gridActor->SetForceTranslucent(hasTransparentCells);
         gridActor->GetMapper()->SetLookupTable(lut);
         gridActor->GetMapper()->Update();

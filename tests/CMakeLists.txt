@@ -119,6 +119,23 @@ target_include_directories(GridWorldMappingTests PRIVATE
 add_test(NAME GridWorldMappingTests COMMAND GridWorldMappingTests)
 
 # ============================================
+# Add test executable for BenchmarkStatistics (header-only, no Qt/VTK)
+# ============================================
+add_executable(BenchmarkStatisticsTests
+    BenchmarkStatisticsTests.cpp
+)
+
+target_link_libraries(BenchmarkStatisticsTests
+    GTest::gtest_main
+)
+
+target_include_directories(BenchmarkStatisticsTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME BenchmarkStatisticsTests COMMAND BenchmarkStatisticsTests)
+
+# ============================================
 # Add test executable for VolumeZSpacing (header-only, no Qt/VTK)
 # ============================================
 add_executable(VolumeZSpacingTests

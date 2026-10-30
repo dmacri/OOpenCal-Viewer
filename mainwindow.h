@@ -91,6 +91,11 @@ private slots: // menu actions
     void onRenderingModeSelected(GridWorldMapping::GridRenderingMode mode);
     /// @brief Select in Settings -> Rendering the mode which the scene widget uses
     void syncRenderingModeMenu();
+
+    /// @brief --benchmark: shows the steps from the current one to the last one, one after another and without any delay,
+    ///        and prints how long reading, colouring and rendering them took (see Benchmark::StepTimes)
+    /// @return exit code of the application: 0 when the measurement was made, 1 when there is nothing to measure
+    int runBenchmark();
     void onPausePlaybackOnRotationToggled(bool checked);
     void onToolTipToggled(bool checked);
     void syncToolTipCheckbox();

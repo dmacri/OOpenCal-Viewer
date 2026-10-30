@@ -102,6 +102,40 @@ shows the mode given here. Without this option `points` is used.
 ./OOpenCal-Viewer /path/to/model/directory --renderingMode=texture
 ```
 
+### `--benchmark`
+Measures how fast the steps are shown, prints the result and exits with code 0 (1 when there is nothing to measure). The steps
+from `--step=<NUMBER>` (the first step by default) to the last one are shown one after another, **synchronously and without
+any delay**: no playback timer, no waiting for the vertical blank of the monitor (swap interval 0) and the time of drawing
+includes waiting until the GPU has finished. So to measure e.g. the last 100 steps, give `--step` a number 100 steps before
+the end. `--benchmark` replaces `--autoPlay`, `--generateImagePath` and `--generateMoviePath`.
+
+The time of every step is split into phases, because a different `--renderingMode` changes only some of them:
+
+| Phase | What is measured |
+|-------|------------------|
+| `read` | Reading the files of the step and parsing them into the cells. |
+| `coloring (CPU)` | Calculating the colour of every cell and writing it into the lookup table (`points`, `cells`) or into the pixels of the texture (`texture`). |
+| `VTK update` | The rest of updating the VTK scene after the colours changed. |
+| `render (GPU finished)` | Drawing the scene, including waiting for the GPU. |
+
+The first step is a warm-up (the OpenGL objects are created, the texture is uploaded) and is not counted in the summary.
+Besides the lines of the steps, the output has a table with the median, mean, minimum and maximum of every phase, the grid size,
+the rendering mode that was really used, the name of the OpenGL renderer and, on Linux, the peak memory of the process.
+
+**Example** (compare the three modes; run each one in a separate process, so that the memory used by the previous one does not matter):
+```bash
+for mode in points cells texture; do
+    ./OOpenCal-Viewer /path/to/model/directory --step=900 --renderingMode=$mode --benchmark > benchmark_$mode.txt
+done
+```
+
+**Notes:**
+- The window is shown during the measurement and has to stay uncovered and visible.
+- The drivers can force vsync regardless of the application. Then switch it off in the driver, e.g. `vblank_mode=0` for Mesa
+  or `__GL_SYNC_TO_VBLANK=0` for NVIDIA, and check that `total` of a step is not about 16.7 ms (the 60 Hz period) for small grids.
+- `coloring` is measured only in the flat (2D) view; in the other views it is 0 and its time is included in `VTK update`.
+- Software rendering (e.g. `llvmpipe` in the name of the OpenGL renderer) says a lot about the CPU work and nothing about the GPU.
+
 ### `--buildPrecompiledHeader[=<DIR>]`
 
 Builds the precompiled header which speeds up on-the-fly compilation of models and exits. It does not start the GUI and needs

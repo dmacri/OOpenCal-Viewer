@@ -3,10 +3,13 @@
 
 #include <iostream> // std::cout
 #include <algorithm>
+#include <chrono>
 #include <cmath> // std::isfinite
 #include <filesystem>
 #include <string>
 #include <QApplication>
+#include <QOpenGLContext>
+#include <QOpenGLFunctions>
 #include "core/directoryConstants.h"
 #include "widgets/WaitCursorGuard.h"
 #include <vtkCallbackCommand.h>
@@ -439,6 +442,7 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
         // Resize lines vector to match expected number of lines
         lines.resize(settingParameter->numberOfLines);
 
+        const auto readStart = std::chrono::steady_clock::now();
         {
             // Create a performance session for step loading (latency measurement)
             PerformanceSession perfSession("Step Loading",
@@ -452,9 +456,14 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
             // Read stage state from files for the current step
             sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
         } // Session destructor prints metrics here
+        const auto readEnd = std::chrono::steady_clock::now();
 
         // Refresh VTK visualization with optional 3D substate support
         refreshVisualizationWithOptional3DSubstate();
+
+        const auto refreshEnd = std::chrono::steady_clock::now();
+        lastStepReadMs = std::chrono::duration<double, std::milli>(readEnd - readStart).count();
+        lastStepRefreshMs = std::chrono::duration<double, std::milli>(refreshEnd - readEnd).count();
 
         // Update load balancing lines if we have any
         sceneWidgetVisualizerProxy->getVisualizer().refreshBuildLoadBalanceLine(lines,
@@ -2283,6 +2292,62 @@ void SceneWidget::setActiveSubstatesForColorring(const std::vector<std::string>&
     activeSubstatesForColorring = fieldNames;
 
     refreshVisualization();
+}
+
+GridWorldMapping::GridRenderingMode SceneWidget::effectiveGridRenderingMode() const
+{
+    if (! settingParameter)
+        return gridRenderingMode;
+    return GridWorldMapping::effectiveRenderingMode(gridRenderingMode, settingParameter->numberOfRowsY, settingParameter->numberOfColumnX);
+}
+
+Benchmark::StepTimes SceneWidget::benchmarkStep(StepIndex step)
+{
+    using Clock = std::chrono::steady_clock;
+
+    Benchmark::StepTimes times;
+    if (! settingParameter)
+        return times;
+
+    settingParameter->step = step;
+    settingParameter->changed = true;
+
+    // Reading the files, colouring the cells and updating the VTK pipeline (the same code as the user triggers)
+    sceneWidgetVisualizerProxy->getVisualizer().resetLastColoringTime();
+    loadAndUpdateVisualizationForCurrentStep();
+    const double coloringMs = sceneWidgetVisualizerProxy->getVisualizer().lastColoringTime().count();
+
+    times.readMs = lastStepReadMs;
+    times.coloringMs = std::min(coloringMs, lastStepRefreshMs);
+    times.vtkUpdateMs = lastStepRefreshMs - times.coloringMs;
+
+    // Drawing: Render() only requests the paint when the widget is not being painted, repaint() does it right now.
+    // glFinish() waits for the GPU, otherwise we would measure only how long it takes to queue the commands.
+    const auto renderStart = Clock::now();
+    renderer->Modified();
+    renderWindow()->Render();
+    repaint();
+    makeCurrent();
+    if (QOpenGLContext* glContext = context())
+        glContext->functions()->glFinish();
+    doneCurrent();
+    times.renderMs = std::chrono::duration<double, std::milli>(Clock::now() - renderStart).count();
+
+    settingParameter->changed = false;
+    return times;
+}
+
+QString SceneWidget::glRendererName()
+{
+    QString name;
+    makeCurrent();
+    if (QOpenGLContext* glContext = context())
+    {
+        if (const GLubyte* renderer = glContext->functions()->glGetString(GL_RENDERER))
+            name = QString::fromLatin1(reinterpret_cast<const char*>(renderer));
+    }
+    doneCurrent();
+    return name;
 }
 
 void SceneWidget::refreshVisualization()
