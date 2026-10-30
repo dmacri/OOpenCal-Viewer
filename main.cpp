@@ -33,6 +33,7 @@
 
 #include "mainwindow.h"
 #include "core/CommandLineParser.h"
+#include "widgets/GridWorldMapping.h"
 #include "plugins/PluginLoader.h"
 #include "data/PerformanceMetrics.h"
 #include "core/PrecompiledHeaderCommand.h"
@@ -105,6 +106,14 @@ int main(int argc, char* argv[])
     }
 
     MainWindow mainWindow;
+
+    // The rendering mode has to be known before the model is loaded: the first picture is drawn in it
+    // (for a huge grid drawing it first in the default mode could take a lot of memory and time)
+    if (const auto& requestedRenderingMode = cmdParser.getRenderingMode())
+    {
+        if (const auto mode = GridWorldMapping::parseRenderingMode(*requestedRenderingMode))
+            mainWindow.setGridRenderingMode(*mode);
+    }
 
     // Load model directory if provided
     if (cmdParser.getConfigFile())

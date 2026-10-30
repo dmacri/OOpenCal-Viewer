@@ -87,6 +87,21 @@ without any interaction. Use `--step=<NUMBER>` to start the playback from a chos
 **Note:** The playback is driven by a timer, so the delay between the steps set in the GUI is part of the total time.
 For measuring the speed of reading and rendering use `--benchmark` instead.
 
+### `--renderingMode=<points|cells|texture>`
+Chooses how the grid of the flat (2D) view is drawn. The same choice is available in the **Settings → Rendering** menu, and the menu
+shows the mode given here. Without this option `points` is used.
+
+| Mode | Description |
+|------|-------------|
+| `points` | One vertex per cell. The colours of neighbouring cells are blended, so the picture looks blurred. |
+| `cells` | One quad per cell. Sharp cells, but slower and it needs more memory for large grids. |
+| `texture` | One pixel per cell in a texture drawn on a single quad. Sharp cells and the fastest way to draw large grids. A grid with more than 8192 rows or columns does not fit in a texture and is drawn as `cells`. |
+
+**Example:**
+```bash
+./OOpenCal-Viewer /path/to/model/directory --renderingMode=texture
+```
+
 ### `--buildPrecompiledHeader[=<DIR>]`
 
 Builds the precompiled header which speeds up on-the-fly compilation of models and exits. It does not start the GUI and needs

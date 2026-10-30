@@ -689,8 +689,23 @@ void MainWindow::connectMenuActions()
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
     connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
     connect(ui->actionPerformance_settings, &QAction::triggered, this, &MainWindow::onPerformanceSettingsRequested);
-    connect(ui->actionCellRendering, &QAction::triggered, this, &MainWindow::onCellRenderingToggled);
-    connect(ui->actionTextureRendering, &QAction::triggered, this, &MainWindow::onTextureRenderingToggled);
+
+    // Settings -> Rendering: exactly one of the modes is always selected
+    {
+        using GridWorldMapping::GridRenderingMode;
+        auto* renderingModeGroup = new QActionGroup(this);
+        renderingModeGroup->setExclusive(true);
+        const std::pair<QAction*, GridRenderingMode> renderingModeActions[] = {
+            {ui->actionRenderingPoints, GridRenderingMode::Points},
+            {ui->actionRenderingCells, GridRenderingMode::Cells},
+            {ui->actionRenderingTexture, GridRenderingMode::Texture},
+        };
+        for (const auto& [action, mode] : renderingModeActions)
+        {
+            renderingModeGroup->addAction(action);
+            connect(action, &QAction::triggered, this, [this, mode] { onRenderingModeSelected(mode); });
+        }
+    }
 
     {
         // Restore persisted state (enabled by default) before connecting, to avoid a needless save
@@ -1637,8 +1652,8 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Synchronize flat scene background checkbox with current visibility state
         syncFlatSceneBackgroundCheckbox();
 
-        // Synchronize cell rendering checkbox with current setting
-        syncCellRenderingCheckbox();
+        // Select the rendering mode which is currently used in Settings -> Rendering
+        syncRenderingModeMenu();
 
         // Synchronize tooltip checkbox with current setting
         syncToolTipCheckbox();
@@ -1692,38 +1707,41 @@ void MainWindow::onPerformanceSettingsRequested()
     delete perfSettings;  // Modal dialog, delete after use
 }
 
-void MainWindow::onCellRenderingToggled(bool checked)
+void MainWindow::onRenderingModeSelected(GridWorldMapping::GridRenderingMode mode)
 {
     if (ui->sceneWidget)
     {
-        // The two actions are mutually exclusive; none of them checked means point-based rendering
-        ui->sceneWidget->setGridRenderingMode(checked ? GridWorldMapping::GridRenderingMode::Cells
-                                                      : GridWorldMapping::GridRenderingMode::Points);
-        syncCellRenderingCheckbox();
+        ui->sceneWidget->setGridRenderingMode(mode);
         ui->sceneWidget->setViewMode2D(); // this is to refresh visualization
     }
 }
 
-void MainWindow::onTextureRenderingToggled(bool checked)
+void MainWindow::setGridRenderingMode(GridWorldMapping::GridRenderingMode mode)
 {
     if (ui->sceneWidget)
     {
-        ui->sceneWidget->setGridRenderingMode(checked ? GridWorldMapping::GridRenderingMode::Texture
-                                                      : GridWorldMapping::GridRenderingMode::Points);
-        syncCellRenderingCheckbox();
-        ui->sceneWidget->setViewMode2D(); // this is to refresh visualization
+        ui->sceneWidget->setGridRenderingMode(mode);
+        syncRenderingModeMenu();
     }
 }
 
-void MainWindow::syncCellRenderingCheckbox()
+void MainWindow::syncRenderingModeMenu()
 {
     if (ui->sceneWidget)
     {
-        const auto mode = ui->sceneWidget->getGridRenderingMode();
-        const QSignalBlocker cellBlocker(ui->actionCellRendering);
-        const QSignalBlocker textureBlocker(ui->actionTextureRendering);
-        ui->actionCellRendering->setChecked(mode == GridWorldMapping::GridRenderingMode::Cells);
-        ui->actionTextureRendering->setChecked(mode == GridWorldMapping::GridRenderingMode::Texture);
+        using GridWorldMapping::GridRenderingMode;
+        switch (ui->sceneWidget->getGridRenderingMode())
+        {
+        case GridRenderingMode::Points:
+            ui->actionRenderingPoints->setChecked(true);
+            break;
+        case GridRenderingMode::Cells:
+            ui->actionRenderingCells->setChecked(true);
+            break;
+        case GridRenderingMode::Texture:
+            ui->actionRenderingTexture->setChecked(true);
+            break;
+        }
     }
 }
 

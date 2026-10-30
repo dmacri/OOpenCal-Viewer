@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstddef>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include "visualiser/Line.h"
@@ -251,6 +252,30 @@ enum class GridRenderingMode
     Cells,
     Texture,
 };
+
+/// @brief Name of the rendering mode as it is written on the command line (--renderingMode=...): "points", "cells" or "texture".
+constexpr std::string_view toString(GridRenderingMode mode) noexcept
+{
+    switch (mode)
+    {
+    case GridRenderingMode::Points:
+        return "points";
+    case GridRenderingMode::Cells:
+        return "cells";
+    case GridRenderingMode::Texture:
+        return "texture";
+    }
+    return "points";
+}
+
+/// @brief Inverse of toString(): the mode with the given name, or nothing when the name is unknown (case-sensitive).
+constexpr std::optional<GridRenderingMode> parseRenderingMode(std::string_view name) noexcept
+{
+    for (const auto mode : {GridRenderingMode::Points, GridRenderingMode::Cells, GridRenderingMode::Texture})
+        if (name == toString(mode))
+            return mode;
+    return std::nullopt;
+}
 
 /** @brief Largest texture side (in pixels) that Texture mode relies on.
  *

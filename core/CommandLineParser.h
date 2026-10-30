@@ -23,6 +23,7 @@
  * - generateImagePath=<path>: Generate image for current step and save to file
  * - configFile: Path to simulation directory (positional argument)
  * - --autoPlay: Automatically start playback when simulation data loads
+ * - --renderingMode=<points|cells|texture>: How the grid of the flat view is drawn (Settings -> Rendering)
  * - --metrics: Enable performance metrics (default enabled)
  * - --disableMetrics: Disable performance metrics reporting
  * - --buildPrecompiledHeader[=<dir>]: Build the precompiled header which speeds up compilation of models and exit
@@ -42,6 +43,7 @@ public:
     static constexpr const char ARG_DISABLE_METRICS[] = "--disableMetrics";
     static constexpr const char ARG_METRICS_MODE[] = "--metricsMode";
     static constexpr const char ARG_AUTO_PLAY[] = "--autoPlay";
+    static constexpr const char ARG_RENDERING_MODE[] = "--renderingMode";
     static constexpr const char ARG_BUILD_PRECOMPILED_HEADER[] = "--buildPrecompiledHeader";
 
     /** @brief Parse command-line arguments.
@@ -109,6 +111,13 @@ public:
         return autoPlay;
     }
 
+    /// @brief Rendering mode requested with --renderingMode.
+    /// @return "points", "cells" or "texture" (the parser rejects other values), or nothing when the option was not used
+    const std::optional<std::string>& getRenderingMode() const
+    {
+        return renderingMode;
+    }
+
     /// @brief Print help message with available arguments.
     void printHelp() const;
 
@@ -124,4 +133,5 @@ private:
     bool enableMetrics = true;  ///< true if performance metrics should be enabled
     std::string metricsMode = "all";  ///< Metrics reporting mode: "all", "summary", "steps", or "none"
     bool autoPlay = false;  ///< true if automatic playback should start on config load
+    std::optional<std::string> renderingMode;  ///< value of --renderingMode: "points", "cells" or "texture"
 };
