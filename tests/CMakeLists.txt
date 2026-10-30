@@ -201,10 +201,13 @@ add_test(NAME VolumeLayersTests COMMAND VolumeLayersTests)
 add_executable(CellHistoryTests
     CellHistoryTests.cpp
     ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
+    # ModelReader.hpp calls readCompressedStep (mode=compressed), so the definition has to be linked in
+    ${CMAKE_SOURCE_DIR}/data/CompressedStepReader.cpp
 )
 
 target_link_libraries(CellHistoryTests
     GTest::gtest_main
+    viewer_blosc2
 )
 
 target_include_directories(CellHistoryTests PRIVATE

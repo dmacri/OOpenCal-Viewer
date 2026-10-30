@@ -101,6 +101,53 @@ TEST(CompressedStepReader, RejectsCorruptedChunk)
     EXPECT_THROW(ReaderHelpers::readCompressedStep(stream, bytes), std::runtime_error);
 }
 
+namespace
+{
+/** Value stored in cell `i` of `node` at `step` by writeTwoNodeOutput(). */
+int twoNodeValue(int node, int step, std::size_t i)
+{
+    return static_cast<int>(100 * step + 10 * node + i);
+}
+
+/** Writes steps 0 and 5 of a grid split into two nodes side by side (nNodeX = 2): node 0 is 2x2 cells,
+ * node 1 is 1x2 cells (3 columns x 2 rows in total), in `<directory>/<mode>/grid<node>.{bin,blosc}`.
+ * @param mode "binary" or "compressed"; returns the base name of the files */
+std::string writeTwoNodeOutput(const std::filesystem::path& directory, const std::string& mode)
+{
+    namespace fs = std::filesystem;
+    const std::string baseName = (directory / mode / "grid").string();
+    fs::create_directories(directory / mode);
+    const bool compressed = (mode == "compressed");
+
+    for (int node = 0; node < 2; ++node)
+    {
+        std::ofstream index(baseName + std::to_string(node) + "_index.txt");
+        std::ofstream data(baseName + std::to_string(node) + (compressed ? ".blosc" : ".bin"), std::ios::binary);
+        const int cols = node == 0 ? 2 : 1;
+        for (int step : {0, 5})
+        {
+            index << step << ' ' << static_cast<long long>(data.tellp()) << " (" << cols << "-2)\n";
+
+            std::vector<TestCell> cells(static_cast<std::size_t>(cols) * 2);
+            for (std::size_t i = 0; i < cells.size(); ++i)
+                cells[i].value = twoNodeValue(node, step, i);
+
+            const std::size_t bytes = cells.size() * sizeof(TestCell);
+            if (compressed)
+            {
+                const std::string block = makeCompressedStep(cells.data(), bytes, sizeof(TestCell));
+                data.write(block.data(), static_cast<std::streamsize>(block.size()));
+            }
+            else
+            {
+                data.write(reinterpret_cast<const char*>(cells.data()), static_cast<std::streamsize>(bytes));
+            }
+        }
+    }
+    return baseName;
+}
+} // namespace
+
 TEST(CompressedModeReading, GivesTheSameGridAsBinaryMode)
 {
     namespace fs = std::filesystem;
@@ -108,44 +155,8 @@ TEST(CompressedModeReading, GivesTheSameGridAsBinaryMode)
     fs::remove_all(directory);
     fs::create_directories(directory);
 
-    // Two nodes side by side (nNodeX = 2); node 0 is 2x2 cells, node 1 is 1x2 cells. Two steps per file.
-    auto cellsFor = [](int node, int step)
-    {
-        const int cols = node == 0 ? 2 : 1;
-        std::vector<TestCell> cells(static_cast<std::size_t>(cols) * 2);
-        for (std::size_t i = 0; i < cells.size(); ++i)
-            cells[i].value = static_cast<int>(100 * step + 10 * node + i);
-        return cells;
-    };
-
     for (const char* mode : {"binary", "compressed"})
-    {
-        const std::string baseName = (directory / mode / "grid").string();
-        fs::create_directories(directory / mode);
-        const bool compressed = std::string(mode) == "compressed";
-
-        for (int node = 0; node < 2; ++node)
-        {
-            std::ofstream index(baseName + std::to_string(node) + "_index.txt");
-            std::ofstream data(baseName + std::to_string(node) + (compressed ? ".blosc" : ".bin"), std::ios::binary);
-            const int cols = node == 0 ? 2 : 1;
-            for (int step : {0, 5})
-            {
-                index << step << ' ' << static_cast<long long>(data.tellp()) << " (" << cols << "-2)\n";
-                const auto cells = cellsFor(node, step);
-                const std::size_t bytes = cells.size() * sizeof(TestCell);
-                if (compressed)
-                {
-                    const std::string block = makeCompressedStep(cells.data(), bytes, sizeof(TestCell));
-                    data.write(block.data(), static_cast<std::streamsize>(block.size()));
-                }
-                else
-                {
-                    data.write(reinterpret_cast<const char*>(cells.data()), static_cast<std::streamsize>(bytes));
-                }
-            }
-        }
-    }
+        writeTwoNodeOutput(directory, mode);
 
     auto readGrid = [&](const std::string& mode, StepIndex step)
     {
@@ -191,6 +202,51 @@ TEST(CompressedModeReading, GivesTheSameGridAsBinaryMode)
     EXPECT_EQ(step5[3], 502);  // node 0, cell 2 (row 1, col 0)
     EXPECT_EQ(step5[4], 503);  // node 0, cell 3 (row 1, col 1)
     EXPECT_EQ(step5[5], 511);  // node 1, cell 1 (row 1, col 2)
+
+    fs::remove_all(directory);
+}
+
+TEST(CompressedModeReading, ReadCellAcrossStepsDecompressesOnlyTheNodeHoldingTheCell)
+{
+    namespace fs = std::filesystem;
+    const fs::path directory = fs::temp_directory_path() / "oopencal-viewer-reader-compressed-history-test";
+    fs::remove_all(directory);
+    const std::string baseName = writeTwoNodeOutput(directory, "compressed");
+
+    ModelReader<TestCell> reader;
+    reader.readStepsOffsetsForAllNodesFromFiles(2, 1, 1, baseName);
+
+    SettingParameter settings{};
+    settings.numberOfColumnX = 3;
+    settings.numberOfRowsY = 2;
+    settings.numberOfSlicesZ = 1;
+    settings.nNodeX = 2;
+    settings.nNodeY = 1;
+    settings.nNodeZ = 1;
+    settings.outputFileName = baseName;
+    settings.readMode = "compressed";
+
+    const std::vector<StepIndex> steps = {0, 5};
+
+    // row 1, column 1 lies in node 0 (its 4th cell); row 1, column 2 lies in node 1 (its 2nd cell)
+    const auto inNode0 = reader.readCellAcrossSteps(settings, 1, 1, 0, steps);
+    const auto inNode1 = reader.readCellAcrossSteps(settings, 1, 2, 0, steps);
+
+    ASSERT_EQ(inNode0.size(), steps.size());
+    ASSERT_EQ(inNode1.size(), steps.size());
+    for (std::size_t i = 0; i < steps.size(); ++i)
+    {
+        ASSERT_TRUE(inNode0[i].has_value());
+        ASSERT_TRUE(inNode1[i].has_value());
+        EXPECT_EQ(inNode0[i]->value, twoNodeValue(0, static_cast<int>(steps[i]), 3));
+        EXPECT_EQ(inNode1[i]->value, twoNodeValue(1, static_cast<int>(steps[i]), 1));
+    }
+
+    // A step that is not in the index stays empty instead of aborting the whole history
+    const auto withUnknownStep = reader.readCellAcrossSteps(settings, 0, 0, 0, {0, 99});
+    ASSERT_EQ(withUnknownStep.size(), 2u);
+    EXPECT_TRUE(withUnknownStep[0].has_value());
+    EXPECT_FALSE(withUnknownStep[1].has_value());
 
     fs::remove_all(directory);
 }

@@ -218,11 +218,6 @@ namespace ReaderHelpers /// functions which are not templates
     return std::format("{}{}.{}", fileName, node, extention);
 }
 
-[[nodiscard]] inline std::string giveMeFileName(const std::string& fileName, NodeIndex node, bool isBinary)
-{
-    return giveMeFileName(fileName, node, isBinary ? ReadMode::Binary : ReadMode::Text);
-}
-
 [[nodiscard]] inline std::string giveMeFileNameIndex(const std::string& fileName, NodeIndex node)
 {
     return std::format("{}{}_index.txt", fileName, node);
@@ -538,7 +533,7 @@ std::vector<std::optional<Cell>> ModelReader<Cell>::readCellAcrossSteps(
 {
     std::vector<std::optional<Cell>> result(steps.size());
 
-    const bool isBinary = (sp.readMode == "binary");
+    const ReadMode mode = ReaderHelpers::parseReadMode(sp.readMode);
     const auto totalNodes = sp.nNodeX * sp.nNodeY * sp.nNodeZ;
 
     for (std::size_t i = 0; i < steps.size(); ++i)
@@ -549,7 +544,7 @@ std::vector<std::optional<Cell>> ModelReader<Cell>::readCellAcrossSteps(
         const StepIndex step = steps[i];
         try
         {
-            const auto dimensions = localDimensionsForAllNodes(step, sp.nNodeX, sp.nNodeY, sp.nNodeZ, sp.outputFileName, isBinary);
+            const auto dimensions = localDimensionsForAllNodes(step, sp.nNodeX, sp.nNodeY, sp.nNodeZ, sp.outputFileName, mode);
 
             for (NodeIndex node = 0; node < totalNodes; ++node)
             {
@@ -570,7 +565,7 @@ std::vector<std::optional<Cell>> ModelReader<Cell>::readCellAcrossSteps(
                                                                                   sp.outputFileName,
                                                                                   node,
                                                                                   ignoredDimensions,
-                                                                                  isBinary);
+                                                                                  mode);
 
                 // Same order as in readStageStateFromFilesForStep(): slice by slice, row by row
                 const std::size_t rowInNode = static_cast<std::size_t>(localZ) * local.row + localY;
@@ -578,15 +573,26 @@ std::vector<std::optional<Cell>> ModelReader<Cell>::readCellAcrossSteps(
                 Cell cell;
                 cell.startStep(static_cast<int>(step));
 
-                if (isBinary)
+                if (mode != ReadMode::Text)
                 {
                     const std::size_t cellIndex = rowInNode * local.column + localX;
-                    fp.seekg(static_cast<std::streamoff>(cellIndex * sizeof(Cell)), std::ios::cur);
 
                     std::vector<char> raw(sizeof(Cell));
-                    fp.read(raw.data(), static_cast<std::streamsize>(raw.size()));
-                    if (fp.gcount() != static_cast<std::streamsize>(raw.size()))
-                        throw std::runtime_error("Failed to read a cell record");
+                    if (mode == ReadMode::Compressed)
+                    {
+                        // A compressed step cannot be seeked into: decompress the whole step of this node
+                        // and take the one record out of it.
+                        const std::size_t stepBytes = static_cast<std::size_t>(local.column) * local.row * local.slice * sizeof(Cell);
+                        const auto stepData = ReaderHelpers::readCompressedStep(fp, stepBytes);
+                        std::memcpy(raw.data(), stepData.data() + cellIndex * sizeof(Cell), sizeof(Cell));
+                    }
+                    else
+                    {
+                        fp.seekg(static_cast<std::streamoff>(cellIndex * sizeof(Cell)), std::ios::cur);
+                        fp.read(raw.data(), static_cast<std::streamsize>(raw.size()));
+                        if (fp.gcount() != static_cast<std::streamsize>(raw.size()))
+                            throw std::runtime_error("Failed to read a cell record");
+                    }
 
                     Cell fromFile;
                     std::memcpy(&fromFile, raw.data(), sizeof(Cell)); /// @note This erases the temporary object's vtable; the assignment copies the cell state only.
