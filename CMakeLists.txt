@@ -202,6 +202,7 @@ list(APPEND Sources
     core/CommandLineParser.cpp
     core/PrecompiledHeaderCommand.cpp
     data/ReductionManager.cpp
+    data/PerformanceMetrics.cpp
     data/ModelReader.cpp
     widgets/WaitCursorGuard.cpp
 )

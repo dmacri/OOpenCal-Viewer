@@ -9,12 +9,13 @@
       1. the program starts            (all DLLs of Qt, VTK and the compiler runtime are in the package)
       2. the bundled g++ builds a model plugin with exactly the command line of the program (CompilationConfig / CppModuleBuilder)
       3. the program loads that plugin (it links against the import library of the executable and calls back into it)
+      4. the launcher OOpenCal-Viewer.exe (GUI subsystem, no console window) sets up the environment itself and starts the program
 
     Used by .github/workflows/windows-mingw-all-in-one.yml; it can be run on any Windows machine as well:
         pwsh scripts\windows-mingw\smoke-test\run-smoke-test.ps1 -Package C:\OOpenCal-Viewer-windows-mingw-portable
 
 .PARAMETER Package
-    Directory of the extracted package (the one with OOpenCal-Viewer.bat).
+    Directory of the extracted package (the one with OOpenCal-Viewer.exe).
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Package
@@ -152,6 +153,32 @@ Write-Host (Read-SharedText $stdoutFile)
 Write-Host '--- stderr'
 Write-Host (Read-SharedText $stderrFile)
 if (-not $loaded) { Fail 'the program did not report "Loaded plugin" for the plugin built by the bundled compiler' }
+
+# ---------------------------------------------------------------------------------------------------------------------------
+Write-Step '4. The launcher (OOpenCal-Viewer.exe): no console window, environment of the package, program started'
+$launcher = Join-Path $Package 'OOpenCal-Viewer.exe'
+if (-not (Test-Path -LiteralPath $launcher)) { Fail 'OOpenCal-Viewer.exe (the launcher) is missing in the package' }
+# Subsystem field of the PE header: 2 = GUI (no console window when double-clicked), 3 = console
+$pe = [IO.File]::ReadAllBytes($launcher)
+$subsystem = [BitConverter]::ToUInt16($pe, [BitConverter]::ToInt32($pe, 0x3C) + 24 + 68)
+if ($subsystem -ne 2) { Fail "the launcher is not a program of the GUI subsystem (subsystem $subsystem): double-clicking it would open a console window" }
+Write-Host 'the launcher is a GUI subsystem program'
+
+# What a double-click gives: nothing but the Windows directories in PATH and none of the variables of the package
+foreach ($name in $names) { if ($name -ne 'PATH') { Remove-Item -LiteralPath "env:$name" -ErrorAction SilentlyContinue } }
+$env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+$launcherLog = Join-Path $work 'launcher.log'
+$env:OOPENCAL_LAUNCHER_LOG = $launcherLog
+$started = Start-Process -FilePath $launcher -ArgumentList @("--loadModel=`"$plugin`"") -PassThru -WindowStyle Hidden
+$loaded = $false
+for ($i = 0; $i -lt 60 -and -not $loaded -and -not $started.HasExited; $i++) {
+    Start-Sleep -Seconds 1
+    $loaded = (Read-SharedText $launcherLog) -match 'Loaded plugin'
+}
+Write-Host '--- log written by the launcher'
+Write-Host (Read-SharedText $launcherLog)
+if (-not $started.HasExited) { & taskkill.exe /PID $started.Id /T /F | Out-Null }   # the launcher waits for the program, which runs forever
+if (-not $loaded) { Fail 'the program started by the launcher did not report "Loaded plugin"' }
 
 Write-Host "`nSMOKE TEST PASSED" -ForegroundColor Green
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
