@@ -56,7 +56,7 @@ bool isGeneratedModuleStale(const std::filesystem::path& moduleFile,
         viewerRoot / "visualiserProxy/ISceneWidgetVisualizer.h", // virtual methods: a plugin built against another set has another vtable
         viewerRoot / "data/ModelReader.hpp",
         viewerRoot / "data/CompressedStepReader.hpp",
-        viewerRoot / "visualiser/Visualizer.hpp"
+        viewerRoot / "visualiser/Visualizer.hpp",
         viewerRoot / "visualiser/VolumeLayers.h",
         viewerRoot / "visualiser/VolumePicking.h"
     };
