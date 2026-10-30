@@ -104,7 +104,7 @@ public:
         modelReader.readStageStateFromFilesForStep(p, sp, lines);
     }
 
-    void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos, GridWorldMapping::GridRenderingMode renderingMode = GridWorldMapping::GridRenderingMode::Points) override
+    void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos, GridWorldMapping::GridRenderingMode renderingMode = GridWorldMapping::defaultRenderingMode) override
     {
         if (p.layerCount() > 1)
         {

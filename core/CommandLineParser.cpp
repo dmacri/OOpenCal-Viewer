@@ -60,6 +60,18 @@ bool CommandLineParser::parse(int argc, char* argv[])
             .help("Automatically start playback when simulation data loads (useful for performance testing)")
             .flag();
 
+        program.add_argument(ARG_RENDERING_MODE)
+            .help("How the grid of the flat view is drawn: texture (default; sharp, fastest for large grids), "
+                  "cells (sharp, slower) or points (blurred)")
+            .metavar("MODE");
+        // No .choices() here: argparse then takes the next argument as one more value of this option
+        // (--renderingMode=texture --benchmark fails). The value is checked by main().
+
+        program.add_argument(ARG_BENCHMARK)
+            .help("Measure the speed: show the steps from --step to the last one without any delay, "
+                  "print the times of reading, colouring and rendering them, and exit")
+            .flag();
+
         // Handled by main() before the GUI is created; registered here so that it is listed in --help
         program.add_argument(ARG_BUILD_PRECOMPILED_HEADER)
             .help("Build the precompiled header which speeds up compilation of models and exit "
@@ -117,6 +129,11 @@ bool CommandLineParser::parse(int argc, char* argv[])
 
         autoPlay = program.is_used(ARG_AUTO_PLAY);
 
+        if (auto mode = program.present<std::string>(ARG_RENDERING_MODE))
+            renderingMode = *mode;
+
+        benchmark = program.is_used(ARG_BENCHMARK);
+
         // Handle metrics flags
         if (program.is_used(ARG_DISABLE_METRICS))
         {
@@ -162,6 +179,9 @@ void CommandLineParser::printHelp() const
               << std::format("  {: <{}} Generate image for current step\n", ARG_GENERATE_IMAGE, WIDTH)
               << std::format("  {: <{}} Go to specific step directly\n", ARG_STEP, WIDTH)
               << std::format("  {: <{}} Exit after last step\n", ARG_EXIT_AFTER_LAST, WIDTH)
+              << std::format("  {: <{}} Start the playback as soon as the data is loaded\n", ARG_AUTO_PLAY, WIDTH)
+              << std::format("  {: <{}} Grid rendering: texture (default), cells or points\n", ARG_RENDERING_MODE, WIDTH)
+              << std::format("  {: <{}} Measure the times of reading, colouring and rendering the steps, then exit\n", ARG_BENCHMARK, WIDTH)
               << std::format("  {: <{}} Enable performance metrics (default)\n", ARG_METRICS, WIDTH)
               << std::format("  {: <{}} Disable performance metrics reporting\n", ARG_DISABLE_METRICS, WIDTH)
               << std::format("  {: <{}} Build the precompiled header for model compilation and exit\n", ARG_BUILD_PRECOMPILED_HEADER, WIDTH)

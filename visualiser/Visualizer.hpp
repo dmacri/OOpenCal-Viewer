@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
@@ -103,7 +104,7 @@ class Visualizer
 {
 public:
     template<class Matrix>
-    void drawWithVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos={}, GridWorldMapping::GridRenderingMode renderingMode=GridWorldMapping::GridRenderingMode::Points);
+    void drawWithVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos={}, GridWorldMapping::GridRenderingMode renderingMode=GridWorldMapping::defaultRenderingMode);
     template<class Matrix>
     void refreshWindowsVTK(const Matrix& p, int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos);
 
@@ -165,6 +166,21 @@ private:
                                    int zGapPlanes);
 
 public:
+
+    /// @brief CPU time of colouring the cells during the last refreshWindowsVTK() of the flat view (used by --benchmark).
+    /// @details It is the time of calculating the colour of every cell and of writing it into the lookup table
+    ///          (Points, Cells) or into the pixels of the texture (Texture). Zero until the first refresh.
+    std::chrono::duration<double, std::milli> lastColoringTime() const
+    {
+        return lastColoringDuration;
+    }
+
+    /// @brief Sets lastColoringTime() to zero, so that a refresh which does not colour the flat grid (e.g. the 3D views)
+    ///        does not report the time of an earlier one.
+    void resetLastColoringTime()
+    {
+        lastColoringDuration = {};
+    }
 
     /// @brief Draw 3D substate visualization as a quad mesh surface (new healed quad approach).
     template<class Matrix>
@@ -385,6 +401,7 @@ private:
     /// @brief This function is to decrease dependencies with Qt (Visualiser.hpp is used in module compilation, so we don't want Qt)
     Color flatSceneBackgroundColor() const;
     GlobalValueManager* gvm = nullptr;
+    std::chrono::duration<double, std::milli> lastColoringDuration{}; ///< see lastColoringTime()
 };
 
 ////////////////////////////////////////////////////////////////////
@@ -567,7 +584,9 @@ void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSma
     {
         if (auto* image = vtkImageData::SafeDownCast(texture->GetInput()))
         {
+            const auto coloringStart = std::chrono::steady_clock::now();
             const bool hasTransparentCells = fillColorImage(image, nCols, nRows, p, colorSubstateInfos);
+            lastColoringDuration = std::chrono::steady_clock::now() - coloringStart;
             gridActor->SetForceTranslucent(hasTransparentCells);
             texture->Modified();
             return;
@@ -576,7 +595,9 @@ void Visualizer::refreshWindowsVTK(const Matrix &p, int nRows, int nCols, vtkSma
 
     if (vtkLookupTable* lut = dynamic_cast<vtkLookupTable*>(gridActor->GetMapper()->GetLookupTable()))
     {
+        const auto coloringStart = std::chrono::steady_clock::now();
         const bool hasTransparentCells = buidColor(lut, nCols, nRows, p, colorSubstateInfos);
+        lastColoringDuration = std::chrono::steady_clock::now() - coloringStart;
         gridActor->SetForceTranslucent(hasTransparentCells);
         gridActor->GetMapper()->SetLookupTable(lut);
         gridActor->GetMapper()->Update();
@@ -982,12 +1003,10 @@ bool Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matr
 template<class Matrix>
 bool Visualizer::fillColorImage(vtkImageData* image, int nCols, int nRows, const Matrix &p, const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
-    // The same conversion as the lookup table gets (toUnitColor / toOpacity), so that all modes show the same colours.
-    const auto toByte = [](double unit)
-    {
-        return static_cast<std::uint8_t>(std::lround(std::clamp(unit, 0.0, 1.0) * 255.0));
-    };
-
+    // The channels of Color are bytes [0, 255] and so are the pixels, so they are copied as they are. It gives the very
+    // same colours as the lookup table of the other modes, which gets toUnitColor() = channel / 255 and converts it back
+    // to a byte. Doing that conversion here (division, multiplication, clamp, rounding for 4 channels of every cell)
+    // took more than 5 times longer, which matters: this code is compiled together with the model, without optimization.
     bool anyTransparent = false;
     auto* pixels = static_cast<std::uint8_t*>(image->GetScalarPointer());
     for (int r = 0; r < nRows; ++r)
@@ -996,12 +1015,11 @@ bool Visualizer::fillColorImage(vtkImageData* image, int nCols, int nRows, const
         for (int c = 0; c < nCols; ++c, pixel += 4)
         {
             const auto color = calculateCellColor(r, c, p, colorSubstateInfos);
-            const double opacity = toOpacity(color);
-            anyTransparent = anyTransparent || opacity < 1.0;
-            pixel[0] = toByte(toUnitColor(color.getRed()));
-            pixel[1] = toByte(toUnitColor(color.getGreen()));
-            pixel[2] = toByte(toUnitColor(color.getBlue()));
-            pixel[3] = toByte(opacity);
+            pixel[0] = color.getRed();
+            pixel[1] = color.getGreen();
+            pixel[2] = color.getBlue();
+            pixel[3] = color.getAlpha();
+            anyTransparent = anyTransparent || color.getAlpha() != 255;
         }
     }
     image->GetPointData()->GetScalars()->Modified();

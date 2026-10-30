@@ -190,6 +190,41 @@ TEST(GridRenderingModes, TextureFallsBackToCellsWhenTooLargeForTexture)
     EXPECT_EQ(effectiveRenderingMode(GridRenderingMode::Texture, 10, maxTextureSide + 1), GridRenderingMode::Cells);
 }
 
+TEST(GridRenderingModes, NamesAreTheValuesOfTheCommandLineOption)
+{
+    EXPECT_EQ(toString(GridRenderingMode::Points), "points");
+    EXPECT_EQ(toString(GridRenderingMode::Cells), "cells");
+    EXPECT_EQ(toString(GridRenderingMode::Texture), "texture");
+}
+
+TEST(GridRenderingModes, ParsingIsTheInverseOfToString)
+{
+    for (const auto mode : {GridRenderingMode::Points, GridRenderingMode::Cells, GridRenderingMode::Texture})
+    {
+        const auto parsed = parseRenderingMode(toString(mode));
+        ASSERT_TRUE(parsed.has_value());
+        EXPECT_EQ(*parsed, mode);
+    }
+}
+
+TEST(GridRenderingModes, ParsingRejectsUnknownNames)
+{
+    EXPECT_FALSE(parseRenderingMode("").has_value());
+    EXPECT_FALSE(parseRenderingMode("Points").has_value()); // case-sensitive, like the other values of the options
+    EXPECT_FALSE(parseRenderingMode("textures").has_value());
+    EXPECT_FALSE(parseRenderingMode("glyph").has_value());
+}
+
+TEST(GridRenderingModes, DefaultModeIsTexture)
+{
+    // Decision of issue #138: the sharp, fastest and least memory hungry mode is what the user gets without choosing.
+    EXPECT_EQ(defaultRenderingMode, GridRenderingMode::Texture);
+    EXPECT_EQ(toString(defaultRenderingMode), "texture");
+    EXPECT_EQ(effectiveRenderingMode(defaultRenderingMode, 1000, 1000), GridRenderingMode::Texture);
+    // The extent of the scene does not depend on whether the texture or the cells are used
+    EXPECT_EQ(flatSceneBoundsFor(defaultRenderingMode, 30, 50).xMax, 50);
+}
+
 TEST(GridRenderingModes, OtherModesAreNeverChanged)
 {
     for (const auto mode : {GridRenderingMode::Points, GridRenderingMode::Cells})
