@@ -848,7 +848,18 @@
     <addaction name="actionCompilation_settings"/>
     <addaction name="actionPerformance_settings"/>
     <addaction name="separator"/>
-    <addaction name="actionCellRendering"/>
+    <widget class="QMenu" name="menuRendering">
+     <property name="title">
+      <string>Rendering</string>
+     </property>
+     <property name="toolTipsVisible">
+      <bool>true</bool>
+     </property>
+     <addaction name="actionRenderingPoints"/>
+     <addaction name="actionRenderingCells"/>
+     <addaction name="actionRenderingTexture"/>
+    </widget>
+    <addaction name="menuRendering"/>
     <addaction name="actionPausePlaybackOnRotation"/>
     <addaction name="actionShowToolTip"/>
    </widget>
@@ -1105,7 +1116,21 @@
     <string>Suppress confirmation dialogs during automation (uncheck for loud mode)</string>
    </property>
   </action>
-  <action name="actionCellRendering">
+  <action name="actionRenderingPoints">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Points</string>
+   </property>
+   <property name="toolTip">
+    <string>One point per cell (default): fast to build, but the colours of neighbouring cells are blended, so the picture looks blurred.</string>
+   </property>
+  </action>
+  <action name="actionRenderingCells">
    <property name="checkable">
     <bool>true</bool>
    </property>
@@ -1113,10 +1138,24 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>Cell Rendering (High Quality)</string>
+    <string>Cells</string>
    </property>
    <property name="toolTip">
-    <string>Use cell-based rendering for better quality (slower for large grids). Uncheck for faster point-based rendering.</string>
+    <string>One quad per cell: sharp cells, but slower and it needs more memory for large grids.</string>
+   </property>
+  </action>
+  <action name="actionRenderingTexture">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Texture</string>
+   </property>
+   <property name="toolTip">
+    <string>One pixel per cell in a texture: sharp cells and the fastest way to draw large grids.</string>
    </property>
   </action>
   <action name="actionPausePlaybackOnRotation">

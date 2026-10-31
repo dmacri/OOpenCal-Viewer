@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <chrono>
+#include <format>
 #include <QCommonStyle>
 #include <QSettings>
 #include <QDebug>
@@ -14,6 +16,10 @@
 #include <QStandardPaths>
 #include <QFileDialog>
 #include <QActionGroup>
+#include <QElapsedTimer>
+#include <QFile>
+#include <QSurfaceFormat>
+#include <QWindow>
 #include <QProgressDialog>
 #include <QFileInfo>
 #include <QDateTime>
@@ -22,6 +28,7 @@
 #include <QSizePolicy>
 
 #include "mainwindow.h"
+#include "data/PerformanceMetrics.h"
 #include "ui_mainwindow.h"
 #include "widgets/WaitCursorGuard.h"
 
@@ -534,7 +541,7 @@ SimulationDirectorySummary inspectSimulationDirectory(const QString& configFileP
         {
             addFileToGroup(summary.reductionFiles, fileInfo);
         }
-        else if (startsWithOutputPrefix && (lowerName.endsWith(".bin") || lowerName.endsWith(".txt")))
+        else if (startsWithOutputPrefix && (lowerName.endsWith(".bin") || lowerName.endsWith(".blosc") || lowerName.endsWith(".txt")))
         {
             addFileToGroup(summary.dataFiles, fileInfo);
         }
@@ -689,7 +696,23 @@ void MainWindow::connectMenuActions()
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
     connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
     connect(ui->actionPerformance_settings, &QAction::triggered, this, &MainWindow::onPerformanceSettingsRequested);
-    connect(ui->actionCellRendering, &QAction::triggered, this, &MainWindow::onCellRenderingToggled);
+
+    // Settings -> Rendering: exactly one of the modes is always selected
+    {
+        using GridWorldMapping::GridRenderingMode;
+        auto* renderingModeGroup = new QActionGroup(this);
+        renderingModeGroup->setExclusive(true);
+        const std::pair<QAction*, GridRenderingMode> renderingModeActions[] = {
+            {ui->actionRenderingPoints, GridRenderingMode::Points},
+            {ui->actionRenderingCells, GridRenderingMode::Cells},
+            {ui->actionRenderingTexture, GridRenderingMode::Texture},
+        };
+        for (const auto& [action, mode] : renderingModeActions)
+        {
+            renderingModeGroup->addAction(action);
+            connect(action, &QAction::triggered, this, [this, mode] { onRenderingModeSelected(mode); });
+        }
+    }
 
     {
         // Restore persisted state (enabled by default) before connecting, to avoid a needless save
@@ -1636,8 +1659,8 @@ void MainWindow::openConfigurationFile(const QString& configFileName, std::share
         // Synchronize flat scene background checkbox with current visibility state
         syncFlatSceneBackgroundCheckbox();
 
-        // Synchronize cell rendering checkbox with current setting
-        syncCellRenderingCheckbox();
+        // Select the rendering mode which is currently used in Settings -> Rendering
+        syncRenderingModeMenu();
 
         // Synchronize tooltip checkbox with current setting
         syncToolTipCheckbox();
@@ -1691,21 +1714,41 @@ void MainWindow::onPerformanceSettingsRequested()
     delete perfSettings;  // Modal dialog, delete after use
 }
 
-void MainWindow::onCellRenderingToggled(bool checked)
+void MainWindow::onRenderingModeSelected(GridWorldMapping::GridRenderingMode mode)
 {
     if (ui->sceneWidget)
     {
-        ui->sceneWidget->setUseCellRendering(checked);
+        ui->sceneWidget->setGridRenderingMode(mode);
         ui->sceneWidget->setViewMode2D(); // this is to refresh visualization
     }
 }
 
-void MainWindow::syncCellRenderingCheckbox()
+void MainWindow::setGridRenderingMode(GridWorldMapping::GridRenderingMode mode)
 {
     if (ui->sceneWidget)
     {
-        bool useCellRendering = ui->sceneWidget->getUseCellRendering();
-        ui->actionCellRendering->setChecked(useCellRendering);
+        ui->sceneWidget->setGridRenderingMode(mode);
+        syncRenderingModeMenu();
+    }
+}
+
+void MainWindow::syncRenderingModeMenu()
+{
+    if (ui->sceneWidget)
+    {
+        using GridWorldMapping::GridRenderingMode;
+        switch (ui->sceneWidget->getGridRenderingMode())
+        {
+        case GridRenderingMode::Points:
+            ui->actionRenderingPoints->setChecked(true);
+            break;
+        case GridRenderingMode::Cells:
+            ui->actionRenderingCells->setChecked(true);
+            break;
+        case GridRenderingMode::Texture:
+            ui->actionRenderingTexture->setChecked(true);
+            break;
+        }
     }
 }
 
@@ -2501,6 +2544,113 @@ void MainWindow::setWidgetsEnabledState(bool enabled)
 }
 
 
+namespace
+{
+/// @brief Peak size of the memory held in RAM by this process in megabytes (VmHWM), or -1 if the system does not tell it
+double peakMemoryMegabytes()
+{
+#ifdef __linux__
+    QFile status("/proc/self/status");
+    if (status.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        // readAll(), not a loop with atEnd(): files of /proc have size 0, so atEnd() is true from the start
+        const QList<QByteArray> lines = status.readAll().split('\n');
+        for (const QByteArray& line : lines)
+        {
+            if (line.startsWith("VmHWM:"))
+                return line.mid(6).trimmed().split(' ').first().toDouble() / 1024.0; // the value is in kB
+        }
+    }
+#endif
+    return -1.0;
+}
+} // namespace
+
+int MainWindow::runBenchmark()
+{
+    const SettingParameter* parameters = ui->sceneWidget ? ui->sceneWidget->getSettingParameter() : nullptr;
+    if (!parameters)
+    {
+        std::cerr << "Error: --benchmark needs simulation data: give a directory with the data or a configuration file." << std::endl;
+        return 1;
+    }
+
+    // Steps to show: from the current one (--step) to the last one. If the config lists the available steps, only them.
+    std::vector<StepIndex> steps;
+    if (availableSteps.empty())
+    {
+        for (StepIndex step = currentStep; step <= totalSteps(); ++step)
+            steps.push_back(step);
+    }
+    else
+    {
+        std::ranges::copy_if(availableSteps, std::back_inserter(steps), [this](StepIndex step) { return step >= currentStep; });
+    }
+    if (steps.empty())
+    {
+        std::cerr << "Error: --benchmark: there is no step to show from step " << currentStep << " on." << std::endl;
+        return 1;
+    }
+
+    // The scene can be painted only when the window is on the screen
+    {
+        QElapsedTimer waiting;
+        waiting.start();
+        while (!(windowHandle() && windowHandle()->isExposed()) && waiting.elapsed() < 10000)
+            QApplication::processEvents(QEventLoop::AllEvents, 50);
+    }
+
+    const bool flatView = !ui->sceneWidget->isNative3DModel();
+    const auto requestedMode = ui->sceneWidget->getGridRenderingMode();
+    const auto effectiveMode = ui->sceneWidget->effectiveGridRenderingMode();
+
+    std::cout << "=== OOpenCal-Viewer benchmark ===\n"
+              << std::format("Grid:              {} rows x {} columns x {} slices\n", parameters->numberOfRowsY, parameters->numberOfColumnX, parameters->numberOfSlicesZ);
+    if (flatView)
+    {
+        std::cout << std::format("Rendering mode:    {}", GridWorldMapping::toString(effectiveMode));
+        if (effectiveMode != requestedMode)
+            std::cout << std::format(" (requested {}, but the grid is too large for a texture)", GridWorldMapping::toString(requestedMode));
+        std::cout << "\n";
+    }
+    else
+    {
+        std::cout << "Rendering mode:    not used (native 3D volume)\n";
+    }
+    std::cout << std::format("OpenGL renderer:   {}\n", ui->sceneWidget->glRendererName().toStdString())
+              << std::format("Swap interval:      {} (0 = vsync off)\n", QSurfaceFormat::defaultFormat().swapInterval())
+              << std::format("Steps:             {} (from {} to {}); the first one is a warm-up and is not counted\n", steps.size(), steps.front(), steps.back())
+              << std::flush;
+
+    // The metrics of PerformanceMetrics would print a block for every step and make the measurement slower
+    const bool metricsWereEnabled = PerformanceMetrics::isEnabled();
+    PerformanceMetrics::setEnabled(false);
+
+    std::vector<Benchmark::StepTimes> measured;
+    const auto loopStart = std::chrono::steady_clock::now();
+    for (std::size_t i = 0; i < steps.size(); ++i)
+    {
+        const Benchmark::StepTimes times = ui->sceneWidget->benchmarkStep(steps[i]);
+        const bool warmUp = (i == 0 && steps.size() > 1);
+        if (!warmUp)
+            measured.push_back(times);
+
+        std::cout << std::format("step {:>7}: read {:>10.2f}  coloring {:>10.2f}  VTK update {:>10.2f}  render {:>10.2f}  total {:>10.2f} ms{}\n",
+                                 steps[i], times.readMs, times.coloringMs, times.vtkUpdateMs, times.renderMs, times.totalMs(),
+                                 warmUp ? "  (warm-up)" : "")
+                  << std::flush;
+    }
+    const std::chrono::duration<double> loopDuration = std::chrono::steady_clock::now() - loopStart;
+    PerformanceMetrics::setEnabled(metricsWereEnabled);
+
+    std::cout << "\n" << std::format("Measured steps: {}\n", measured.size()) << Benchmark::formatTable(Benchmark::summarize(measured))
+              << std::format("\nWall time of all {} steps: {:.2f} s\n", steps.size(), loopDuration.count());
+    if (const double peakMemory = peakMemoryMegabytes(); peakMemory >= 0.0)
+        std::cout << std::format("Peak memory (RSS): {:.0f} MB\n", peakMemory);
+    std::cout << std::flush;
+    return 0;
+}
+
 void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
 {
     // Set starting model if specified
@@ -2547,6 +2697,18 @@ void MainWindow::applyCommandLineOptions(const CommandLineParser& cmdParser)
         {
             std::cerr << "Warning: Invalid step value: " << stepValue << std::endl;
         }
+    }
+
+    // --benchmark: measure the steps one after another and exit. It replaces the playback and the generation of the image
+    // or the movie, because they would add timers and delays to the measurement.
+    if (cmdParser.isBenchmarkRequested())
+    {
+        if (cmdParser.isAutoPlayRequested() || cmdParser.getGenerateImagePath() || cmdParser.getGenerateMoviePath())
+            std::cerr << "Warning: --benchmark replaces --autoPlay, --generateImagePath and --generateMoviePath, which are ignored." << std::endl;
+
+        // Run it from the event loop: the window has to be shown first
+        QTimer::singleShot(0, this, [this] { QCoreApplication::exit(runBenchmark()); });
+        return;
     }
 
     // Handle generateImagePath - generate image and optionally exit

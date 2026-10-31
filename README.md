@@ -27,6 +27,9 @@ The OOpenCal-Viewer is designed to:
 - **OOpenCAL** - Required for certain model types
   - The project uses headers from the OOpenCAL library
   - Set the `OOPENCAL_DIR` CMake variable to point to your OOpenCAL base directory
+- **C-Blosc2** - Needed to read simulations saved with `mode=compressed`
+  - Downloaded and built automatically by CMake (needs network access during the first configuration)
+  - Use `-DVIEWER_WITH_BLOSC2=OFF` to build without it; see [Output formats](doc/LOAD_MODEL_FROM_DIRECTORY.md#output-formats)
 
 ### OOpenCAL Setup
 
@@ -115,8 +118,8 @@ The application supports various command-line arguments for automated testing, b
 # Generate image at specific step
 ./QtVtkViewer /path/to/model/directory --step=100 --generateImagePath=/tmp/step100.png
 
-# Batch processing with silent mode
-./QtVtkViewer /path/to/model/directory --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep --silent
+# Measure how fast the steps from step 100 to the last one are shown with the texture rendering
+./QtVtkViewer /path/to/model/directory --step=100 --renderingMode=texture --benchmark
 ```
 
 For complete documentation of all available arguments, see **[doc/COMMAND_LINE_ARGUMENTS.md](doc/COMMAND_LINE_ARGUMENTS.md)**.

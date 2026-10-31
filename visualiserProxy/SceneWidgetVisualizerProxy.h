@@ -104,7 +104,7 @@ public:
         modelReader.readStageStateFromFilesForStep(p, sp, lines);
     }
 
-    void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos, bool useCellRendering = false) override
+    void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos, GridWorldMapping::GridRenderingMode renderingMode = GridWorldMapping::GridRenderingMode::Points) override
     {
         if (p.layerCount() > 1)
         {
@@ -120,7 +120,7 @@ public:
                                        renderer,
                                        gridActor,
                                        colorSubstateInfos,
-                                       useCellRendering);
+                                       renderingMode);
                 return;
             }
 
@@ -142,7 +142,7 @@ public:
 
         if (nativeVolumeActor)
             renderer->RemoveVolume(nativeVolumeActor);
-        visualiser.drawWithVTK(p, nRows, nCols, renderer, gridActor, colorSubstateInfos, useCellRendering);
+        visualiser.drawWithVTK(p, nRows, nCols, renderer, gridActor, colorSubstateInfos, renderingMode);
     }
 
     void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos) override

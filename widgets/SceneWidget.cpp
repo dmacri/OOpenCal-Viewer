@@ -3,10 +3,13 @@
 
 #include <iostream> // std::cout
 #include <algorithm>
+#include <chrono>
 #include <cmath> // std::isfinite
 #include <filesystem>
 #include <string>
 #include <QApplication>
+#include <QOpenGLContext>
+#include <QOpenGLFunctions>
 #include "core/directoryConstants.h"
 #include "widgets/WaitCursorGuard.h"
 #include <vtkCallbackCommand.h>
@@ -57,7 +60,7 @@ public:
     void clearStage() override {}
     void readStepsOffsetsForAllNodesFromFiles(int, int, int, const std::string&) override {}
     void readStageStateFromFilesForStep(SettingParameter*, Line*) override {}
-    void drawWithVTK(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, bool) override {}
+    void drawWithVTK(int, int, vtkSmartPointer<vtkRenderer>, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&, GridWorldMapping::GridRenderingMode) override {}
     void refreshWindowsVTK(int, int, vtkSmartPointer<vtkActor>, const std::vector<const SubstateInfo*>&) override {}
     void setNative3DSlice(GridSliceAxis, int) override {}
     void clearNative3DSlice() override {}
@@ -120,7 +123,7 @@ bool isDataDirectory(const std::filesystem::path& configDir, const std::string& 
 
         // Check if it has a known data file extension
         std::string ext = entry.path().extension().string();
-        if (ext == ".bin" || ext == ".txt")
+        if (ext == ".bin" || ext == ".blosc" || ext == ".txt")
             return true;
     }
 
@@ -439,6 +442,7 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
         // Resize lines vector to match expected number of lines
         lines.resize(settingParameter->numberOfLines);
 
+        const auto readStart = std::chrono::steady_clock::now();
         {
             // Create a performance session for step loading (latency measurement)
             PerformanceSession perfSession("Step Loading",
@@ -452,9 +456,14 @@ void SceneWidget::loadAndUpdateVisualizationForCurrentStep()
             // Read stage state from files for the current step
             sceneWidgetVisualizerProxy->readStageStateFromFilesForStep(settingParameter.get(), &lines[0]);
         } // Session destructor prints metrics here
+        const auto readEnd = std::chrono::steady_clock::now();
 
         // Refresh VTK visualization with optional 3D substate support
         refreshVisualizationWithOptional3DSubstate();
+
+        const auto refreshEnd = std::chrono::steady_clock::now();
+        lastStepReadMs = std::chrono::duration<double, std::milli>(readEnd - readStart).count();
+        lastStepRefreshMs = std::chrono::duration<double, std::milli>(refreshEnd - readEnd).count();
 
         // Update load balancing lines if we have any
         sceneWidgetVisualizerProxy->getVisualizer().refreshBuildLoadBalanceLine(lines,
@@ -479,6 +488,13 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     if (gridActor && renderer)
     {
         renderer->RemoveActor(gridActor);
+    }
+    if (gridActor)
+    {
+        // The actor is shared by all drawing modes: drop what the Texture rendering mode put on it,
+        // otherwise the texture would be painted over the 3D surfaces too.
+        gridActor->SetTexture(nullptr);
+        gridActor->GetProperty()->LightingOn();
     }
     if (backgroundActor && renderer)
     {
@@ -509,7 +525,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
                                                 renderer,
                                                 gridActor,
                                                 colorSubstateInfos,
-                                                useCellRendering);
+                                                gridRenderingMode);
 
         if (!sliceView)
         {
@@ -663,7 +679,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
 
     // Fallback to regular 2D visualization
     const auto colorSubstateInfos = getColorSubstateInfos();
-    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, colorSubstateInfos, useCellRendering);
+    sceneWidgetVisualizerProxy->drawWithVTK(settingParameter->numberOfRowsY, settingParameter->numberOfColumnX, renderer, gridActor, colorSubstateInfos, gridRenderingMode);
     updateCameraPivotFromBounds();
 }
 
@@ -2240,7 +2256,13 @@ void SceneWidget::setFlatSceneBackgroundVisible(bool visible)
 
 void SceneWidget::setUseCellRendering(bool useCellRenderingMode)
 {
-    useCellRendering = useCellRenderingMode;
+    setGridRenderingMode(useCellRenderingMode ? GridWorldMapping::GridRenderingMode::Cells
+                                              : GridWorldMapping::GridRenderingMode::Points);
+}
+
+void SceneWidget::setGridRenderingMode(GridWorldMapping::GridRenderingMode mode)
+{
+    gridRenderingMode = mode;
     // No need to trigger render update here - caller will call refreshVisualization
 }
 
@@ -2270,6 +2292,62 @@ void SceneWidget::setActiveSubstatesForColorring(const std::vector<std::string>&
     activeSubstatesForColorring = fieldNames;
 
     refreshVisualization();
+}
+
+GridWorldMapping::GridRenderingMode SceneWidget::effectiveGridRenderingMode() const
+{
+    if (! settingParameter)
+        return gridRenderingMode;
+    return GridWorldMapping::effectiveRenderingMode(gridRenderingMode, settingParameter->numberOfRowsY, settingParameter->numberOfColumnX);
+}
+
+Benchmark::StepTimes SceneWidget::benchmarkStep(StepIndex step)
+{
+    using Clock = std::chrono::steady_clock;
+
+    Benchmark::StepTimes times;
+    if (! settingParameter)
+        return times;
+
+    settingParameter->step = step;
+    settingParameter->changed = true;
+
+    // Reading the files, colouring the cells and updating the VTK pipeline (the same code as the user triggers)
+    sceneWidgetVisualizerProxy->getVisualizer().resetLastColoringTime();
+    loadAndUpdateVisualizationForCurrentStep();
+    const double coloringMs = sceneWidgetVisualizerProxy->getVisualizer().lastColoringTime().count();
+
+    times.readMs = lastStepReadMs;
+    times.coloringMs = std::min(coloringMs, lastStepRefreshMs);
+    times.vtkUpdateMs = lastStepRefreshMs - times.coloringMs;
+
+    // Drawing: Render() only requests the paint when the widget is not being painted, repaint() does it right now.
+    // glFinish() waits for the GPU, otherwise we would measure only how long it takes to queue the commands.
+    const auto renderStart = Clock::now();
+    renderer->Modified();
+    renderWindow()->Render();
+    repaint();
+    makeCurrent();
+    if (QOpenGLContext* glContext = context())
+        glContext->functions()->glFinish();
+    doneCurrent();
+    times.renderMs = std::chrono::duration<double, std::milli>(Clock::now() - renderStart).count();
+
+    settingParameter->changed = false;
+    return times;
+}
+
+QString SceneWidget::glRendererName()
+{
+    QString name;
+    makeCurrent();
+    if (QOpenGLContext* glContext = context())
+    {
+        if (const GLubyte* renderer = glContext->functions()->glGetString(GL_RENDERER))
+            name = QString::fromLatin1(reinterpret_cast<const char*>(renderer));
+    }
+    doneCurrent();
+    return name;
 }
 
 void SceneWidget::refreshVisualization()
@@ -2509,7 +2587,7 @@ GridWorldMapping::Bounds2D SceneWidget::flatSceneBounds() const
 {
     const int rows = settingParameter->numberOfRowsY;
     const int columns = settingParameter->numberOfColumnX;
-    return useCellRendering ? GridWorldMapping::cellGridBounds(rows, columns) : GridWorldMapping::pointGridBounds(rows, columns);
+    return GridWorldMapping::flatSceneBoundsFor(gridRenderingMode, rows, columns);
 }
 
 bool SceneWidget::pickBasePlane(int displayX, int displayY, std::array<double, 3>& outWorldPos) const

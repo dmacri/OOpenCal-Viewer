@@ -24,6 +24,10 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QStyleFactory>
+#include <algorithm>
+#include <string_view>
+#include <iostream>
+#include <optional>
 #include <QSurfaceFormat>
 #include <clocale>
 #include <filesystem>
@@ -33,6 +37,7 @@
 
 #include "mainwindow.h"
 #include "core/CommandLineParser.h"
+#include "widgets/GridWorldMapping.h"
 #include "plugins/PluginLoader.h"
 #include "data/PerformanceMetrics.h"
 #include "core/PrecompiledHeaderCommand.h"
@@ -49,7 +54,13 @@ int main(int argc, char* argv[])
 
     // vtkObject::GlobalWarningDisplayOff();
 
-    QSurfaceFormat::setDefaultFormat(QVTKOpenGLNativeWidget::defaultFormat());
+    // --benchmark measures the speed, so the drawing must not wait for the vertical blank of the monitor.
+    // The swap interval belongs to the surface format, which has to be set before the window is created,
+    // i.e. earlier than the command line is parsed, so the arguments are only looked through here.
+    QSurfaceFormat surfaceFormat = QVTKOpenGLNativeWidget::defaultFormat();
+    if (std::any_of(argv + 1, argv + argc, [](const char* argument) { return std::string_view(argument) == "--benchmark"; }))
+        surfaceFormat.setSwapInterval(0);
+    QSurfaceFormat::setDefaultFormat(surfaceFormat);
 
     QApplication a(argc, argv);
 
@@ -74,6 +85,18 @@ int main(int argc, char* argv[])
     if (! cmdParser.parse(argc, argv))
     {
         return 1; // Parsing failed
+    }
+
+    // Check the value of --renderingMode now, before the window is created and before any data is loaded
+    std::optional<GridWorldMapping::GridRenderingMode> requestedRenderingMode;
+    if (const auto& renderingModeName = cmdParser.getRenderingMode())
+    {
+        requestedRenderingMode = GridWorldMapping::parseRenderingMode(*renderingModeName);
+        if (! requestedRenderingMode)
+        {
+            std::cerr << "Error: unknown value of --renderingMode: \"" << *renderingModeName << "\" (allowed: points, cells, texture)" << std::endl;
+            return 1;
+        }
     }
 
     // Configure performance metrics based on command-line flag
@@ -105,6 +128,11 @@ int main(int argc, char* argv[])
     }
 
     MainWindow mainWindow;
+
+    // The rendering mode has to be known before the model is loaded: the first picture is drawn in it
+    // (for a huge grid drawing it first in the default mode could take a lot of memory and time)
+    if (requestedRenderingMode)
+        mainWindow.setGridRenderingMode(*requestedRenderingMode);
 
     // Load model directory if provided
     if (cmdParser.getConfigFile())

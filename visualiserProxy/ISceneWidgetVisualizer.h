@@ -25,6 +25,7 @@
 
 #include "core/types.h"
 #include "visualiserProxy/CellHistory.h"
+#include "widgets/GridWorldMapping.h"
 #include "visualiserProxy/ContiguousGrid.h"
 
 // Forward declarations
@@ -68,7 +69,7 @@ public:
     virtual void readStageStateFromFilesForStep(SettingParameter* sp, Line* lines) = 0;
 
     /// @brief Draw the visualization using VTK.
-    virtual void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos, bool useCellRendering = false) = 0;
+    virtual void drawWithVTK(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos, GridWorldMapping::GridRenderingMode renderingMode = GridWorldMapping::GridRenderingMode::Points) = 0;
 
     /// @brief Refresh the VTK windows.
     virtual void refreshWindowsVTK(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::vector<const SubstateInfo*>& colorSubstateInfos) = 0;

@@ -87,7 +87,7 @@ namespace ConfigConstants
     /** @brief Configuration category name for visualization settings */
     inline constexpr const char CATEGORY_VISUALIZATION[] = "VISUALIZATION";
     
-    /** @brief File read mode: "text" or "binary" */
+    /** @brief File read mode: "text", "binary" or "compressed" */
     inline constexpr const char PARAM_MODE[] = "mode";
     
     /** @brief Substates to read from simulation data (e.g., "h,z") */
