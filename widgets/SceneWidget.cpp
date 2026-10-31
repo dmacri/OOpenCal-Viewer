@@ -123,7 +123,7 @@ bool isDataDirectory(const std::filesystem::path& configDir, const std::string& 
 
         // Check if it has a known data file extension
         std::string ext = entry.path().extension().string();
-        if (ext == ".bin" || ext == ".txt")
+        if (ext == ".bin" || ext == ".blosc" || ext == ".txt")
             return true;
     }
 
