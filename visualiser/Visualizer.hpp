@@ -1003,12 +1003,10 @@ bool Visualizer::buidColor(vtkLookupTable* lut, int nCols, int nRows, const Matr
 template<class Matrix>
 bool Visualizer::fillColorImage(vtkImageData* image, int nCols, int nRows, const Matrix &p, const std::vector<const SubstateInfo*>& colorSubstateInfos)
 {
-    // The same conversion as the lookup table gets (toUnitColor / toOpacity), so that all modes show the same colours.
-    const auto toByte = [](double unit)
-    {
-        return static_cast<std::uint8_t>(std::lround(std::clamp(unit, 0.0, 1.0) * 255.0));
-    };
-
+    // The channels of Color are bytes [0, 255] and so are the pixels, so they are copied as they are. It gives the very
+    // same colours as the lookup table of the other modes, which gets toUnitColor() = channel / 255 and converts it back
+    // to a byte. Doing that conversion here (division, multiplication, clamp, rounding for 4 channels of every cell)
+    // took more than 5 times longer, which matters: this code is compiled together with the model, without optimization.
     bool anyTransparent = false;
     auto* pixels = static_cast<std::uint8_t*>(image->GetScalarPointer());
     for (int r = 0; r < nRows; ++r)
@@ -1017,12 +1015,11 @@ bool Visualizer::fillColorImage(vtkImageData* image, int nCols, int nRows, const
         for (int c = 0; c < nCols; ++c, pixel += 4)
         {
             const auto color = calculateCellColor(r, c, p, colorSubstateInfos);
-            const double opacity = toOpacity(color);
-            anyTransparent = anyTransparent || opacity < 1.0;
-            pixel[0] = toByte(toUnitColor(color.getRed()));
-            pixel[1] = toByte(toUnitColor(color.getGreen()));
-            pixel[2] = toByte(toUnitColor(color.getBlue()));
-            pixel[3] = toByte(opacity);
+            pixel[0] = color.getRed();
+            pixel[1] = color.getGreen();
+            pixel[2] = color.getBlue();
+            pixel[3] = color.getAlpha();
+            anyTransparent = anyTransparent || color.getAlpha() != 255;
         }
     }
     image->GetPointData()->GetScalars()->Modified();
