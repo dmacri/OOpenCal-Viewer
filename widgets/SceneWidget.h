@@ -21,7 +21,9 @@
 #include <vtkSmartPointer.h>
 #include <vtkTextMapper.h>
 
+#include "core/BenchmarkStatistics.h"
 #include "core/types.h"
+#include "data/StepTimeMap.h"
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
 #include "widgets/GridWorldMapping.h"
@@ -143,6 +145,23 @@ public:
     void setToolTipEnabled(bool enabled);
 
     /// @brief Get the current tooltip enabled state
+    /** @brief Choose how the simulated time is written under the step number.
+     *  @param pretty true: `1 d 2 h 3 min 4 s` (seconds roll over to minutes, hours and days),
+     *                false: plain seconds `93784 s`
+     *  @note Has an effect only when the model provides a time file (see StepTimeMap). */
+    void setPrettyTimeFormat(bool pretty);
+
+    bool getPrettyTimeFormat() const
+    {
+        return prettyTimeFormat;
+    }
+
+    /// @brief Mapping step -> simulated time of the loaded model (not available when the model has no `*-time.txt` file)
+    const StepTimeMap& getStepTimeMap() const
+    {
+        return stepTimeMap;
+    }
+
     bool getToolTipEnabled() const
     {
         return toolTipEnabled;
@@ -210,13 +229,38 @@ public:
 
     /// @brief Set cell rendering mode (high quality vs fast point-based)
     /// @param useCellRendering If true, uses cell-based rendering (better quality); if false, uses point-based (faster)
+    /// @note Shortcut for setGridRenderingMode(Cells / Points)
     void setUseCellRendering(bool useCellRendering);
 
     /// @brief Get the current cell rendering mode
+    /// @return true only for GridRenderingMode::Cells
     bool getUseCellRendering() const
     {
-        return useCellRendering;
+        return gridRenderingMode == GridWorldMapping::GridRenderingMode::Cells;
     }
+
+    /// @brief Set how the grid of the flat (2D) view is drawn: Points, Cells or Texture (see GridWorldMapping::GridRenderingMode)
+    /// @note No render update is triggered here - the caller refreshes the visualization
+    void setGridRenderingMode(GridWorldMapping::GridRenderingMode mode);
+
+    /// @brief Get the requested grid rendering mode (Texture is drawn as Cells for grids that are too large for a texture)
+    GridWorldMapping::GridRenderingMode getGridRenderingMode() const
+    {
+        return gridRenderingMode;
+    }
+
+    /// @brief The rendering mode that is really used for the loaded grid (Texture falls back to Cells for a grid that is too large)
+    GridWorldMapping::GridRenderingMode effectiveGridRenderingMode() const;
+
+    /// @brief Shows the given step like the user would do, but synchronously, and measures the phases (--benchmark).
+    /// @details Unlike selectedStepParameter() it does not process the events of the application and it waits until the GPU
+    ///          has finished drawing, so the returned times do not depend on the timer of the playback nor on vsync
+    ///          (the swap interval is set to 0 by main() when --benchmark is used).
+    /// @return times of reading the step, colouring the cells, the rest of the VTK update and rendering
+    Benchmark::StepTimes benchmarkStep(StepIndex step);
+
+    /// @brief Name of the OpenGL renderer (the graphics card or e.g. "llvmpipe" for software rendering), empty if unknown
+    QString glRendererName();
 
     /// @brief Set camera roll (rotation around X axis) in degrees
     void setCameraRoll(double angle);
@@ -353,6 +397,11 @@ signals:
      *  @param totalSteps Total number of steps available */
     void totalNumberOfStepsReadFromConfigFile(StepIndex totalSteps);
 
+    /** @brief Signal emitted when the optional file with the simulated time of the steps exists, but can not be understood.
+     *  The viewer then shows the step number only.
+     *  @param message Description of the problem (with the line number) */
+    void stepTimeFileInvalid(const QString& message);
+
     /** @brief Signal emitted when available steps are read from config file.
      *  @param availableSteps Vector of available step numbers */
     void availableStepsReadFromConfigFile(std::vector<StepIndex> availableSteps);
@@ -421,6 +470,9 @@ protected:
     /// @brief Reads settings from a configuration file
     /// @param filename Path to the configuration file
     void readSettingsFromConfigFile(const std::string& filename);
+
+    /// @brief Reads the optional `<output_file_name>-time.txt` (needs settingParameter->outputFileName to be set)
+    void loadStepTimeMap();
 
     /// @brief Sets up the VTK scene, it is called when reading config file
     void setupVtkScene();
@@ -591,8 +643,8 @@ protected:
 
     /** @brief World extent of the flat (2D) scene, to which the lines between the nodes are fitted.
      *
-     *  The grid is drawn with one quad per cell (useCellRendering) or with one point per cell; the second
-     *  one ends one unit earlier on the right and at the top (see GridWorldMapping::pointGridBounds()). */
+     *  The grid is drawn with one quad per cell (Cells and Texture modes) or with one point per cell (Points);
+     *  the last one ends one unit earlier on the right and at the top (see GridWorldMapping::pointGridBounds()). */
     GridWorldMapping::Bounds2D flatSceneBounds() const;
 
     /** @brief Converts VTK world coordinates to display/pixel coordinates shown to users.
@@ -702,8 +754,13 @@ protected:
     /// @brief Flat scene background visibility state (shown in 3D mode)
     bool flatSceneBackgroundVisible = true;
 
-    /// @brief Cell rendering mode (true = high quality cell-based, false = fast point-based)
-    bool useCellRendering = false;
+    /// @brief How the flat (2D) grid is drawn: points (blurred), cells (sharp, slower) or texture (sharp, fastest)
+    GridWorldMapping::GridRenderingMode gridRenderingMode = GridWorldMapping::defaultRenderingMode;
+
+    /// @brief Milliseconds spent reading the files in the last loadAndUpdateVisualizationForCurrentStep()
+    double lastStepReadMs = 0.0;
+    /// @brief Milliseconds spent refreshing the visualization (colours and VTK) in the last loadAndUpdateVisualizationForCurrentStep()
+    double lastStepRefreshMs = 0.0;
 
     /// @brief Name of the topmost substate field currently used for 3D visualization (empty if none)
     std::string activeSubstateFor3D;
@@ -766,6 +823,29 @@ protected:
 
     /// @brief Text mapper for step display: This text mapper is responsible for rendering the step number in the scene.
     vtkNew<vtkTextMapper> singleLineTextStep;
+
+    /// @brief Text mapper for the simulated time shown under the step number (smaller font than the step).
+    vtkNew<vtkTextMapper> singleLineTextTime;
+
+    /// @brief Actor of the step number text (needed to place the time text under it); null until the scene is rendered
+    vtkSmartPointer<vtkActor2D> stepTextActor;
+
+    /// @brief Actor of the time text; null until the scene is rendered, hidden when the model has no time file
+    vtkSmartPointer<vtkActor2D> timeTextActor;
+
+    /// @brief Simulated time of the steps of the loaded model (optional file `<output_file_name>-time.txt`)
+    StepTimeMap stepTimeMap;
+
+    /// @brief Whether the time is shown as "1 d 2 h 3 min 4 s" (true) or as plain seconds (false)
+    bool prettyTimeFormat = true;
+
+    /// @brief Text of the time line for the current step, e.g. "Time: 1 h 0 min 0.0 s", "Time: n/a" when the file does
+    ///        not list the step; empty when the model has no time file
+    std::string timeLineForCurrentStep() const;
+
+    /// @brief Puts the time of the current step into the time text (and hides it when the model has no time file).
+    ///        Does not trigger rendering.
+    void updateTimeText();
 
     /// @brief Rotation pivot in world coordinates: the scene centre (see updateCameraPivotFromBounds()).
     /// The focal point moves on zoom and pan; the pivot does not.

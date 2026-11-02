@@ -27,6 +27,9 @@ The OOpenCal-Viewer is designed to:
 - **OOpenCAL** - Required for certain model types
   - The project uses headers from the OOpenCAL library
   - Set the `OOPENCAL_DIR` CMake variable to point to your OOpenCAL base directory
+- **C-Blosc2** - Needed to read simulations saved with `mode=compressed`
+  - Downloaded and built automatically by CMake (needs network access during the first configuration)
+  - Use `-DVIEWER_WITH_BLOSC2=OFF` to build without it; see [Output formats](doc/LOAD_MODEL_FROM_DIRECTORY.md#output-formats)
 
 ### OOpenCAL Setup
 
@@ -61,6 +64,7 @@ The generated documentation will be available in the `doc/html` directory.
 - **[doc/ACTION_PLUGINS.md](doc/ACTION_PLUGINS.md)** - Action plugins: model-specific exports and analyses (e.g. pedestrian trajectories) as shared libraries
 - **[doc/VIEW_MODES.md](doc/VIEW_MODES.md)** - 2D/3D view modes documentation
 - **[doc/CELL_HISTORY_PLOT.md](doc/CELL_HISTORY_PLOT.md)** - Plot of the substates of a clicked cell over the whole simulation
+- **[doc/SIMULATED_TIME.md](doc/SIMULATED_TIME.md)** - Showing the simulated time (optional `*-time.txt` file) next to the step number
 - **[doc/Build-VTK.md](doc/Build-VTK.md)** - VTK compilation instructions
 - **[examples/custom_model_plugin/](examples/custom_model_plugin/)** - Working example of a plugin
 - **[examples/model_header_example/](examples/model_header_example/)** - Example Header.txt configuration file
@@ -116,8 +120,8 @@ The application supports various command-line arguments for automated testing, b
 # Generate image at specific step
 ./QtVtkViewer /path/to/model/directory --step=100 --generateImagePath=/tmp/step100.png
 
-# Batch processing with silent mode
-./QtVtkViewer /path/to/model/directory --generateMoviePath=/tmp/movie.ogv --exitAfterLastStep --silent
+# Measure how fast the steps from step 100 to the last one are shown with the texture rendering
+./QtVtkViewer /path/to/model/directory --step=100 --renderingMode=texture --benchmark
 ```
 
 For complete documentation of all available arguments, see **[doc/COMMAND_LINE_ARGUMENTS.md](doc/COMMAND_LINE_ARGUMENTS.md)**.

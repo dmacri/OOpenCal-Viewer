@@ -27,7 +27,7 @@ struct SettingParameter
     NodeIndex nNodeZ;           ///< Number of nodes in Z direction (3D models, 1 for 2D)
     int numberOfLines;          ///< Total number of lines in the visualization
     std::string outputFileName; ///< Name of the output file
-    std::string readMode;       ///< File read mode: "text" or "binary"
+    std::string readMode;       ///< File read mode: "text", "binary" or "compressed"
     std::string substates;      ///< Substates to read (e.g., "h,z")
     std::string reduction;      ///< Reduction operations (e.g., "sum,min,max")
     
