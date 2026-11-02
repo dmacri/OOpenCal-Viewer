@@ -98,6 +98,8 @@ private slots: // menu actions
     int runBenchmark();
     void onPausePlaybackOnRotationToggled(bool checked);
     void onToolTipToggled(bool checked);
+    void onPrettyTimeFormatToggled(bool checked);
+    void onStepTimeFileInvalid(const QString& message);
     void syncToolTipCheckbox();
 
     // Help submenu:

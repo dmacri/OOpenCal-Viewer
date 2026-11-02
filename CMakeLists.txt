@@ -202,6 +202,7 @@ list(APPEND Sources
     core/CommandLineParser.cpp
     core/PrecompiledHeaderCommand.cpp
     data/ReductionManager.cpp
+    data/StepTimeMap.cpp
     data/PerformanceMetrics.cpp
     data/ModelReader.cpp
     data/CompressedStepReader.cpp
