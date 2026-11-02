@@ -71,6 +71,7 @@ if(VIEWER_WITH_BLOSC2)
         CompressedStepReaderTests.cpp
         ${CMAKE_SOURCE_DIR}/data/CompressedStepReader.cpp
         ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
+        ${CMAKE_SOURCE_DIR}/data/PerformanceMetrics.cpp
     )
 
     target_link_libraries(CompressedStepReaderTests
