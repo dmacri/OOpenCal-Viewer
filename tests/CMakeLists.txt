@@ -31,6 +31,7 @@ endif()
 add_executable(ModelReaderTests
     ModelReaderTests.cpp
     ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
+    ${CMAKE_SOURCE_DIR}/data/PerformanceMetrics.cpp
 )
 
 # Link against GTest
@@ -175,6 +176,7 @@ add_test(NAME VolumeLayersTests COMMAND VolumeLayersTests)
 add_executable(CellHistoryTests
     CellHistoryTests.cpp
     ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
+    ${CMAKE_SOURCE_DIR}/data/PerformanceMetrics.cpp
 )
 
 target_link_libraries(CellHistoryTests

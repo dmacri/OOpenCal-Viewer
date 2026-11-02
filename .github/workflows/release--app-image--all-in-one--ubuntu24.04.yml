@@ -5,7 +5,9 @@ on:
     branches:
       - '**'
   release:
-    types: [created]
+    # "published" (and not "created"): it fires both when a release is published at once and when a saved draft is published
+    # later, while "created" does not fire for the second case, so a release made from a draft got no files at all
+    types: [published]
 
 env:
   PROJECT_NAME: OOpenCal-Viewer
@@ -13,6 +15,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # attaching the AppImage to a release (the default token of the repository may be read-only)
 
     steps:
       ################### checkout & dependencies ###################
@@ -598,3 +602,21 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ env.PROJECT_NAME }}-x86_64-allin.AppImage
+          fail_on_unmatched_files: true
+
+      - name: Check that the file is attached to the release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          EXPECTED_ASSET: ${{ env.PROJECT_NAME }}-x86_64-allin.AppImage
+        run: |
+          # Fails the job (and so the release gets a red cross) when the upload above did not leave the file in the release
+          assets=$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
+          echo "Files attached to release $TAG_NAME:"
+          echo "$assets"
+          if ! grep -Fxq "$EXPECTED_ASSET" <<< "$assets"; then
+            echo "::error::$EXPECTED_ASSET is not attached to release $TAG_NAME"
+            exit 1
+          fi
