@@ -235,7 +235,11 @@ public:
 
     void drawWithVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
-        visualiser.drawWithVTK3DSubstate(p, nRows, nCols, renderer, gridActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
+        removeNativeVolumeFrom(renderer);
+        withHeightGrid([&](const auto& grid)
+        {
+            visualiser.drawWithVTK3DSubstate(grid, nRows, nCols, renderer, gridActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
+        });
     }
 
     void drawWithVTK3DSubstates(int nRows,
@@ -245,18 +249,25 @@ public:
                                 const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
                                 const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
-        visualiser.drawWithVTK3DSubstates(p,
-                                          nRows,
-                                          nCols,
-                                          renderer,
-                                          gridActor,
-                                          heightSubstateInfosBottomToTop,
-                                          colorSubstateInfos);
+        removeNativeVolumeFrom(renderer);
+        withHeightGrid([&](const auto& grid)
+        {
+            visualiser.drawWithVTK3DSubstates(grid,
+                                              nRows,
+                                              nCols,
+                                              renderer,
+                                              gridActor,
+                                              heightSubstateInfosBottomToTop,
+                                              colorSubstateInfos);
+        });
     }
 
     void refreshWindowsVTK3DSubstate(int nRows, int nCols, vtkSmartPointer<vtkActor> gridActor, const std::string& substateFieldName, double minValue, double maxValue, const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
-        visualiser.refreshWindowsVTK3DSubstate(p, nRows, nCols, gridActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
+        withHeightGrid([&](const auto& grid)
+        {
+            visualiser.refreshWindowsVTK3DSubstate(grid, nRows, nCols, gridActor, substateFieldName, minValue, maxValue, colorSubstateInfos);
+        });
     }
 
     void refreshWindowsVTK3DSubstates(int nRows,
@@ -265,12 +276,15 @@ public:
                                       const std::vector<const SubstateInfo*>& heightSubstateInfosBottomToTop,
                                       const std::vector<const SubstateInfo*>& colorSubstateInfos) override
     {
-        visualiser.refreshWindowsVTK3DSubstates(p,
-                                                nRows,
-                                                nCols,
-                                                gridActor,
-                                                heightSubstateInfosBottomToTop,
-                                                colorSubstateInfos);
+        withHeightGrid([&](const auto& grid)
+        {
+            visualiser.refreshWindowsVTK3DSubstates(grid,
+                                                    nRows,
+                                                    nCols,
+                                                    gridActor,
+                                                    heightSubstateInfosBottomToTop,
+                                                    colorSubstateInfos);
+        });
     }
 
     void drawWithVTK3DSubstateSlice(int nRows,
@@ -319,7 +333,8 @@ public:
 
     void drawFlatSceneBackground(int nRows, int nCols, vtkSmartPointer<vtkRenderer> renderer, vtkSmartPointer<vtkActor> backgroundActor) override
     {
-        const double zPosition = p.layerCount() > 1 ? -1.0 : 0.0;
+        // Under the whole volume (-1), but directly under a plane drawn as a height surface (see heightSurfaceBaseZ)
+        const double zPosition = (p.layerCount() > 1 && !nativeSliceEnabled) ? -1.0 : 0.0;
         visualiser.drawFlatSceneBackground(nRows, nCols, renderer, backgroundActor, zPosition);
     }
 
@@ -614,6 +629,27 @@ private:
         }
 
         return history;
+    }
+
+    /** @brief Calls @p draw with the grid whose cells are drawn as a height surface.
+     *
+     *  A 2D model uses its only layer; a native 3D model in the XY cross-section (fixed Z) uses that plane (issue #171). */
+    template<class Draw>
+    void withHeightGrid(Draw&& draw)
+    {
+        if (p.layerCount() > 1 && nativeSliceEnabled && nativeSliceAxis == GridSliceAxis::Z)
+        {
+            const ContiguousGridSliceView<Cell> slice(p, nativeSliceAxis, nativeSliceIndex);
+            draw(slice);
+            return;
+        }
+        draw(p);
+    }
+
+    void removeNativeVolumeFrom(const vtkSmartPointer<vtkRenderer>& renderer)
+    {
+        if (nativeVolumeActor && renderer)
+            renderer->RemoveVolume(nativeVolumeActor);
     }
 
     const std::string m_modelName;

@@ -507,7 +507,8 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         renderer->RemoveActor(gridLinesOnSurfaceActor);
     }
 
-    if (isNative3DModel())
+    // The XY plane of a native 3D model drawn as a height surface goes the way of a 2D model with "3D altitude" (issue #171)
+    if (isNative3DModel() && !isHeightSurfaceDisplayed())
     {
         const bool sliceView = isNative3DSliceView();
         if (flatSceneBackgroundVisible && !sliceView)
@@ -552,7 +553,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     
     // Check if we should use 3D substate visualization
     const auto heightSubstateInfosTopToBottom = get3DSubstateInfosTopToBottom();
-    if (settingParameter->numberOfSlicesZ <= 1 &&
+    if ((settingParameter->numberOfSlicesZ <= 1 || isNative3DXYSliceView()) &&
         !heightSubstateInfosTopToBottom.empty())
     {
         auto heightSubstateInfosBottomToTop = heightSubstateInfosTopToBottom;
@@ -646,8 +647,14 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
             actorBuildLine->SetVisibility(false); // Always hide 2D lines in 3D mode
         }
 
-        // Draw 3D grid lines on surface with proper visibility
-        if (stackedSubstates)
+        // Draw 3D grid lines on surface with proper visibility.
+        // The node lines describe the whole volume, so a plane of a native 3D model has none (see applyGridLinesSettings()).
+        if (isNative3DModel())
+        {
+            if (gridLinesOnSurfaceActor)
+                gridLinesOnSurfaceActor->SetVisibility(false);
+        }
+        else if (stackedSubstates)
         {
             sceneWidgetVisualizerProxy->drawGridLinesOn3DSubstateStack(settingParameter->numberOfRowsY,
                                                                        settingParameter->numberOfColumnX,
@@ -670,7 +677,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         }
 
         // Apply visibility setting to 3D grid lines
-        if (gridLinesOnSurfaceActor)
+        if (gridLinesOnSurfaceActor && !isNative3DModel())
         {
             gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
         }
@@ -723,7 +730,8 @@ std::vector<const SubstateInfo*> SceneWidget::getNative3DVolumeSubstateInfos() c
 std::vector<const SubstateInfo*> SceneWidget::get3DSubstateInfosTopToBottom() const
 {
     std::vector<const SubstateInfo*> heightSubstateInfos;
-    if (!settingParameter || isNative3DModel())
+    // A native 3D model draws its checked substates in the volume; only its XY plane uses them as the height
+    if (!settingParameter || (isNative3DModel() && !isNative3DXYSliceView()))
         return heightSubstateInfos;
 
     for (const auto& fieldName : activeSubstatesFor3D)
@@ -2022,7 +2030,8 @@ void SceneWidget::setViewMode2D()
     currentViewMode = ViewMode::Mode2D;
     
     // Disable 3D substate visualization when switching to 2D mode
-    if (!substateSliceEnabled)
+    // (the substates checked for a native 3D model belong to its volume and to its XY plane, they stay)
+    if (!substateSliceEnabled && !isNative3DModel())
     {
         activeSubstateFor3D.clear();
         activeSubstatesFor3D.clear();
@@ -2154,6 +2163,12 @@ bool SceneWidget::isNative3DSliceView() const
            sceneWidgetVisualizerProxy->isNative3DSliceEnabled();
 }
 
+bool SceneWidget::isNative3DXYSliceView() const
+{
+    return isNative3DSliceView() &&
+           sceneWidgetVisualizerProxy->native3DSliceAxis() == GridSliceAxis::Z;
+}
+
 bool SceneWidget::is3DSubstateSurface() const
 {
     if (!settingParameter || isNative3DModel())
@@ -2183,6 +2198,12 @@ void SceneWidget::setNative3DSlice(GridSliceAxis axis, int fixedIndex)
 
     sceneWidgetVisualizerProxy->setNative3DSlice(axis, fixedIndex);
 
+    if (isHeightSurfaceDisplayed())
+    {
+        showNative3DSliceAsHeightSurface(planeChanged);
+        return;
+    }
+
     if (planeChanged || currentViewMode != ViewMode::Mode2D)
     {
         setViewMode2D();
@@ -2193,6 +2214,47 @@ void SceneWidget::setNative3DSlice(GridSliceAxis axis, int fixedIndex)
     update2DRulerAxisTitles();
     update2DRulerAxesBounds();
     updateCameraPivotFromBounds();
+    triggerRenderUpdate();
+}
+
+void SceneWidget::showNative3DSliceAsHeightSurface(bool resetCamera)
+{
+    const bool modeChanged = currentViewMode != ViewMode::Mode3D;
+    drawVisualizationWithOptional3DSubstate();
+
+    if (modeChanged)
+        setViewMode3D();
+
+    updateCameraPivotFromBounds();
+    if (modeChanged || resetCamera)
+    {
+        if (renderer)
+            renderer->ResetCamera();
+        applyCameraAngles();
+    }
+    triggerRenderUpdate();
+}
+
+void SceneWidget::updateNative3DSliceElevation()
+{
+    if (!isNative3DSliceView() || !sceneWidgetVisualizerProxy)
+        return;
+
+    if (isHeightSurfaceDisplayed())
+    {
+        showNative3DSliceAsHeightSurface(false);
+        return;
+    }
+
+    // No substate left to use as the height (or another plane): the flat plane seen from above
+    if (currentViewMode == ViewMode::Mode3D)
+    {
+        setViewMode2D();
+        return;
+    }
+
+    drawVisualizationWithOptional3DSubstate();
+    update2DRulerAxesBounds();
     triggerRenderUpdate();
 }
 
@@ -2652,7 +2714,7 @@ bool SceneWidget::isHeightSurfaceDisplayed() const
     // height surface; cross-section (substateSliceEnabled) draws a profile instead.
     return settingParameter &&
            !substateSliceEnabled &&
-           !isNative3DModel() &&
+           (!isNative3DModel() || isNative3DXYSliceView()) &&
            !get3DSubstateInfosTopToBottom().empty();
 }
 

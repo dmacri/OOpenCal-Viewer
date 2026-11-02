@@ -206,6 +206,15 @@ public:
     /// @brief Return true while a native 3D cross-section is displayed.
     bool isNative3DSliceView() const;
 
+    /// @brief Return true while the XY plane (fixed Z) of a native 3D model is displayed.
+    bool isNative3DXYSliceView() const;
+
+    /** @brief Redraw the displayed plane after the substates checked in the dock changed (issue #171).
+     *
+     *  In the XY plane the checked substates are its height: the plane is drawn as a 3D height surface seen with
+     *  the 3D camera. Without any of them it is the flat plane seen from above. Does nothing outside a plane view. */
+    void updateNative3DSliceElevation();
+
     /// @brief Return true when a 2D model is currently visualized as a 3D height field.
     bool is3DSubstateSurface() const;
 
@@ -770,6 +779,9 @@ protected:
 
     /// @brief Names of the substate fields currently used for 2D visualization (empty if using default)
     std::vector<std::string> activeSubstatesForColorring;
+
+    /// @brief Draw the XY plane of a native 3D model as a height surface and switch to the 3D camera when needed.
+    void showNative3DSliceAsHeightSurface(bool resetCamera);
 
     /// @brief Cross-section state for a 2D model rendered as a 3D substate surface.
     bool substateSliceEnabled = false;
