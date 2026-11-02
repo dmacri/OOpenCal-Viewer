@@ -22,7 +22,6 @@ struct CompressedStepHeader
     std::uint64_t compressedSize; ///< bytes of the Blosc2 chunk that follows the header
 };
 static_assert(sizeof(CompressedStepHeader) == 16, "must match StepHeader in OOpenCAL (base/lib/BloscStepCodec.h)");
-// TODO: Consider using the header from OOpenCAL, but it is blocked until: https://github.com/alessioderango/OOpenCAL/pull/61
 
 /** @brief Reads one step stored as `[CompressedStepHeader][Blosc2 chunk]` and returns the decompressed bytes.
  *
