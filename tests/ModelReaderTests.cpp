@@ -6,34 +6,7 @@
 #include "core/types.h"
 #include "data/ModelReader.hpp"
 #include "visualiserProxy/ContiguousGrid.h"
-
-namespace
-{
-class TestCell
-{
-public:
-    void composeElement(char* text)
-    {
-        value = std::stoi(text);
-    }
-
-    std::string stringEncoding(const char* = nullptr) const
-    {
-        return std::to_string(value);
-    }
-
-    Color outputValue(const char*, GlobalValueManager*) const
-    {
-        return Color(static_cast<std::uint8_t>(value), 0, 0);
-    }
-
-    void startStep(int)
-    {
-    }
-
-    int value = 0;
-};
-}
+#include "tests/TestCell.hpp"
 
 TEST(ParseGridDimensions, Supports2DAnd3DHeaders)
 {
@@ -159,6 +132,19 @@ TEST(ReadStageState, StitchesAllSlicesFromMultipleTextNodes)
     EXPECT_EQ((volume[1, 1, 1].value), 8);
 
     fs::remove_all(directory);
+}
+
+TEST(ReadModeParsing, MapsHeaderValuesAndFallsBackToText)
+{
+    EXPECT_EQ(ReaderHelpers::parseReadMode("text"), ReadMode::Text);
+    EXPECT_EQ(ReaderHelpers::parseReadMode("binary"), ReadMode::Binary);
+    EXPECT_EQ(ReaderHelpers::parseReadMode("compressed"), ReadMode::Compressed);
+    EXPECT_EQ(ReaderHelpers::parseReadMode(""), ReadMode::Text);
+    EXPECT_EQ(ReaderHelpers::parseReadMode("compresed"), ReadMode::Text);
+
+    EXPECT_EQ(ReaderHelpers::giveMeFileName("ball", 3, ReadMode::Text), "ball3.txt");
+    EXPECT_EQ(ReaderHelpers::giveMeFileName("ball", 3, ReadMode::Binary), "ball3.bin");
+    EXPECT_EQ(ReaderHelpers::giveMeFileName("ball", 3, ReadMode::Compressed), "ball3.blosc");
 }
 
 /**
