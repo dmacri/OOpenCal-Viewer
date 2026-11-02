@@ -8,6 +8,7 @@
 #include <QTimer>
 #include <memory>
 #include "core/types.h"
+#include "widgets/GridWorldMapping.h"
 
 namespace Ui
 {
@@ -35,6 +36,11 @@ public:
     ~MainWindow();
 
     void applyCommandLineOptions(const CommandLineParser& cmdParser);
+
+    /// @brief Set how the grid of the flat view is drawn and select it in Settings -> Rendering.
+    /// @details It does not redraw the scene, so it can be used before a model is loaded (--renderingMode):
+    ///          the model is then drawn in this mode from the beginning.
+    void setGridRenderingMode(GridWorldMapping::GridRenderingMode mode);
     void loadModelFromDirectory(const QString& modelDirectory, bool forceCompilation=false);
     
     /// @brief Load model data using an existing model from the system
@@ -81,8 +87,15 @@ private slots: // menu actions
     void onColorSettingsRequested();
     void onCompilationSettingsRequested();
     void onPerformanceSettingsRequested();
-    void onCellRenderingToggled(bool checked);
-    void syncCellRenderingCheckbox();
+    /// @brief The user picked a rendering mode in Settings -> Rendering: set it and redraw the scene
+    void onRenderingModeSelected(GridWorldMapping::GridRenderingMode mode);
+    /// @brief Select in Settings -> Rendering the mode which the scene widget uses
+    void syncRenderingModeMenu();
+
+    /// @brief --benchmark: shows the steps from the current one to the last one, one after another and without any delay,
+    ///        and prints how long reading, colouring and rendering them took (see Benchmark::StepTimes)
+    /// @return exit code of the application: 0 when the measurement was made, 1 when there is nothing to measure
+    int runBenchmark();
     void onPausePlaybackOnRotationToggled(bool checked);
     void onToolTipToggled(bool checked);
     void syncToolTipCheckbox();

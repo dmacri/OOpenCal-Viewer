@@ -43,6 +43,7 @@ add_executable(ModelReaderTests
     ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
     # ModelReader.hpp calls readCompressedStep (mode=compressed), so the definition has to be linked in
     ${CMAKE_SOURCE_DIR}/data/CompressedStepReader.cpp
+    ${CMAKE_SOURCE_DIR}/data/PerformanceMetrics.cpp
 )
 
 # Link against GTest
@@ -145,6 +146,23 @@ target_include_directories(GridWorldMappingTests PRIVATE
 add_test(NAME GridWorldMappingTests COMMAND GridWorldMappingTests)
 
 # ============================================
+# Add test executable for BenchmarkStatistics (header-only, no Qt/VTK)
+# ============================================
+add_executable(BenchmarkStatisticsTests
+    BenchmarkStatisticsTests.cpp
+)
+
+target_link_libraries(BenchmarkStatisticsTests
+    GTest::gtest_main
+)
+
+target_include_directories(BenchmarkStatisticsTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME BenchmarkStatisticsTests COMMAND BenchmarkStatisticsTests)
+
+# ============================================
 # Add test executable for VolumeZSpacing (header-only, no Qt/VTK)
 # ============================================
 add_executable(VolumeZSpacingTests
@@ -203,6 +221,7 @@ add_executable(CellHistoryTests
     ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
     # ModelReader.hpp calls readCompressedStep (mode=compressed), so the definition has to be linked in
     ${CMAKE_SOURCE_DIR}/data/CompressedStepReader.cpp
+    ${CMAKE_SOURCE_DIR}/data/PerformanceMetrics.cpp
 )
 
 target_link_libraries(CellHistoryTests
