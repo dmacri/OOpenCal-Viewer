@@ -17,7 +17,6 @@
 #include <QFileDialog>
 #include <QActionGroup>
 #include <QElapsedTimer>
-#include <QFile>
 #include <QSurfaceFormat>
 #include <QWindow>
 #include <QProgressDialog>
@@ -36,6 +35,7 @@
 #include "config/ConfigConstants.h"
 #include "core/AppImagePaths.h"
 #include "core/CommandLineParser.h"
+#include "core/ProcessMemory.h"
 #include "plugins/CppModuleBuilder.h"
 #include "plugins/ModelLoader.h"
 #include "plugins/PluginLoader.h"
@@ -2570,29 +2570,6 @@ void MainWindow::setWidgetsEnabledState(bool enabled)
     changeWhichButtonsAreEnabled();
 }
 
-
-namespace
-{
-/// @brief Peak size of the memory held in RAM by this process in megabytes (VmHWM), or -1 if the system does not tell it
-double peakMemoryMegabytes()
-{
-#ifdef __linux__
-    QFile status("/proc/self/status");
-    if (status.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        // readAll(), not a loop with atEnd(): files of /proc have size 0, so atEnd() is true from the start
-        const QList<QByteArray> lines = status.readAll().split('\n');
-        for (const QByteArray& line : lines)
-        {
-            if (line.startsWith("VmHWM:"))
-                return line.mid(6).trimmed().split(' ').first().toDouble() / 1024.0; // the value is in kB
-        }
-    }
-#endif
-    return -1.0;
-}
-} // namespace
-
 int MainWindow::runBenchmark()
 {
     const SettingParameter* parameters = ui->sceneWidget ? ui->sceneWidget->getSettingParameter() : nullptr;
@@ -2672,8 +2649,8 @@ int MainWindow::runBenchmark()
 
     std::cout << "\n" << std::format("Measured steps: {}\n", measured.size()) << Benchmark::formatTable(Benchmark::summarize(measured))
               << std::format("\nWall time of all {} steps: {:.2f} s\n", steps.size(), loopDuration.count());
-    if (const double peakMemory = peakMemoryMegabytes(); peakMemory >= 0.0)
-        std::cout << std::format("Peak memory (RSS): {:.0f} MB\n", peakMemory);
+    if (const auto peakMemory = ProcessMemory::peakResidentMegabytes())
+        std::cout << std::format("Peak memory (RSS): {:.0f} MB\n", *peakMemory);
     std::cout << std::flush;
     return 0;
 }
