@@ -141,13 +141,30 @@ TEST(StepTimeMap, UnitLineToleratesCommentsBlankLinesWhitespaceCaseAndWindowsLin
     EXPECT_EQ(fromText("[S]\n0 0\n").unit(), TimeUnit::Seconds);
 }
 
+TEST(StepTimeMap, ReadsMinutesAndHours)
+{
+    const auto minutes = fromText("[min]\n0 0\n10 1.5\n");
+    ASSERT_TRUE(minutes.isAvailable());
+    EXPECT_TRUE(minutes.errorMessage().empty());
+    EXPECT_EQ(minutes.unit(), TimeUnit::Minutes);
+    EXPECT_DOUBLE_EQ(*minutes.timeForStep(10), 1.5);
+    EXPECT_DOUBLE_EQ(*minutes.secondsForStep(10), 90.0);
+
+    const auto hours = fromText("# long simulation\n[H]\n0 0\n100 52,5\n");
+    ASSERT_TRUE(hours.isAvailable());
+    EXPECT_EQ(hours.unit(), TimeUnit::Hours);
+    EXPECT_DOUBLE_EQ(*hours.timeForStep(100), 52.5);
+    EXPECT_DOUBLE_EQ(*hours.secondsForStep(100), 52.5 * 3600.0);
+}
+
 TEST(StepTimeMap, UnknownUnitIsRejectedWithItsNameAndTheSupportedOnes)
 {
     const auto map = fromText("[hours]\n0 0\n");
 
     EXPECT_FALSE(map.isAvailable());
     EXPECT_NE(map.errorMessage().find("[hours]"), std::string::npos);
-    EXPECT_NE(map.errorMessage().find("[ms]"), std::string::npos);
+    for (const char* supported : {"[s]", "[ms]", "[min]", "[h]"})
+        EXPECT_NE(map.errorMessage().find(supported), std::string::npos) << supported;
     EXPECT_NE(map.errorMessage().find("line 1"), std::string::npos);
 }
 

@@ -3,17 +3,29 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <chrono>
 #include <optional>
 #include <string>
 #include <string_view>
 
-/// Units of simulated time understood in the time file. To add a unit, extend the three functions below.
+/// Units of simulated time understood in the time file. To add a unit, extend this enum, allTimeUnits and the
+/// three functions below (timeUnitName(), timeUnitDuration(), timeUnitSecondDecimals()).
 enum class TimeUnit
 {
     Seconds,
     Milliseconds,
+    Minutes,
+    Hours,
 };
+
+/// Every unit that can be written in the time file (in the order shown in messages).
+inline constexpr std::array allTimeUnits{TimeUnit::Seconds, TimeUnit::Milliseconds, TimeUnit::Minutes, TimeUnit::Hours};
+
+/// Simulated time as a floating point number of seconds. Every std::chrono duration (seconds, milliseconds, minutes,
+/// hours, ...) converts to it implicitly and without loss.
+using SimulatedSeconds = std::chrono::duration<double>;
 
 /// Name of the unit as written in the time file (without brackets) and shown in the UI, e.g. "ms".
 constexpr const char* timeUnitName(TimeUnit unit)
@@ -24,31 +36,61 @@ constexpr const char* timeUnitName(TimeUnit unit)
         return "s";
     case TimeUnit::Milliseconds:
         return "ms";
+    case TimeUnit::Minutes:
+        return "min";
+    case TimeUnit::Hours:
+        return "h";
     }
     return "s";
 }
 
-/// How many seconds the given unit has, e.g. 0.001 for milliseconds.
-constexpr double timeUnitInSeconds(TimeUnit unit)
+/// Length of one unit, e.g. `timeUnitDuration(TimeUnit::Minutes)` is 60 s.
+constexpr SimulatedSeconds timeUnitDuration(TimeUnit unit)
 {
     switch (unit)
     {
     case TimeUnit::Seconds:
-        return 1.0;
+        return std::chrono::seconds{1};
     case TimeUnit::Milliseconds:
-        return 0.001;
+        return std::chrono::milliseconds{1};
+    case TimeUnit::Minutes:
+        return std::chrono::minutes{1};
+    case TimeUnit::Hours:
+        return std::chrono::hours{1};
     }
-    return 1.0;
+    return std::chrono::seconds{1};
+}
+
+/// How many seconds the given unit has, e.g. 0.001 for milliseconds and 3600 for hours.
+constexpr double timeUnitInSeconds(TimeUnit unit)
+{
+    return timeUnitDuration(unit).count();
+}
+
+/// A time written in the given unit (e.g. 2500 in milliseconds), expressed as std::chrono duration of seconds.
+constexpr SimulatedSeconds toSeconds(double value, TimeUnit unit)
+{
+    return value * timeUnitDuration(unit);
 }
 
 /// Digits after the decimal point the "pretty" format keeps for seconds: the resolution of the unit
-/// (tenths for seconds, thousandths when the model counts in milliseconds).
+/// (tenths for seconds, thousandths when the model counts in milliseconds, whole seconds for minutes and hours).
 constexpr int timeUnitSecondDecimals(TimeUnit unit)
 {
-    return unit == TimeUnit::Milliseconds ? 3 : 1;
+    switch (unit)
+    {
+    case TimeUnit::Seconds:
+        return 1;
+    case TimeUnit::Milliseconds:
+        return 3;
+    case TimeUnit::Minutes:
+    case TimeUnit::Hours:
+        return 0;
+    }
+    return 1;
 }
 
-/** @brief Parses a unit name such as "ms" or "s" (case insensitive, surrounding spaces ignored; no brackets).
+/** @brief Parses a unit name such as "ms", "s", "min" or "h" (case insensitive, surrounding spaces ignored; no brackets).
  *  @return The unit or std::nullopt when the name is not known */
 inline std::optional<TimeUnit> parseTimeUnit(std::string_view text)
 {
@@ -60,8 +102,17 @@ inline std::optional<TimeUnit> parseTimeUnit(std::string_view text)
     std::string name(text);
     std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-    for (const TimeUnit unit : {TimeUnit::Seconds, TimeUnit::Milliseconds})
+    for (const TimeUnit unit : allTimeUnits)
         if (name == timeUnitName(unit))
             return unit;
     return std::nullopt;
+}
+
+/// The units for an error message: `[s], [ms], [min], [h]`.
+inline std::string supportedTimeUnitsText()
+{
+    std::string text;
+    for (const TimeUnit unit : allTimeUnits)
+        text += (text.empty() ? "[" : ", [") + std::string(timeUnitName(unit)) + "]";
+    return text;
 }

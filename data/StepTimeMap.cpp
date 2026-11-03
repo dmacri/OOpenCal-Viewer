@@ -109,7 +109,7 @@ void StepTimeMap::parse(std::istream& stream)
             if (!unitFromFile)
             {
                 error = "Unknown time unit [" + unitName + "] in line " + std::to_string(lineNumber) + " of time file" + describeFile()
-                        + " (supported: [s], [ms])";
+                        + " (supported: " + supportedTimeUnitsText() + ")";
                 return;
             }
 
@@ -145,6 +145,6 @@ std::optional<double> StepTimeMap::timeForStep(StepIndex step) const
 std::optional<double> StepTimeMap::secondsForStep(StepIndex step) const
 {
     if (const auto time = timeForStep(step))
-        return *time * timeUnitInSeconds(timeUnit);
+        return toSeconds(*time, timeUnit).count();
     return std::nullopt;
 }

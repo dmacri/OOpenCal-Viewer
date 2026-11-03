@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <chrono>
 #include <limits>
 #include "widgets/TimeFormatting.h"
 
@@ -111,7 +112,66 @@ TEST(TimeUnit, ParsesNamesCaseInsensitively)
     EXPECT_EQ(parseTimeUnit("ms"), TimeUnit::Milliseconds);
     EXPECT_EQ(parseTimeUnit(" MS "), TimeUnit::Milliseconds);
     EXPECT_EQ(parseTimeUnit("s"), TimeUnit::Seconds);
+    EXPECT_EQ(parseTimeUnit("min"), TimeUnit::Minutes);
+    EXPECT_EQ(parseTimeUnit(" Min "), TimeUnit::Minutes);
+    EXPECT_EQ(parseTimeUnit("h"), TimeUnit::Hours);
+    EXPECT_EQ(parseTimeUnit("H"), TimeUnit::Hours);
     EXPECT_FALSE(parseTimeUnit("").has_value());
-    EXPECT_FALSE(parseTimeUnit("min").has_value());
+    EXPECT_FALSE(parseTimeUnit("m").has_value());      // minutes or metres? not guessed
+    EXPECT_FALSE(parseTimeUnit("hours").has_value());
+    EXPECT_FALSE(parseTimeUnit("d").has_value());
     EXPECT_DOUBLE_EQ(timeUnitInSeconds(TimeUnit::Milliseconds), 0.001);
+    EXPECT_DOUBLE_EQ(timeUnitInSeconds(TimeUnit::Minutes), 60.0);
+    EXPECT_DOUBLE_EQ(timeUnitInSeconds(TimeUnit::Hours), 3600.0);
+}
+
+TEST(TimeUnit, EveryUnitHasItsOwnNameAndParsesBack)
+{
+    for (const TimeUnit unit : allTimeUnits)
+        EXPECT_EQ(parseTimeUnit(timeUnitName(unit)), unit) << timeUnitName(unit);
+    EXPECT_EQ(supportedTimeUnitsText(), "[s], [ms], [min], [h]");
+}
+
+TEST(TimeUnit, ConvertsToChronoSeconds)
+{
+    using namespace std::chrono_literals;
+    EXPECT_EQ(toSeconds(2500, TimeUnit::Milliseconds), 2.5s);
+    EXPECT_EQ(toSeconds(1.5, TimeUnit::Minutes), 90s);
+    EXPECT_EQ(toSeconds(2, TimeUnit::Hours), 7200s);
+    EXPECT_EQ(toSeconds(7, TimeUnit::Seconds), 7s);
+    EXPECT_EQ(timeUnitDuration(TimeUnit::Hours), 60min);
+}
+
+TEST(TimeFormatting, PrettyOfMinutesAndHours)
+{
+    using TimeFormatting::format;
+    constexpr auto min = TimeUnit::Minutes;
+    constexpr auto h = TimeUnit::Hours;
+
+    EXPECT_EQ(format(0, min, true), "0 s");
+    EXPECT_EQ(format(0.5, min, true), "30 s");
+    EXPECT_EQ(format(1, min, true), "1 min 0 s");
+    EXPECT_EQ(format(90, min, true), "1 h 30 min 0 s");
+    EXPECT_EQ(format(1440, min, true), "1 d 0 h 0 min 0 s");
+    EXPECT_EQ(format(0.25, h, true), "15 min 0 s");
+    EXPECT_EQ(format(1.5, h, true), "1 h 30 min 0 s");
+    EXPECT_EQ(format(24, h, true), "1 d 0 h 0 min 0 s");
+    EXPECT_EQ(format(52.5, h, true), "2 d 4 h 30 min 0 s");
+    EXPECT_EQ(format(-1.5, h, true), "-1 h 30 min 0 s");
+}
+
+TEST(TimeFormatting, PlainOfMinutesAndHoursKeepsTheUnit)
+{
+    EXPECT_EQ(TimeFormatting::format(90, TimeUnit::Minutes, false), "90 min");
+    EXPECT_EQ(TimeFormatting::format(1.5, TimeUnit::Hours, false), "1.5 h");
+    EXPECT_EQ(TimeFormatting::plain(0, TimeUnit::Hours), "0 h");
+}
+
+TEST(TimeFormatting, PrettyAcceptsChronoDurations)
+{
+    using namespace std::chrono_literals;
+    EXPECT_EQ(TimeFormatting::pretty(65s), "1 min 5.0 s");
+    EXPECT_EQ(TimeFormatting::pretty(2h + 3min + 4s), "2 h 3 min 4.0 s");
+    EXPECT_EQ(TimeFormatting::pretty(1500ms, 3), "1.500 s");
+    EXPECT_EQ(TimeFormatting::pretty(48h), "2 d 0 h 0 min 0 s");
 }
