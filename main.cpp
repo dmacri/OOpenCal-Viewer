@@ -40,6 +40,7 @@
 #include "widgets/GridWorldMapping.h"
 #include "plugins/PluginLoader.h"
 #include "data/PerformanceMetrics.h"
+#include "core/ActionCommand.h"
 #include "core/PrecompiledHeaderCommand.h"
 
 
@@ -50,6 +51,10 @@ int main(int argc, char* argv[])
 {
     // Helper mode without any GUI (and without a display): builds the precompiled header and exits
     if (const auto exitCode = viz::cli::runBuildPrecompiledHeaderCommand(argc, argv))
+        return *exitCode;
+
+    // Helper mode without any GUI: runs an action of a plugin (--runAction / --listActions)
+    if (const auto exitCode = viz::cli::runActionCommand(argc, argv))
         return *exitCode;
 
     // vtkObject::GlobalWarningDisplayOff();
