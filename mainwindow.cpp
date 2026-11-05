@@ -2212,10 +2212,26 @@ void MainWindow::syncFlatSceneBackgroundCheckbox()
 
 void MainWindow::updateCameraControlsVisibility()
 {
+    // The XY plane drawn as a height surface (a substate used as its height) is the only plane seen with the 3D camera
     const bool is3DMode =
         ui->sceneWidget->getViewMode() == ViewMode::Mode3D &&
-        !ui->sceneWidget->isCrossSectionView();
+        (!ui->sceneWidget->isCrossSectionView() || ui->sceneWidget->isNative3DXYSliceView());
     ui->camera3DControlsWidget->setVisible(is3DMode);
+}
+
+void MainWindow::syncViewModeActionsWithScene()
+{
+    const bool is3DMode = ui->sceneWidget->getViewMode() == ViewMode::Mode3D;
+    {
+        QSignalBlocker blocker2D(ui->action2DMode);
+        QSignalBlocker blocker3D(ui->action3DMode);
+        ui->action2DMode->setChecked(!is3DMode);
+        ui->action3DMode->setChecked(is3DMode);
+    }
+    syncCameraSliders();
+    updateCameraControlsVisibility();
+    syncFlatSceneBackgroundCheckbox();
+    syncToolTipCheckbox();
 }
 
 void MainWindow::updateSliceControls(bool resetSelection)
@@ -2399,13 +2415,8 @@ void MainWindow::onSliceViewChanged(int viewIndex)
     else
         ui->sceneWidget->setSubstate3DSlice(axis, initialIndex);
 
-    QSignalBlocker blocker2D(ui->action2DMode);
-    QSignalBlocker blocker3D(ui->action3DMode);
-    ui->action2DMode->setChecked(true);
-    ui->action3DMode->setChecked(false);
-    updateCameraControlsVisibility();
-    syncFlatSceneBackgroundCheckbox();
-    syncToolTipCheckbox();
+    // The scene decides: a plane is flat and seen from above, except the XY plane drawn as a height surface (issue #171)
+    syncViewModeActionsWithScene();
 }
 
 void MainWindow::onSliceChanged(int fixedIndex)
@@ -3091,10 +3102,18 @@ void MainWindow::apply3DSubstateSelection(const std::vector<std::string>& fieldN
     {
         // Every cell of a native 3D model has its own place in 3D, so the checked substates are not heights:
         // they are what the voxels of the volume are made of. There is no mode to switch, only to redraw.
+        // The exception is the XY plane (fixed Z): its cells lie on one plane, so there the checked substates
+        // are the height of the plane (issue #171) and the plane is shown with the 3D camera.
         WaitCursorGuard waitCursor("Updating 3D volume...");
         activeSubstatesFor3D = fieldNamesTopToBottom;
         ui->sceneWidget->setActiveSubstatesFor3D(fieldNamesTopToBottom);
         ui->substatesDockWidget->setActiveSubstates(fieldNamesTopToBottom);
+        if (ui->sceneWidget->isNative3DSliceView())
+        {
+            ui->sceneWidget->updateNative3DSliceElevation();
+            syncViewModeActionsWithScene();
+            return;
+        }
         ui->sceneWidget->refreshVisualization();
         return;
     }

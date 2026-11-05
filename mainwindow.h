@@ -117,6 +117,9 @@ private slots: // menu actions
     void onCameraInteractionFinished();
     void syncCameraSliders();
     void onCrossSectionControlsToggled(bool checked);
+
+    /// @brief Check the 2D / 3D mode action that matches the scene and show the camera controls when they are needed.
+    void syncViewModeActionsWithScene();
     void onSliceViewChanged(int viewIndex);
     void onSliceChanged(int fixedIndex);
     /// Pull the Z planes of a native 3D volume apart (empty planes between them).
