@@ -163,6 +163,23 @@ target_include_directories(BenchmarkStatisticsTests PRIVATE
 add_test(NAME BenchmarkStatisticsTests COMMAND BenchmarkStatisticsTests)
 
 # ============================================
+# Add test executable for ProcessMemory (header-only, no Qt/VTK)
+# ============================================
+add_executable(ProcessMemoryTests
+    ProcessMemoryTests.cpp
+)
+
+target_link_libraries(ProcessMemoryTests
+    GTest::gtest_main
+)
+
+target_include_directories(ProcessMemoryTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME ProcessMemoryTests COMMAND ProcessMemoryTests)
+
+# ============================================
 # Add test executable for VolumeZSpacing (header-only, no Qt/VTK)
 # ============================================
 add_executable(VolumeZSpacingTests

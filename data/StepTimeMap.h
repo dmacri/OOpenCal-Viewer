@@ -7,13 +7,13 @@
  *
  *  File format (plain text):
  *  @code
- *  [ms]                   <- unit of the times below: [s] or [ms]; first line of the file
+ *  [ms]                   <- unit of the times below: [s], [ms], [min] or [h]; first line of the file
  *  # step  time           <- '#' starts a comment, blank lines are ignored
  *  0       0
  *  500     2500
  *  1000    5000.5
  *  @endcode
- *  - the unit line (`[s]`, `[ms]`, case insensitive) comes before the first step; when it is missing the times are
+ *  - the unit line (`[s]`, `[ms]`, `[min]`, `[h]`, case insensitive) comes before the first step; when it is missing the times are
  *    seconds,
  *  - the first column is the step number (as used in the output file names / `*_index.txt`),
  *  - the second column is the simulated time elapsed at that step, in the unit from the unit line (may be fractional),

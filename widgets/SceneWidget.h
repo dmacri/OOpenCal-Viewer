@@ -13,10 +13,9 @@
 #include <QToolTip>
 
 #include <QVTKOpenGLNativeWidget.h>
-#include <vtkAxesActor.h>
+#include <vtkCameraOrientationWidget.h>
 #include <vtkDataSet.h>
 #include <vtkNamedColors.h>
-#include <vtkOrientationMarkerWidget.h>
 #include <vtkRenderer.h>
 #include <vtkSmartPointer.h>
 #include <vtkTextMapper.h>
@@ -26,6 +25,7 @@
 #include "data/StepTimeMap.h"
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h"
+#include "widgets/CameraPivotMath.h"
 #include "widgets/GridWorldMapping.h"
 #include "widgets/RulerAxisActor2D.h"
 
@@ -388,6 +388,17 @@ public:
      * @param callData     Additional event-specific data (unused). */
     static void cameraCallbackFunction(vtkObject* caller, long unsigned int eventId, void* clientData, void* callData);
 
+    /** @brief Callback for the events of the interactive axes gizmo (cameraOrientationWidget).
+     *
+     * Keeps the rotation pivot at the scene centre while the gizmo is dragged and publishes the new
+     * Roll/Pitch/Yaw, so the angle sliders move together with the gizmo.
+     *
+     * @param caller       The vtkCameraOrientationWidget.
+     * @param eventId      StartInteractionEvent, InteractionEvent or EndInteractionEvent.
+     * @param clientData   Pointer to user data (the owning SceneWidget instance).
+     * @param callData     Additional event-specific data (unused). */
+    static void cameraOrientationWidgetCallback(vtkObject* caller, long unsigned int eventId, void* clientData, void* callData);
+
 signals:
     /** @brief Signal emitted when step number is changed using keyboard keys (sent from method keypressCallbackFunction)
      *  @param stepNumber The new step number */
@@ -477,8 +488,11 @@ protected:
     /// @brief Sets up the VTK scene, it is called when reading config file
     void setupVtkScene();
 
-    /// @brief Sets up the orientation axes widget
+    /// @brief Sets up the interactive orientation axes widget (hidden until 3D mode is entered)
     void setupAxesWidget();
+
+    /// @brief Reads the camera orientation into the cached Roll/Pitch/Yaw and emits cameraOrientationChanged()
+    void publishCameraOrientation();
 
     /// @brief Sets up the 2D ruler axes
     void setup2DRulerAxes();
@@ -851,11 +865,18 @@ protected:
     /// The focal point moves on zoom and pan; the pivot does not.
     std::array<double, 3> cameraPivot{ 0.0, 0.0, 0.0 };
 
-    /// @brief Axes actor for showing coordinate system orientation
-    vtkNew<vtkAxesActor> axesActor;
+    /// @brief Interactive XYZ axes gizmo in the corner (3D mode only).
+    /// Dragging it rotates the camera, clicking an axis end snaps the view to that axis. Every change is
+    /// reported through cameraOrientationChanged(), so the Roll/Pitch/Yaw sliders follow it.
+    vtkNew<vtkCameraOrientationWidget> cameraOrientationWidget;
 
-    /// @brief Orientation marker widget for displaying axes in corner
-    vtkNew<vtkOrientationMarkerWidget> axesWidget;
+    /// @brief Camera pose before the latest step of a drag on cameraOrientationWidget.
+    /// The widget turns the camera around its focal point; the pose is used to move the camera so that
+    /// the rotation orbits cameraPivot (the scene centre) instead, as mouse rotation does.
+    std::optional<CameraPivotMath::CameraPose> orientationWidgetPose;
+
+    /// @brief True once the observers of cameraOrientationWidget are registered (setupVtkScene() runs per model)
+    bool orientationWidgetObserversAdded{};
 
     /// @brief 2D ruler axes for showing scale in 2D mode (X and Y axes)
     vtkNew<RulerAxisActor2D> rulerAxisX;

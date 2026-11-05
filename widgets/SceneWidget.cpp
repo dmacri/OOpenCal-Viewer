@@ -17,8 +17,7 @@
 #include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkCamera.h>
 #include <vtkNamedColors.h>
-#include <vtkOrientationMarkerWidget.h>
-#include <vtkAxesActor.h>
+#include <vtkCameraOrientationRepresentation.h>
 #include <vtkAxisActor2D.h>
 #include <vtkProperty.h>
 #include <vtkProperty2D.h>
@@ -1041,28 +1040,35 @@ void SceneWidget::setupVtkScene()
 
 void SceneWidget::setupAxesWidget()
 {
-    // Configure axes actor
-    axesActor->SetShaftTypeToCylinder();
-    axesActor->SetXAxisLabelText("X");
-    axesActor->SetYAxisLabelText("Y");
-    axesActor->SetZAxisLabelText("Z");
-    axesActor->SetTotalLength(1.0, 1.0, 1.0);
-    axesActor->SetCylinderRadius(0.02);
-    axesActor->SetConeRadius(0.05);
-    axesActor->SetSphereRadius(0.03);
+    // Interactive gizmo (VTK's vtkCameraOrientationWidget, see the "CurvaturesAdjustEdges" example):
+    // drag it to rotate the scene, click the end of an axis to look along that axis.
+    // The widget adds its own overlay renderer to the render window, so it is attached only once.
+    cameraOrientationWidget->SetParentRenderer(renderer);
+    cameraOrientationWidget->SetAnimate(true);
 
-    // Make labels more readable
-    axesActor->GetXAxisCaptionActor2D()->GetCaptionTextProperty()->SetFontSize(20);
-    axesActor->GetYAxisCaptionActor2D()->GetCaptionTextProperty()->SetFontSize(20);
-    axesActor->GetZAxisCaptionActor2D()->GetCaptionTextProperty()->SetFontSize(20);
+    cameraOrientationWidget->CreateDefaultRepresentation();
+    if (auto* representation = vtkCameraOrientationRepresentation::SafeDownCast(cameraOrientationWidget->GetRepresentation()))
+    {
+        representation->AnchorToLowerLeft(); // the same corner as the former passive axes marker
+        representation->SetPadding(10, 10);
+        representation->SetSize(140, 140);
+    }
 
-    // Configure orientation marker widget
-    axesWidget->SetOrientationMarker(axesActor);
-    axesWidget->SetViewport(0.0, 0.0, 0.2, 0.2); // Bottom-left corner, 20% size
-    axesWidget->SetInteractor(interactor());
-    // Note: InteractiveOff() is not called here to avoid VTK warning
-    // The widget is non-interactive by default when disabled
-    axesWidget->SetEnabled(false); // Hidden by default (2D mode)
+    // The widget turns the camera around its focal point. These observers move the camera so that the
+    // rotation orbits the scene centre (like mouse rotation) and publish the angles for the sliders.
+    if (! orientationWidgetObserversAdded)
+    {
+        vtkNew<vtkCallbackCommand> callback;
+        callback->SetCallback(SceneWidget::cameraOrientationWidgetCallback);
+        callback->SetClientData(this);
+        cameraOrientationWidget->AddObserver(vtkCommand::StartInteractionEvent, callback);
+        cameraOrientationWidget->AddObserver(vtkCommand::InteractionEvent, callback);
+        cameraOrientationWidget->AddObserver(vtkCommand::EndInteractionEvent, callback);
+        orientationWidgetObserversAdded = true;
+    }
+
+    // Shown only in 3D mode (see setAxesWidgetVisible()); the view starts in 2D
+    cameraOrientationWidget->SetEnabled(currentViewMode == ViewMode::Mode3D);
 }
 
 void SceneWidget::setup2DRulerAxes()
@@ -1275,28 +1281,85 @@ void SceneWidget::cameraCallbackFunction(vtkObject* caller, long unsigned int ev
     Q_UNUSED(eventId);
     Q_UNUSED(callData);
 
-    auto* self = static_cast<SceneWidget*>(clientData);
-    if (! self)
+    if (auto* self = static_cast<SceneWidget*>(clientData))
+        self->publishCameraOrientation();
+}
+
+void SceneWidget::publishCameraOrientation()
+{
+    // Synchronize only in 3D mode; 2D interaction has no rotation controls.
+    if (currentViewMode != ViewMode::Mode3D || ! renderer)
         return;
 
-    // Synchronize only in 3D mode; 2D interaction has no rotation controls.
-    if (self->currentViewMode == ViewMode::Mode3D && self->renderer)
+    vtkCamera* camera = renderer->GetActiveCamera();
+    if (! camera)
+        return;
+
+    const CameraEulerAngles angles = cameraEulerFromVtk(*camera);
+
+    // cameraPivot is not updated here: it stays the scene centre, because zoom and
+    // pan move the focal point.
+    // Store the actual VTK orientation. The Qt side blocks slider signals
+    // while displaying these values, so this cannot feed back into VTK.
+    cameraRoll = angles.roll;
+    cameraPitch = angles.pitch;
+    cameraYaw = angles.yaw;
+
+    emit cameraOrientationChanged(angles.roll, angles.pitch, angles.yaw);
+}
+
+void SceneWidget::cameraOrientationWidgetCallback(vtkObject* caller, long unsigned int eventId, void* clientData, void* callData)
+{
+    Q_UNUSED(caller);
+    Q_UNUSED(callData);
+
+    auto* self = static_cast<SceneWidget*>(clientData);
+    if (! self || self->currentViewMode != ViewMode::Mode3D || ! self->renderer)
+        return;
+
+    vtkCamera* camera = self->renderer->GetActiveCamera();
+    if (! camera)
+        return;
+
+    if (eventId == vtkCommand::StartInteractionEvent)
     {
-        vtkCamera* camera = self->renderer->GetActiveCamera();
-        if (camera)
+        // Same notification as for a mouse rotation: the main window pauses playback meanwhile
+        self->orientationWidgetPose = VtkCameraPose::read(*camera);
+        emit self->cameraInteractionStarted();
+        return;
+    }
+
+    if (eventId == vtkCommand::InteractionEvent && self->orientationWidgetPose)
+    {
+        // One drag step: the widget rotated the camera around the focal point. Repeat the same rotation
+        // around the scene centre. (The jump to an axis on a click needs no correction: the widget
+        // re-centres the camera on the scene afterwards.)
+        const CameraPivotMath::CameraPose& before = *self->orientationWidgetPose;
+        const CameraPivotMath::CameraPose after = VtkCameraPose::read(*camera);
+        const auto frameBefore = CameraPivotMath::cameraFrameOf(before);
+        const auto frameAfter = CameraPivotMath::cameraFrameOf(after);
+        if (frameBefore && frameAfter)
         {
-            const CameraEulerAngles angles = cameraEulerFromVtk(*camera);
-
-            // cameraPivot is not updated here: it stays the scene centre, because zoom and
-            // pan move the focal point.
-            // Store the actual VTK orientation. The Qt side blocks slider signals
-            // while displaying these values, so this cannot feed back into VTK.
-            self->cameraRoll = angles.roll;
-            self->cameraPitch = angles.pitch;
-            self->cameraYaw = angles.yaw;
-
-            emit self->cameraOrientationChanged(angles.roll, angles.pitch, angles.yaw);
+            const CameraPivotMath::Mat3 rotation = CameraPivotMath::rotationBetween(*frameBefore, *frameAfter);
+            const CameraPivotMath::Vec3 correction =
+                CameraPivotMath::pivotCompensation(rotation, before.focalPoint, self->cameraPivot);
+            if (CameraPivotMath::length(correction) > 1e-9)
+            {
+                VtkCameraPose::write(*camera, CameraPivotMath::compensatePivot(after, rotation, before.focalPoint, self->cameraPivot));
+                self->renderer->ResetCameraClippingRange();
+                self->renderWindow()->Render();
+            }
         }
+        self->orientationWidgetPose = VtkCameraPose::read(*camera);
+    }
+
+    // Move the Roll/Pitch/Yaw sliders together with the gizmo (during the drag and after a click on an axis)
+    self->publishCameraOrientation();
+
+    if (eventId == vtkCommand::EndInteractionEvent)
+    {
+        self->orientationWidgetPose.reset();
+        emit self->cameraInteractionFinished();
     }
 }
 
@@ -2288,11 +2351,9 @@ void SceneWidget::clearCrossSection()
 
 void SceneWidget::setAxesWidgetVisible(bool visible)
 {
-    if (axesWidget)
-    {
-        axesWidget->SetEnabled(visible);
-        triggerRenderUpdate();
-    }
+    // The gizmo makes sense only for a 3D camera; in 2D mode the view is a fixed top-down projection
+    cameraOrientationWidget->SetEnabled(visible);
+    triggerRenderUpdate();
 }
 
 void SceneWidget::setGridLinesVisible(bool visible)
@@ -2489,6 +2550,14 @@ void SceneWidget::mousePressEvent(QMouseEvent* event)
 {
     // Call parent implementation first
     QVTKOpenGLNativeWidget::mousePressEvent(event);
+
+    // The press was taken by the axes gizmo (see cameraOrientationWidgetCallback()): it is neither a click on
+    // a cell nor a click on the background, so the substate panel stays as it is and no cell is picked
+    if (orientationWidgetPose)
+    {
+        m_volumePressPosition.reset();
+        return;
+    }
 
     // The complete 3D volume is rotated with the left button: the cell is taken when the button is released
     if (isNative3DVolumeDisplayed())

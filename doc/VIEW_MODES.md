@@ -29,11 +29,10 @@ The OOpenCal-Viewer now supports switching between **2D** and **3D** view modes,
   - **Azimuth** (-180° to +180°) - Rotation around the Z axis (horizontal rotation)
   - **Elevation** (-90° to +90°) - Rotation around the X axis (vertical tilt)
 - **Interactive manipulation** - Use mouse to freely explore the 3D scene
-- **Orientation axes widget** - Small 3D axes indicator in the bottom-left corner showing:
-  - **Red axis** = X direction
-  - **Green axis** = Y direction
-  - **Blue axis** = Z direction
-  - Rotates with the camera to show current viewing orientation
+- **Interactive orientation axes** - 3D axes gizmo in the bottom-left corner (3D mode only):
+  - **Drag** it to rotate the scene around its centre; the Roll/Pitch/Yaw sliders move together with it
+  - **Click the end of an axis** (X, Y or Z, or the opposite one) to look along that axis
+  - Rotates with the camera to show the current viewing orientation
 - Useful for 3D models and examining data from different angles
 
 ## How to Use
