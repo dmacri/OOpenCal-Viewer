@@ -42,6 +42,11 @@ public:
      *  @return Formatted string like "sum=12057, min=1, max=1" or empty if not available */
     QString getFormattedReductionString(int stepNumber) const;
 
+    /** @brief Value of a reduction as it is shown to the user: a zero-only fractional part is dropped.
+     *  @param value Text of the value as it is written in the reduction file (e.g., "12.000000" or "12,000000")
+     *  @return "12" for "12.000000", while "0.500000" and text which is not a plain number stay as they are */
+    static QString formatValue(const QString& value);
+
     /** @brief Gets error message if loading failed.
      *  @return Error message or empty string if no error */
     QString getErrorMessage() const
