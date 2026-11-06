@@ -3,6 +3,7 @@
  */
 
 #include "ReductionDialog.h"
+#include "data/ReductionManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -68,7 +69,7 @@ void ReductionDialog::setupUI(const std::map<QString, QString>& reductionData, i
         keyItem->setFont(QFont("Courier", 10));
         table->setItem(row, 0, keyItem);
 
-        auto* valueItem = new QTableWidgetItem(value);
+        auto* valueItem = new QTableWidgetItem(ReductionManager::formatValue(value));
         valueItem->setFlags(valueItem->flags() & ~Qt::ItemIsEditable);
         valueItem->setFont(QFont("Courier", 10));
         valueItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);

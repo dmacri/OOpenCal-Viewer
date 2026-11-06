@@ -8,6 +8,7 @@
 #include <iostream>
 #include <QRegularExpression>
 
+#include "widgets/NumberFormatting.h"
 
 ReductionManager::ReductionManager(const QString& reductionFilePath, const QString& reductionConfig)
 {
@@ -129,6 +130,11 @@ ReductionData ReductionManager::getReductionForStep(int stepNumber) const
     return ReductionData{}; // Return empty data if step not found
 }
 
+QString ReductionManager::formatValue(const QString& value)
+{
+    return QString::fromStdString(NumberFormatting::withoutZeroFraction(value.toStdString()));
+}
+
 QString ReductionManager::getFormattedReductionString(int stepNumber) const
 {
     if (!dataLoaded)
@@ -142,7 +148,7 @@ QString ReductionManager::getFormattedReductionString(int stepNumber) const
     QStringList parts;
     for (const auto& [key, value] : data.values)
     {
-        parts.append(QString("%1=%2").arg(key, value));
+        parts.append(QString("%1=%2").arg(key, formatValue(value)));
     }
 
     return parts.join(", ");

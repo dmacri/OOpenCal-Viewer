@@ -25,6 +25,40 @@ std::string_view trimmed(std::string_view text)
         text.remove_suffix(1);
     return text;
 }
+
+/** Shorter text of a long example from a cell, so that it fits in the message (the whole text is not needed to see what is wrong) */
+std::string shortened(const std::string& text)
+{
+    constexpr std::size_t maxLength = 60;
+    if (text.size() <= maxLength)
+        return text;
+    return text.substr(0, maxLength - 3) + "...";
+}
+
+/** Percentage of `part` in `total` as text, written by hand so it does not depend on the locale.
+ *  It is "100%" only when `part` is all of `total`, and never "0%" for a non-zero `part`, so the number is never misleading. */
+std::string formatPercent(std::size_t part, std::size_t total)
+{
+    if (total == 0)
+        return "0%";
+    if (part >= total)
+        return "100%";
+    if (part == 0)
+        return "0%";
+
+    // Tenths of a percent, rounded; a part which is not all of the total is shown as at most 99.9%
+    auto tenths = static_cast<std::size_t>(std::llround(1000.0 * static_cast<double>(part) / static_cast<double>(total)));
+    tenths = std::min<std::size_t>(tenths, 999);
+    if (tenths == 0)
+        return "<0.1%";
+
+    if (tenths >= 100) // 10% and more: whole percents are enough
+    {
+        const std::size_t whole = std::min<std::size_t>((tenths + 5) / 10, 99);
+        return std::to_string(whole) + "%";
+    }
+    return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + "%";
+}
 } // namespace
 
 std::string numberToText(double value)
@@ -169,16 +203,31 @@ std::string describeProblem(const ValueSummary& summary, const std::string& subs
     if (summary.cellsChecked == 0)
         return "The model has no cells to check.";
 
-    if (summary.notNumeric > 0)
+    if (summary.notNumeric == 0)
+        return {};
+
+    const bool noCellGaveData = summary.notNumeric >= summary.cellsChecked;
+    const std::string quotedName = "\"" + substateName + "\"";
+
+    std::string first; // the first sentence: for how many cells the data could not be got
+    if (noCellGaveData)
     {
-        std::string example = summary.firstNotNumericText;
-        if (example.size() > 60)
-            example = example.substr(0, 57) + "...";
-        return "Cell::stringEncoding(\"" + substateName + "\") did not return a number for " +
-               std::to_string(summary.notNumeric) + " of " + std::to_string(summary.cellsChecked) +
-               " checked cells, e.g. '" + example +
-               "'. The model must return a plain number for the name of a substate.";
+        first = "Substate " + quotedName + " seems to be invalid: could not get data for " +
+                (summary.cellsChecked == 1 ? std::string("the only checked cell.")
+                                           : "any of the " + std::to_string(summary.cellsChecked) + " checked cells.");
     }
-    return {};
+    else
+    {
+        first = "Could not get data of substate " + quotedName + " for " + std::to_string(summary.notNumeric) + " of " +
+                std::to_string(summary.cellsChecked) + " checked cells (" +
+                formatPercent(summary.notNumeric, summary.cellsChecked) + ").";
+    }
+
+    const std::string returned = summary.firstNotNumericText.empty() ? std::string("an empty text")
+                                                                      : "'" + shortened(summary.firstNotNumericText) + "'";
+    const std::string second = std::string(noCellGaveData ? "" : "For example, ") + "Cell::stringEncoding(" + quotedName +
+                               ") returned " + returned + " instead of a number.";
+
+    return first + "\n" + second + "\nThe model must return a plain number for the name of a substate.";
 }
 } // namespace SubstateString

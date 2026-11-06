@@ -35,6 +35,34 @@ TEST(ReductionManager, LoadsValuesOfEveryStep)
     EXPECT_EQ(manager.getFormattedReductionString(0).toStdString(), "min=1, sum=12057");
 }
 
+// CrowdSimulation prints the reductions with "%f", so they come as "12.000000"; the user wants "12"
+TEST(ReductionManager, ZeroFractionIsNotShownInFormattedString)
+{
+    QTemporaryDir dir;
+    ASSERT_TRUE(dir.isValid());
+    const QString path = writeReductionFile(
+        dir, "0  cumulative_departures=0.000000,exit_count=12.000000,mean_speed=0.500000,wall_count=832.000000\n");
+
+    const ReductionManager manager(path, "cumulative_departures,exit_count,mean_speed,wall_count");
+
+    ASSERT_TRUE(manager.isAvailable());
+    EXPECT_EQ(manager.getFormattedReductionString(0).toStdString(),
+              "cumulative_departures=0, exit_count=12, mean_speed=0.500000, wall_count=832");
+    // The values read from the file are left as they are written there
+    EXPECT_EQ(manager.getReductionForStep(0).values.at(QString("exit_count")), QString("12.000000"));
+}
+
+TEST(ReductionManager, FormatValueDropsOnlyAZeroOnlyFraction)
+{
+    EXPECT_EQ(ReductionManager::formatValue("12.000000").toStdString(), "12");
+    EXPECT_EQ(ReductionManager::formatValue("12,000000").toStdString(), "12");
+    EXPECT_EQ(ReductionManager::formatValue("-0.000000").toStdString(), "0");
+    EXPECT_EQ(ReductionManager::formatValue("0.250000").toStdString(), "0.250000");
+    EXPECT_EQ(ReductionManager::formatValue("12057").toStdString(), "12057");
+    EXPECT_EQ(ReductionManager::formatValue("1e+03").toStdString(), "1e+03");
+    EXPECT_EQ(ReductionManager::formatValue("").toStdString(), "");
+}
+
 // HydroCAL3D wrote "step  name=,name=,..." - keys without any value. The error must say so.
 TEST(ReductionManager, EmptyValuesGiveExplainingError)
 {
