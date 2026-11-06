@@ -72,6 +72,23 @@ if(EXTRA_INCLUDE_DIR)
 endif()
 
 # ============================================================================
+# Optimization level (the same option as of the Viewer: -DOOPENCAL_OPTIMIZATION=<none|0|1|2|3|s|g|fast>)
+# ============================================================================
+# Default = none: nothing is added, so the optimization is decided by CMAKE_BUILD_TYPE exactly as before.
+# scripts/build_plugin.sh passes the value chosen for the Viewer (-DOOPENCAL_OPTIMIZATION=... or the one of the Viewer
+# build), and when this project is built as a part of the Viewer the option is simply shared with it.
+# The precompiled header below is built from this very project, so it gets exactly the same flags as the plugins
+# (g++ would refuse a header created with another optimization).
+include("${OOPENCALVIEWER_DIR}/cmake/OOpenCalOptimization.cmake" OPTIONAL RESULT_VARIABLE OOPENCAL_OPTIMIZATION_MODULE)
+if(OOPENCAL_OPTIMIZATION_MODULE)
+    oopencal_declare_optimization_option()
+    oopencal_optimization_options(OOPENCAL_OPTIMIZATION_OPTIONS)
+else()
+    set(OOPENCAL_OPTIMIZATION_OPTIONS "")
+    message(STATUS "cmake/OOpenCalOptimization.cmake not found in ${OOPENCALVIEWER_DIR}: no optimization option")
+endif()
+
+# ============================================================================
 # Precompiled header shared by all plugins (optional, see doc/PRECOMPILED_HEADER.md)
 # ============================================================================
 # Parsing the Viewer headers is a big part of the time needed to build a plugin, and every plugin parses the same ones.
@@ -89,7 +106,10 @@ if(OOPENCAL_PLUGIN_PCH_ONLY)
     # g++ accepts a precompiled header only when every macro defined while it was built is defined for the plugin too.
     # CMake would add -D<target>_EXPORTS, which the plugins do not have.
     set_target_properties(OOpenCalPluginPch PROPERTIES DEFINE_SYMBOL "")
-    message(STATUS "Building only the precompiled header shared by the plugins")
+    if(OOPENCAL_OPTIMIZATION_OPTIONS)
+        target_compile_options(OOpenCalPluginPch PRIVATE ${OOPENCAL_OPTIMIZATION_OPTIONS})
+    endif()
+    message(STATUS "Building only the precompiled header shared by the plugins (optimization: ${OOPENCAL_OPTIMIZATION_NORMALIZED})")
     return()
 endif()
 
@@ -121,6 +141,10 @@ target_link_libraries(${PLUGIN_LIB_NAME}
 set_target_properties(${PLUGIN_LIB_NAME} PROPERTIES
     PREFIX "lib"
 )
+
+if(OOPENCAL_OPTIMIZATION_OPTIONS)
+    target_compile_options(${PLUGIN_LIB_NAME} PRIVATE ${OOPENCAL_OPTIMIZATION_OPTIONS})
+endif()
 
 # Use the shared precompiled header when it has been built (g++: .gch next to cmake_pch.hxx, clang: .pch)
 if(OOPENCAL_PRECOMPILED_HEADER_DIR)
@@ -168,6 +192,7 @@ message(STATUS "========================================")
 message(STATUS "${PROJECT_NAME} Configuration")
 message(STATUS "========================================")
 message(STATUS "Build type:          ${CMAKE_BUILD_TYPE}")
+message(STATUS "Optimization:        ${OOPENCAL_OPTIMIZATION_NORMALIZED} (${OOPENCAL_OPTIMIZATION_OPTIONS})")
 message(STATUS "OOpenCal-Viewer dir: ${OOPENCALVIEWER_DIR}")
 message(STATUS "OOpenCAL directory:  ${OOPENCAL_DIR}")
 message(STATUS "VTK version:         ${VTK_VERSION}")

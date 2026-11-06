@@ -69,6 +69,27 @@ endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build libraries statically" FORCE)
 
 # ============================================
+# Compiler optimization level
+# ============================================
+# Choose it with:  -DOOPENCAL_OPTIMIZATION=<none|0|1|2|3|s|g|fast>
+#
+# Default = none: nothing is added, so the optimization is decided by CMAKE_BUILD_TYPE exactly as before
+# (no optimization at all when it is empty). Any other value is added after the flags of CMAKE_BUILD_TYPE, so it wins.
+#
+# The same value is the default for the model plugins (scripts/build_plugin.sh, examples/custom_model_plugin) and for the
+# models compiled on the fly by the Viewer, so all of them (and their precompiled headers) are optimized the same way.
+# See cmake/OOpenCalOptimization.cmake and doc/PRECOMPILED_HEADER.md
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include(OOpenCalOptimization)
+oopencal_declare_optimization_option()
+oopencal_optimization_options(OOPENCAL_OPTIMIZATION_OPTIONS)
+if(OOPENCAL_OPTIMIZATION_OPTIONS)
+    message(STATUS "Optimization level: ${OOPENCAL_OPTIMIZATION_NORMALIZED} (${OOPENCAL_OPTIMIZATION_OPTIONS})")
+else()
+    message(STATUS "Optimization level: none (decided by CMAKE_BUILD_TYPE='${CMAKE_BUILD_TYPE}')")
+endif()
+
+# ============================================
 # Compiler warnings (optional, full strict set)
 # ============================================
 # Enable full warning level by running CMake with:
@@ -336,6 +357,17 @@ add_executable(${PROJECT_NAME} MACOSX_BUNDLE
 
 if (ENABLE_WARNINGS)
     enable_project_warnings(${PROJECT_NAME})
+endif()
+
+oopencal_apply_optimization(${PROJECT_NAME})
+
+# The models compiled on the fly by the Viewer get the same optimization by default (see CompilationConfig.cpp).
+# It is also the value used for their precompiled header, so both stay identical.
+if(OOPENCAL_OPTIMIZATION_OPTIONS)
+    string(REPLACE ";" " " OOPENCAL_OPTIMIZATION_FLAGS_TEXT "${OOPENCAL_OPTIMIZATION_OPTIONS}")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        OOPENCAL_OPTIMIZATION_FLAGS="${OOPENCAL_OPTIMIZATION_FLAGS_TEXT}"
+    )
 endif()
 
 if (ENABLE_SANITIZERS)

@@ -19,11 +19,14 @@ set -e
 #         - Shows colored logs and build progress
 #
 #  USAGE:
-#      ./build_viewer.sh --oopencal <path> [--qt=VERSION]
+#      ./build_viewer.sh --oopencal <path> [--qt=VERSION] [--optimization=LEVEL]
 #
 #  OPTIONS:
 #      --oopencal <path>    Path to directory containing OOpenCAL/
 #      --qt=VERSION         Qt version: 5 (default) or 6
+#      --optimization=LEVEL Compiler optimization: none (default, as before), 0, 1, 2, 3, s, g or fast
+#                           (-O0 ... -Ofast). It is also the default optimization of the model plugins
+#                           (scripts/build_plugin.sh) and of the models compiled on the fly.
 #
 # ================================================================
 
@@ -70,6 +73,7 @@ echo
 # ================================================================
 QT_VERSION="qt5"
 OOPENCAL_DIR=""
+OPTIMIZATION=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -87,6 +91,17 @@ while [[ $# -gt 0 ]]; do
                 log_err "Invalid Qt version: $QT_REQUESTED (must be 5 or 6)"
                 exit 1
             fi
+            shift
+            ;;
+        --optimization=*)
+            OPTIMIZATION="${1#--optimization=}"
+            case "$OPTIMIZATION" in
+                none|0|1|2|3|s|g|fast) ;;
+                *)
+                    log_err "Invalid optimization: $OPTIMIZATION (must be none, 0, 1, 2, 3, s, g or fast)"
+                    exit 1
+                    ;;
+            esac
             shift
             ;;
         *)
@@ -237,11 +252,19 @@ if command -v ninja >/dev/null 2>&1; then
 fi
 
 log_step "Configuring CMake..."
+# Given only when requested, so without --optimization nothing changes (a value of an earlier configuration stays in the cache).
+# build_plugin.sh reads it from <build dir>/CMakeCache.txt, so the plugins and their precompiled header follow the Viewer.
+OPTIMIZATION_ARGS=()
+if [[ -n "$OPTIMIZATION" ]]; then
+    OPTIMIZATION_ARGS=("-DOOPENCAL_OPTIMIZATION=$OPTIMIZATION")
+    log_info "Optimization: $OPTIMIZATION"
+fi
 cmake "$VIEWER_ROOT" \
     -DCMAKE_BUILD_TYPE=Release \
     -DUSE_QT6=$( [[ "$QT_VERSION" == "qt6" ]] && echo ON || echo OFF ) \
     -DOOPENCAL_DIR="$OOPENCAL_DIR" \
-    -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF
+    -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF \
+    ${OPTIMIZATION_ARGS[@]+"${OPTIMIZATION_ARGS[@]}"}
 
 log_step "Building (make)..."
 make -j"$(nproc)"

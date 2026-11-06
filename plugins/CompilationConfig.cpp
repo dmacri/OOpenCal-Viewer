@@ -326,18 +326,28 @@ std::string CompilationConfig::getCompilationFlags() const
 
 std::string CompilationConfig::getDefaultCompilationFlags() const
 {
+    // The optimization chosen when the Viewer was configured (-DOOPENCAL_OPTIMIZATION=..., see CMakeLists.txt).
+    // Nothing is added for the default "none", so then the flags are exactly as before.
+#ifdef OOPENCAL_OPTIMIZATION_FLAGS
+    const std::string optimization = std::string(" ") + OOPENCAL_OPTIMIZATION_FLAGS;
+#else
+    const std::string optimization;
+#endif
+
 #if defined(_WIN32) && defined(_MSC_VER)
     // Windows + Visual Studio: Use DLL export flags for cl.exe
-    return "/LD /DBUILDING_DLL /EHsc";
+    return "/LD /DBUILDING_DLL /EHsc" + optimization;
 #elif defined(_WIN32)
     // Windows + MinGW-w64 (g++/clang++): a PE DLL. There is no -fPIC here (all code is position independent already,
     // the flag would only produce a warning). BUILDING_DLL makes the generated wrapper export its entry points.
     // -O1: VTK declares its array templates "extern" and the DLLs do not export their inline members (e.g.
     // vtkAOSDataArrayTemplate<T>::SetValue), so without optimization (no inlining) the linker cannot resolve them.
-    return "-shared -DBUILDING_DLL -O1";
+    // For that reason a chosen -O0 / -Og is not used here (a higher level is fine and, as the last -O, it wins).
+    const bool optimizationDisablesInlining = (optimization == " -O0" || optimization == " -Og");
+    return std::string("-shared -DBUILDING_DLL -O1") + (optimizationDisablesInlining ? std::string() : optimization);
 #else
     // Linux/macOS: Use shared library flags
-    return "-shared -fPIC";
+    return "-shared -fPIC" + optimization;
 #endif
 }
 
