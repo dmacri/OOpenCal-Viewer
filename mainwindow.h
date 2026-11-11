@@ -87,6 +87,8 @@ private slots: // menu actions
     void onColorSettingsRequested();
     void onCompilationSettingsRequested();
     void onPerformanceSettingsRequested();
+    /// @brief Settings -> Number Locale: choose the locale of the numbers which the models read and write
+    void onLocaleSettingsRequested();
     /// @brief The user picked a rendering mode in Settings -> Rendering: set it and redraw the scene
     void onRenderingModeSelected(GridWorldMapping::GridRenderingMode mode);
     /// @brief Select in Settings -> Rendering the mode which the scene widget uses

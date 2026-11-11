@@ -54,6 +54,7 @@
 #include "widgets/ReductionDialog.h"
 #include "widgets/CustomDirectoryDialog.h"
 #include "widgets/PerformanceSettingsDialog.h"
+#include "widgets/LocaleSettingsDialog.h"
 
 
 namespace
@@ -696,6 +697,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
     connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
     connect(ui->actionPerformance_settings, &QAction::triggered, this, &MainWindow::onPerformanceSettingsRequested);
+    connect(ui->actionLocale_settings, &QAction::triggered, this, &MainWindow::onLocaleSettingsRequested);
 
     // Settings -> Rendering: exactly one of the modes is always selected
     {
@@ -1739,6 +1741,26 @@ void MainWindow::onPerformanceSettingsRequested()
     auto* perfSettings = new PerformanceSettingsDialog(this);
     perfSettings->exec();
     delete perfSettings;  // Modal dialog, delete after use
+}
+
+void MainWindow::onLocaleSettingsRequested()
+{
+    LocaleSettingsDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted || ! dialog.localeChanged())
+        return;
+
+    // The locale is used when the data is read, so what is shown now was read in the previous one
+    if (! ui->actionReloadData->isEnabled())
+        return; // no simulation is open
+
+    const auto answer = QMessageBox::question(this, tr("Number Locale"),
+                                              tr("The new locale is used whenever the data of a model is read.\n\n"
+                                                 "Reload the data of the current model now?\n"
+                                                 "(The values from Header.txt, e.g. min and max of the substates, are read when the "
+                                                 "model directory is opened, so open it again to read them in the new locale.)"),
+                                              QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    if (answer == QMessageBox::Yes)
+        onReloadDataRequested();
 }
 
 void MainWindow::onRenderingModeSelected(GridWorldMapping::GridRenderingMode mode)
