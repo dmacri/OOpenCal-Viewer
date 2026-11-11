@@ -203,6 +203,8 @@ list(APPEND Sources
     widgets/ColorSettings.cpp
     widgets/CompilationSettingsWidget.cpp
     widgets/AboutDialog.cpp
+    widgets/ActionParametersDialog.cpp
+    widgets/ActionsMenu.cpp
     widgets/CompilationLogWidget.cpp
     widgets/ReductionDialog.cpp
     widgets/ReductionDisplayWidget.cpp
@@ -217,6 +219,8 @@ list(APPEND Sources
     widgets/CellHistoryDialog.cpp
     widgets/TimeSeriesPlot.cpp
     plugins/PluginLoader.cpp
+    plugins/ActionRegistry.cpp
+    plugins/ActionRunner.cpp
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp
     plugins/CompilationConfig.cpp
@@ -224,6 +228,7 @@ list(APPEND Sources
     core/ApplicationLocale.cpp
     core/CommandLineParser.cpp
     core/PrecompiledHeaderCommand.cpp
+    core/ActionCommand.cpp
     data/ReductionManager.cpp
     data/StepTimeMap.cpp
     data/PerformanceMetrics.cpp
@@ -1016,6 +1021,7 @@ option(BUILD_EXAMPLES "Build example plugin demo" ON)
 if (BUILD_EXAMPLES)
     message(STATUS "Building example plugins (BUILD_EXAMPLES=ON)")
     add_subdirectory(examples/custom_model_plugin)
+    add_subdirectory(examples/trajectory_export_plugin)
 else()
     message(STATUS "Skipping example plugins (BUILD_EXAMPLES=OFF)")
 endif()

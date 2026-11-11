@@ -5,6 +5,7 @@
 #include <iostream>
 #include <QLibrary>
 
+#include "ActionRegistry.h"
 #include "PluginLoader.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h" // SceneWidgetVisualizerFactory::unregisterModel
 
@@ -55,13 +56,17 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
         return false;
     }
 
-    // Find the registerPlugin function using QLibrary::resolve
+    // A plugin provides a model (registerPlugin), actions (registerActionPlugin, see ActionApi.h) or both
     typedef void (*RegisterFunc)();
+    typedef void (*RegisterActionsFunc)(viz::actions::IActionRegistry&);
+    typedef int (*ApiVersionFunc)();
     RegisterFunc registerPlugin = reinterpret_cast<RegisterFunc>(library->resolve("registerPlugin"));
+    RegisterActionsFunc registerActions =
+        reinterpret_cast<RegisterActionsFunc>(library->resolve("registerActionPlugin"));
 
-    if (! registerPlugin)
+    if (! registerPlugin && ! registerActions)
     {
-        lastError = "Plugin does not export registerPlugin() function";
+        lastError = "Plugin does not export registerPlugin() nor registerActionPlugin() function";
         if (! library->errorString().isEmpty())
             lastError += std::string(": ") + library->errorString().toStdString();
 
@@ -70,21 +75,47 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
         return false;
     }
 
+    if (registerActions)
+    {
+        // The interfaces are C++ classes with virtual functions: refuse a plugin built for another version of them
+        const auto apiVersion = reinterpret_cast<ApiVersionFunc>(library->resolve("getActionApiVersion"));
+        const int pluginApiVersion = apiVersion ? apiVersion() : 0;
+        if (pluginApiVersion != viz::actions::API_VERSION)
+        {
+            lastError = "Action plugin was built for action API version " + std::to_string(pluginApiVersion) +
+                        ", the application provides version " + std::to_string(viz::actions::API_VERSION) +
+                        " (rebuild the plugin)";
+            std::cerr << "Error: " << lastError << std::endl;
+            library->unload();
+            return false;
+        }
+    }
+
     // Create plugin info
     PluginInfo info;
     info.path = pluginPath;
     info.handle = std::move(library);
     info.isLoaded = false;
 
-    // Call the registration function
+    // Call the registration functions
+    auto& actionRegistry = viz::actions::ActionRegistry::instance();
     try
     {
-        registerPlugin();
+        if (registerPlugin)
+            registerPlugin();
+        if (registerActions)
+        {
+            actionRegistry.setCurrentOwner(pluginPath); // to destroy the actions before the library is unloaded
+            registerActions(actionRegistry);
+            actionRegistry.setCurrentOwner({});
+        }
         info.isLoaded = true;
         std::cout << "✓ Loaded plugin: " << pluginPath << std::endl;
     }
     catch (const std::exception& e)
     {
+        actionRegistry.setCurrentOwner({});
+        actionRegistry.removeOwnedBy(pluginPath);
         lastError = std::string("Exception while registering plugin: ") + e.what();
         std::cerr << "Error: " << lastError << std::endl;
         info.handle->unload();
@@ -149,6 +180,10 @@ void PluginLoader::removePlugin(const std::string &pluginPath)
         if (SceneWidgetVisualizerFactory::unregisterModel(plugin.name))
             std::cout << "✓ Unregistered model: " << plugin.name << std::endl;
     }
+
+    // The code of the actions is in the library, so they must be destroyed before it is unloaded
+    if (const auto removed = viz::actions::ActionRegistry::instance().removeOwnedBy(pluginPath))
+        std::cout << "✓ Unregistered " << removed << " action(s) of: " << pluginPath << std::endl;
 
     // Close the library using QLibrary::unload
     if (plugin.handle)
