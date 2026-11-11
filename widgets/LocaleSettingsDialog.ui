@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>LocaleSettingsDialog</class>
+ <widget class="QDialog" name="LocaleSettingsDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>720</width>
+    <height>740</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>680</width>
+    <height>680</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Number Locale</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="introLabel">
+     <property name="text">
+      <string>&lt;b&gt;Which locale were the numbers of the simulation written in?&lt;/b&gt;&lt;br&gt;The models run inside the Viewer, so this choice decides how they read and write numbers (&lt;code&gt;printf&lt;/code&gt;, &lt;code&gt;strtod&lt;/code&gt;, &lt;code&gt;std::stod&lt;/code&gt;…) and how the substate values in &lt;code&gt;Header.txt&lt;/code&gt; are read. Results which were written with a dot (&lt;code&gt;1008.5&lt;/code&gt;) need the &lt;b&gt;C&lt;/b&gt; locale; results written with a comma (&lt;code&gt;1008,5&lt;/code&gt;), e.g. on an Italian or Polish computer, need a locale with a decimal comma.</string>
+     </property>
+     <property name="textFormat">
+      <enum>Qt::RichText</enum>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="filterEdit">
+     <property name="placeholderText">
+      <string>Filter the list, e.g. pl, it_IT, …</string>
+     </property>
+     <property name="clearButtonEnabled">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTreeWidget" name="localeTree">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>240</height>
+      </size>
+     </property>
+     <property name="alternatingRowColors">
+      <bool>true</bool>
+     </property>
+     <property name="selectionMode">
+      <enum>QAbstractItemView::SingleSelection</enum>
+     </property>
+     <property name="rootIsDecorated">
+      <bool>false</bool>
+     </property>
+     <property name="uniformRowHeights">
+      <bool>true</bool>
+     </property>
+     <attribute name="headerStretchLastSection">
+      <bool>false</bool>
+     </attribute>
+     <column>
+      <property name="text">
+       <string>Locale</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Language</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Decimal separator</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="previewGroupBox">
+     <property name="title">
+      <string>What the model code does in the selected locale</string>
+     </property>
+     <layout class="QFormLayout" name="previewLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="writesCaption">
+        <property name="text">
+         <string>Writes the number 1008.5 as</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLabel" name="writesLabel">
+        <property name="textFormat">
+         <enum>Qt::RichText</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="readsDotCaption">
+        <property name="text">
+         <string>Reads the text "1008.5" as</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLabel" name="readsDotLabel">
+        <property name="textFormat">
+         <enum>Qt::RichText</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="readsCommaCaption">
+        <property name="text">
+         <string>Reads the text "1008,5" as</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QLabel" name="readsCommaLabel">
+        <property name="textFormat">
+         <enum>Qt::RichText</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="hintLabel">
+     <property name="text">
+      <string>Only locales which are installed on this computer are listed. To add one on Ubuntu / Debian:&lt;br&gt;&lt;code&gt;sudo locale-gen it_IT.UTF-8 &amp;amp;&amp;amp; sudo update-locale&lt;/code&gt;&lt;br&gt;The choice is stored and used on every start. It is used when data is read, so reload the model after changing it.</string>
+     </property>
+     <property name="textFormat">
+      <enum>Qt::RichText</enum>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="textInteractionFlags">
+      <set>Qt::TextSelectableByMouse</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok|QDialogButtonBox::RestoreDefaults</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>filterEdit</tabstop>
+  <tabstop>localeTree</tabstop>
+  <tabstop>buttonBox</tabstop>
+ </tabstops>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>rejected()</signal>
+   <receiver>LocaleSettingsDialog</receiver>
+   <slot>reject()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>360</x>
+     <y>720</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>360</x>
+     <y>370</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>

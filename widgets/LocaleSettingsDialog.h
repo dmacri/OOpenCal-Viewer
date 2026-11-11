@@ -10,13 +10,17 @@
  * The choice is stored in QSettings ("locale/numeric"), and applied on every start of the application. */
 #pragma once
 
+#include <memory>
+
 #include <QDialog>
 #include <QString>
 
-class QLabel;
-class QLineEdit;
-class QTreeWidget;
 class QTreeWidgetItem;
+
+namespace Ui
+{
+class LocaleSettingsDialog;
+}
 
 /** @class LocaleSettingsDialog
  * @brief Lets the user choose the LC_NUMERIC locale of the process; OK applies and stores it. */
@@ -26,6 +30,7 @@ class LocaleSettingsDialog : public QDialog
 
 public:
     explicit LocaleSettingsDialog(QWidget* parent = nullptr);
+    ~LocaleSettingsDialog() override;
 
     /// @brief The locale which is stored in the settings: "C" (default), "" (the locale of the system) or e.g. "pl_PL.UTF-8"
     static QString savedLocaleName();
@@ -50,11 +55,7 @@ private:
     void updatePreview();
     QString selectedLocaleName() const;
 
-    QLineEdit* filterEdit = nullptr;
-    QTreeWidget* list = nullptr;
-    QLabel* writesLabel = nullptr;
-    QLabel* readsDotLabel = nullptr;
-    QLabel* readsCommaLabel = nullptr;
+    std::unique_ptr<Ui::LocaleSettingsDialog> ui; ///< The layout is in LocaleSettingsDialog.ui
     QString initialName;
     bool changed = false;
 };
