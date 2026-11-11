@@ -38,6 +38,7 @@
 #include "mainwindow.h"
 #include "core/CommandLineParser.h"
 #include "widgets/GridWorldMapping.h"
+#include "widgets/LocaleSettingsDialog.h"
 #include "plugins/PluginLoader.h"
 #include "data/PerformanceMetrics.h"
 #include "core/PrecompiledHeaderCommand.h"
@@ -70,6 +71,11 @@ int main(int argc, char* argv[])
     std::setlocale(LC_NUMERIC, "C");
     QApplication::setStyle(QStyleFactory::create("Fusion"));
     QApplication::setApplicationName("OOpenCal-Visualiser");
+
+    // Settings -> Number Locale: the locale in which the models (plugins run inside this process) read and write numbers.
+    // The default is "C" (set above). It has to be applied here, after the application name is known (QSettings),
+    // and before any plugin is loaded or any data is read.
+    LocaleSettingsDialog::applySavedLocale();
 
     // Load plugins from standard locations
     // This happens before MainWindow creation so models are available immediately

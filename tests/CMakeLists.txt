@@ -280,6 +280,24 @@ target_include_directories(NumberFormattingTests PRIVATE
 add_test(NAME NumberFormattingTests COMMAND NumberFormattingTests)
 
 # ============================================
+# Add test executable for ApplicationLocale (number locale of the process, no Qt/VTK)
+# ============================================
+add_executable(ApplicationLocaleTests
+    ApplicationLocaleTests.cpp
+    ${CMAKE_SOURCE_DIR}/core/ApplicationLocale.cpp
+)
+
+target_link_libraries(ApplicationLocaleTests
+    GTest::gtest_main
+)
+
+target_include_directories(ApplicationLocaleTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME ApplicationLocaleTests COMMAND ApplicationLocaleTests)
+
+# ============================================
 # Add test executable for RulerLabelFit (header-only, no Qt/VTK)
 # ============================================
 add_executable(RulerLabelFitTests

@@ -192,6 +192,7 @@ list(APPEND Sources
     widgets/RulerAxisActor2D.cpp
     widgets/CustomDirectoryDialog.cpp
     widgets/PerformanceSettingsDialog.cpp
+    widgets/LocaleSettingsDialog.cpp
     widgets/CellHistoryDialog.cpp
     widgets/TimeSeriesPlot.cpp
     plugins/PluginLoader.cpp
@@ -199,6 +200,7 @@ list(APPEND Sources
     plugins/CppModuleBuilder.cpp
     plugins/CompilationConfig.cpp
     plugins/PrecompiledHeader.cpp
+    core/ApplicationLocale.cpp
     core/CommandLineParser.cpp
     core/PrecompiledHeaderCommand.cpp
     data/ReductionManager.cpp
