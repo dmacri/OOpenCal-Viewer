@@ -24,6 +24,7 @@
 #include <vtkRenderer.h>
 
 #include "core/types.h"
+#include "visualiser/SubstateRange.h"
 #include "visualiserProxy/CellHistory.h"
 #include "widgets/GridWorldMapping.h"
 #include "visualiserProxy/ContiguousGrid.h"
@@ -176,6 +177,32 @@ public:
         static_cast<void>(sp);
         static_cast<void>(cell);
         static_cast<void>(fields);
+        static_cast<void>(progress);
+        return {};
+    }
+
+    /** @brief Find the lowest and the highest value of one substate in the cells of many simulation steps.
+     *
+     *  Reads the steps one by one and looks through all the cells which the scene shows (the displayed plane of a
+     *  native 3D model in a cross-section view, otherwise the whole grid). The cells of the step which is shown are
+     *  put back at the end, so the scene is unchanged by the call (it is overwritten while the steps are read).
+     *  The default implementation finds nothing.
+     *
+     *  @param sp        setting parameters of the loaded model (not changed)
+     *  @param fieldName substate to look at
+     *  @param steps     steps to read
+     *  @param noValue   value which means "no data" and is left out, if there is one
+     *  @param progress  optional progress callback; return false from it to cancel (the result is then partial) */
+    virtual SubstateRange substateRangeAcrossSteps(const SettingParameter& sp,
+                                                   const std::string& fieldName,
+                                                   const std::vector<StepIndex>& steps,
+                                                   std::optional<double> noValue,
+                                                   const SubstateRangeProgressCallback& progress = {})
+    {
+        static_cast<void>(sp);
+        static_cast<void>(fieldName);
+        static_cast<void>(steps);
+        static_cast<void>(noValue);
         static_cast<void>(progress);
         return {};
     }

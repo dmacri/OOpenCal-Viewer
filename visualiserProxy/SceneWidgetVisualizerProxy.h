@@ -17,6 +17,7 @@
 #pragma once
 
 #include <array>
+#include <iostream>
 #include <optional>
 #include <string>
 #include <vector>
@@ -482,6 +483,13 @@ public:
         return readCellHistory(sp, cell, fields, progress);
     }
 
+    /** @brief Lowest and highest value of a substate over many steps, see ISceneWidgetVisualizer::substateRangeAcrossSteps(). */
+    SubstateRange substateRangeAcrossSteps(const SettingParameter& sp,
+                                           const std::string& fieldName,
+                                           const std::vector<StepIndex>& steps,
+                                           std::optional<double> noValue,
+                                           const SubstateRangeProgressCallback& progress = {}) override;
+
     void setNative3DVolumeSubstates(const std::vector<const SubstateInfo*>& layersTopToBottom) override
     {
         nativeVolumeLayers.clear();
@@ -665,3 +673,84 @@ private:
     std::size_t nativeSliceIndex = 0;
     int nativeVolumeZGap = 0;        ///< Empty planes between neighbouring Z planes in the volume view
 };
+
+template<typename Cell>
+SubstateRange SceneWidgetVisualizerTemplate<Cell>::substateRangeAcrossSteps(const SettingParameter& sp,
+                                                                           const std::string& fieldName,
+                                                                           const std::vector<StepIndex>& steps,
+                                                                           std::optional<double> noValue,
+                                                                           const SubstateRangeProgressCallback& progress)
+{
+    // The reader writes the lines of the nodes (see Line) for every step it reads: they need room, but are not used here
+    if (steps.empty() || p.rowCount() == 0 || p.columnCount() == 0 || sp.numberOfLines <= 0)
+        return {};
+
+    // What the scene shows: a cross-section of a native 3D model, otherwise all the cells of all the layers
+    std::optional<ContiguousGridSliceView<Cell>> slice;
+    if (nativeSliceEnabled && p.layerCount() > 1)
+        slice.emplace(p, nativeSliceAxis, nativeSliceIndex);
+    const std::size_t rows = slice ? slice->rowCount() : p.rowCount();
+    const std::size_t columns = slice ? slice->columnCount() : p.columnCount();
+    const std::size_t layers = slice ? 1 : p.layerCount();
+    const char* const field = fieldName.c_str();
+
+    // The steps are read into p, the grid of the scene, and the reader takes the step from the parameters it is given
+    SettingParameter readingParameter = sp;
+    std::vector<Line> lines(static_cast<std::size_t>(sp.numberOfLines));
+    bool gridOverwritten = false;
+
+    const auto readStep = [&](StepIndex step)
+    {
+        readingParameter.step = step;
+        gridOverwritten = true;
+        modelReader.readStageStateFromFilesForStep(p, &readingParameter, lines.data());
+    };
+
+    // A unit is a row of one layer; a value which is not a number (or is the "no data" value) is left out
+    const auto scanUnits = [&](SubstateRange& range, std::size_t begin, std::size_t end)
+    {
+        for (std::size_t unit = begin; unit < end; ++unit)
+        {
+            const std::size_t layer = unit / rows;
+            const std::size_t row = unit % rows;
+            for (std::size_t column = 0; column < columns; ++column)
+            {
+                const Cell& cell = slice ? (*slice)[row][column] : p.get(row, column, layer);
+                const double value = parseSubstateValue(cell.stringEncoding(field));
+                if (noValue && value == *noValue)
+                    continue;
+                range.add(value);
+            }
+        }
+    };
+
+    // Puts the step which the scene shows back into p: the reading above replaced it with the last step it read
+    const auto restoreShownStep = [&]()
+    {
+        if (! gridOverwritten)
+            return;
+
+        try
+        {
+            readingParameter.step = sp.step;
+            modelReader.readStageStateFromFilesForStep(p, &readingParameter, lines.data());
+        }
+        catch (const std::exception& error)
+        {
+            std::cerr << "Could not read back step " << sp.step << ": " << error.what() << std::endl;
+        }
+    };
+
+    SubstateRange range;
+    try
+    {
+        range = accumulateAcrossSteps(steps, rows * layers, readStep, scanUnits, progress);
+    }
+    catch (...)
+    {
+        restoreShownStep();
+        throw;
+    }
+    restoreShownStep();
+    return range;
+}

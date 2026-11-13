@@ -215,6 +215,7 @@ list(APPEND Sources
     widgets/PerformanceSettingsDialog.cpp
     widgets/LocaleSettingsDialog.cpp
     widgets/CellHistoryDialog.cpp
+    widgets/StepRangeDialog.cpp
     widgets/TimeSeriesPlot.cpp
     plugins/PluginLoader.cpp
     plugins/ModelLoader.cpp
