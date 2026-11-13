@@ -213,6 +213,13 @@ signals:
      * @param fieldName The name of the field */
     void calculateMaximumRequested(const std::string& fieldName);
 
+    /** @brief Signal emitted when user requests to calculate minimum and/or maximum over a range of steps.
+     *
+     * The dock asks for the range of steps (a dialog) and does the calculation.
+     *
+     * @param fieldName The name of the field */
+    void calculateOverStepsRequested(const std::string& fieldName);
+
     /** @brief Signal emitted when min or max colors change.
      * 
      * @param fieldName The name of the field

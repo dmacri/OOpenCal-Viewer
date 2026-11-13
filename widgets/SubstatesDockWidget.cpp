@@ -2,7 +2,9 @@
  * @brief Implementation of SubstatesDockWidget. */
 
 #include <algorithm>
+#include <chrono>
 #include <cmath> // std::isnan
+#include <QApplication>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QProgressDialog>
@@ -16,6 +18,7 @@
 #include "SubstateDisplayWidget.h"
 #include "widgets/AddSubstateDialog.h"
 #include "widgets/CellHistoryDialog.h"
+#include "widgets/StepRangeDialog.h"
 #include "visualiser/SettingParameter.h"
 #include "visualiser/SubstateString.h"
 #include "visualiserProxy/ISceneWidgetVisualizer.h"
@@ -161,6 +164,7 @@ void SubstatesDockWidget::updateSubstates(SettingParameter* settingParameter)
 
     // The data were (re)loaded: a previously clicked cell and its history are no longer valid
     resetSelectedCell();
+    m_lastStepRange.reset();
 
     // Clear existing widgets
     clearWidgets();
@@ -215,6 +219,7 @@ SubstateDisplayWidget* SubstatesDockWidget::createSubstateWidget(const std::stri
     connect(widget, &SubstateDisplayWidget::calculateMinimumRequested, this, &SubstatesDockWidget::onCalculateMinimumRequested);
     connect(widget, &SubstateDisplayWidget::calculateMinimumGreaterThanZeroRequested, this, &SubstatesDockWidget::onCalculateMinimumGreaterThanZeroRequested);
     connect(widget, &SubstateDisplayWidget::calculateMaximumRequested, this, &SubstatesDockWidget::onCalculateMaximumRequested);
+    connect(widget, &SubstateDisplayWidget::calculateOverStepsRequested, this, &SubstatesDockWidget::onCalculateOverStepsRequested);
     connect(widget, &SubstateDisplayWidget::colorsChanged, this, &SubstatesDockWidget::onColorsChanged);
     connect(widget, QOverload<const std::string&, double, bool>::of(&SubstateDisplayWidget::noValueChanged), this, &SubstatesDockWidget::onNoValueChanged);
     connect(widget, &SubstateDisplayWidget::altitudeScaleChanged, this, &SubstatesDockWidget::onAltitudeScaleChanged);
@@ -621,6 +626,169 @@ void SubstatesDockWidget::onCalculateMaximumRequested(const std::string& fieldNa
         {
             it->second->setMaxValue(maxValue);
         }
+    }
+}
+
+namespace
+{
+/** @brief Time as `42 s`, `3 min 05 s` or `1 h 02 min`, for the estimate of the time left. */
+QString formatDuration(std::chrono::seconds time)
+{
+    const auto total = std::max<long long>(0, time.count());
+    if (total < 60)
+        return QObject::tr("%1 s").arg(total);
+    if (total < 3600)
+        return QObject::tr("%1 min %2 s").arg(total / 60).arg(total % 60, 2, 10, QChar('0'));
+    return QObject::tr("%1 h %2 min").arg(total / 3600).arg((total % 3600) / 60, 2, 10, QChar('0'));
+}
+
+/** @brief Text of the progress window: the step being read and the estimate of the time left. */
+QString progressText(const QString& fieldName, const SubstateRangeProgress& state, std::chrono::steady_clock::duration elapsed)
+{
+    QString text = QObject::tr("Looking for the extremes of '%1'\nStep %2 (%3 of %4)")
+                       .arg(fieldName)
+                       .arg(state.step)
+                       .arg(state.stepNumber)
+                       .arg(state.stepsTotal);
+
+    // The estimate needs some work done, or it jumps wildly in the first moments
+    if (state.fraction > 0.02 && elapsed > std::chrono::seconds(1))
+    {
+        const double secondsElapsed = std::chrono::duration<double>(elapsed).count();
+        const auto left = std::chrono::seconds(static_cast<long long>(secondsElapsed * (1.0 - state.fraction) / state.fraction));
+        text += QObject::tr("\nTime left: about %1").arg(formatDuration(left));
+    }
+    return text;
+}
+} // namespace
+
+void SubstatesDockWidget::onCalculateOverStepsRequested(const std::string& fieldName)
+{
+    if (! m_currentSettingParameter || ! m_currentVisualizer)
+        return;
+
+    const std::vector<StepIndex> availableSteps = m_currentVisualizer->availableSteps();
+    if (availableSteps.empty())
+    {
+        QMessageBox::information(this, tr("Minimum / maximum over steps"), tr("The simulation has no saved steps to look through."));
+        return;
+    }
+
+    const StepRange everything = StepRanges::boundsOf(availableSteps).value_or(StepRange{});
+    const StepRange initialRange = m_lastStepRange.value_or(everything);
+
+    StepRangeDialog dialog(QString::fromStdString(fieldName), availableSteps, initialRange, true, true, window());
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    m_lastStepRange = dialog.selectedRange();
+    const std::vector<StepIndex> steps = dialog.stepsToRead();
+    const bool wantsMinimum = dialog.calculatesMinimum();
+    const bool wantsMaximum = dialog.calculatesMaximum();
+
+    // The value which means "no data" is not a measurement, like in the calculation for one step
+    std::optional<double> noValue;
+    const auto substateIt = m_currentSettingParameter->substateInfo.find(fieldName);
+    if (substateIt != m_currentSettingParameter->substateInfo.end() &&
+        substateIt->second.noValueEnabled &&
+        ! std::isnan(substateIt->second.noValue))
+    {
+        noValue = substateIt->second.noValue;
+    }
+
+    // Reading goes through the files of every step: the user sees how far it is and can cancel
+    constexpr int progressResolution = 1000;
+    QProgressDialog progressDialog(tr("Preparing..."), tr("Cancel"), 0, progressResolution, window());
+    progressDialog.setWindowTitle(tr("Minimum / maximum over steps"));
+    progressDialog.setWindowModality(Qt::WindowModal);
+    progressDialog.setMinimumDuration(0);
+    progressDialog.setMinimumWidth(380);
+    progressDialog.setAutoClose(false);
+    progressDialog.setAutoReset(false);
+    progressDialog.setValue(0);
+
+    const QString fieldText = QString::fromStdString(fieldName);
+    const auto startedAt = std::chrono::steady_clock::now();
+    int shownValue = 0;
+    StepIndex shownStep = steps.front();
+    auto lastTextUpdate = startedAt;
+
+    const SubstateRangeProgressCallback progress = [&](const SubstateRangeProgress& state)
+    {
+        const auto now = std::chrono::steady_clock::now();
+        const int value = static_cast<int>(state.fraction * progressResolution);
+        const bool newStep = state.step != shownStep;
+
+        // Painting is the expensive part: only when the bar moves, and the text about 5 times a second
+        if (value != shownValue || newStep)
+        {
+            shownValue = value;
+            progressDialog.setValue(value);
+        }
+        if (newStep || now - lastTextUpdate > std::chrono::milliseconds(200))
+        {
+            shownStep = state.step;
+            lastTextUpdate = now;
+            progressDialog.setLabelText(progressText(fieldText, state, now - startedAt));
+        }
+
+        // The window is modal, so only its own button (Cancel) takes input; this lets it be clicked
+        QApplication::processEvents();
+        return ! progressDialog.wasCanceled();
+    };
+
+    SubstateRange range;
+    QString failure;
+    try
+    {
+        range = m_currentVisualizer->substateRangeAcrossSteps(*m_currentSettingParameter, fieldName, steps, noValue, progress);
+    }
+    catch (const std::exception& error)
+    {
+        failure = QString::fromUtf8(error.what());
+    }
+    progressDialog.close();
+
+    if (! failure.isEmpty())
+    {
+        QMessageBox::warning(this, tr("Minimum / maximum over steps"), tr("The steps could not be read: %1").arg(failure));
+        return;
+    }
+    if (range.cancelled)
+        return; // a partial result would be misleading
+
+    if (! range.hasValues())
+    {
+        QMessageBox::information(this,
+                                 tr("Minimum / maximum over steps"),
+                                 tr("No numeric value of '%1' was found in the chosen steps.").arg(fieldText));
+        return;
+    }
+
+    if (auto it = m_substateWidgets.find(fieldName); it != m_substateWidgets.end())
+    {
+        if (wantsMinimum)
+            it->second->setMinValue(*range.minimum);
+        if (wantsMaximum)
+            it->second->setMaxValue(*range.maximum);
+    }
+    emit visualizationRefreshRequested();
+
+    if (! range.failedSteps.empty())
+    {
+        constexpr std::size_t maxListed = 10;
+        QStringList listed;
+        for (std::size_t i = 0; i < range.failedSteps.size() && i < maxListed; ++i)
+            listed << QString::number(range.failedSteps[i]);
+        if (range.failedSteps.size() > maxListed)
+            listed << QStringLiteral("...");
+
+        QMessageBox::warning(this,
+                             tr("Minimum / maximum over steps"),
+                             tr("%1 of %2 steps could not be read and were left out: %3.")
+                                 .arg(range.failedSteps.size())
+                                 .arg(steps.size())
+                                 .arg(listed.join(QStringLiteral(", "))));
     }
 }
 

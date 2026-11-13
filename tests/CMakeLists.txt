@@ -419,3 +419,85 @@ target_include_directories(SubstateStringTests PRIVATE
 )
 
 add_test(NAME SubstateStringTests COMMAND SubstateStringTests)
+
+# ============================================
+# Add test executable for SubstateRange (minimum / maximum of a substate over a range of steps, header-only, no Qt/VTK)
+# ============================================
+add_executable(SubstateRangeTests
+    SubstateRangeTests.cpp
+)
+
+target_link_libraries(SubstateRangeTests
+    GTest::gtest_main
+)
+
+target_include_directories(SubstateRangeTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME SubstateRangeTests COMMAND SubstateRangeTests)
+
+# ============================================
+# Add test executable for StepRangeDialog (Qt widgets, run with the offscreen platform)
+# ============================================
+add_executable(StepRangeDialogTests
+    StepRangeDialogTests.cpp
+    ${CMAKE_SOURCE_DIR}/widgets/StepRangeDialog.cpp
+)
+
+target_link_libraries(StepRangeDialogTests
+    GTest::gtest_main
+    ${QT_TARGET_PREFIX}::Core
+    ${QT_TARGET_PREFIX}::Gui
+    ${QT_TARGET_PREFIX}::Widgets
+)
+
+set_target_properties(StepRangeDialogTests PROPERTIES AUTOMOC ON)
+
+target_include_directories(StepRangeDialogTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME StepRangeDialogTests COMMAND StepRangeDialogTests)
+set_tests_properties(StepRangeDialogTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# ============================================
+# Add test executable for the minimum / maximum over steps computed by a real visualizer (needs VTK, no window)
+# ============================================
+add_executable(SubstateRangeVisualizerTests
+    SubstateRangeVisualizerTests.cpp
+    ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
+    ${CMAKE_SOURCE_DIR}/data/CompressedStepReader.cpp
+    ${CMAKE_SOURCE_DIR}/data/PerformanceMetrics.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/SettingParameter.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/SubstateString.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/Visualiser.cpp
+    ${CMAKE_SOURCE_DIR}/widgets/ColorSettings.cpp
+)
+
+set_target_properties(SubstateRangeVisualizerTests PROPERTIES AUTOMOC ON)
+
+target_link_libraries(SubstateRangeVisualizerTests
+    GTest::gtest_main
+    viewer_blosc2
+    ${VTK_LIBRARIES}
+    ${QT_TARGET_PREFIX}::Core
+    ${QT_TARGET_PREFIX}::Gui
+)
+
+target_include_directories(SubstateRangeVisualizerTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/data
+    ${CMAKE_SOURCE_DIR}/core
+    ${CMAKE_SOURCE_DIR}/visualiser
+    ${CMAKE_SOURCE_DIR}/visualiserProxy
+    ${OOPENCAL_DIR}
+    ${OOPENCAL_DIR}/OOpenCAL
+)
+
+vtk_module_autoinit(
+    TARGETS SubstateRangeVisualizerTests
+    MODULES ${VTK_LIBRARIES}
+)
+
+add_test(NAME SubstateRangeVisualizerTests COMMAND SubstateRangeVisualizerTests)

@@ -12,6 +12,7 @@
 #include <vector>
 #include <QDockWidget>
 #include "core/types.h" // StepIndex
+#include "visualiser/SubstateRange.h" // StepRange
 #include "visualiserProxy/ContiguousGrid.h" // GridCellIndex
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -167,6 +168,13 @@ private slots:
      * @param fieldName The name of the field */
     void onCalculateMaximumRequested(const std::string& fieldName);
 
+    /** @brief Ask for the interval of steps, then calculate minimum and/or maximum of a field over it.
+     *
+     * A progress window (with the estimated time left and a cancel button) is shown while the steps are read.
+     *
+     * @param fieldName The name of the field */
+    void onCalculateOverStepsRequested(const std::string& fieldName);
+
     /** @brief Handle click of "Plot over time...": read the history of the selected cell and show it */
     void onPlotHistoryClicked();
     /** @brief Handle deactivate button click */
@@ -305,4 +313,5 @@ private:
     bool m_native3DVolumeMode = false; ///< The substates are shown in a 3D volume, not as altitude
     std::optional<GridCellIndex> m_selectedVolumeCell; ///< Set when the cell was clicked in the complete 3D volume (then it is the position in the whole grid)
     std::optional<StepIndex> m_currentStep;
+    std::optional<StepRange> m_lastStepRange; ///< Interval chosen the last time in "Calculate over steps" (for this simulation)
 };

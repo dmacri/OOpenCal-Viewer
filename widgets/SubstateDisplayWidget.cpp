@@ -375,6 +375,15 @@ void SubstateDisplayWidget::contextMenuEvent(QContextMenuEvent* event)
         emit calculateMaximumRequested(fieldName());
         emit visualizationRefreshRequested();
     });
+
+    menu.addSeparator();
+
+    // Steps are chosen in a dialog, which is why the text ends with "..."
+    auto calcOverStepsAction = menu.addAction(QIcon(":/icons/zoom_to.png"), "Calculate minimum / maximum over steps...");
+    calcOverStepsAction->setToolTip("Look through the cells of many steps and choose the interval of steps");
+    connect(calcOverStepsAction, &QAction::triggered, this, [this]() {
+        emit calculateOverStepsRequested(fieldName());
+    });
     
     // Show menu at cursor position
     menu.exec(event->globalPos());
