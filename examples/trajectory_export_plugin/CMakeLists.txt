@@ -5,7 +5,7 @@ project(TrajectoryExportPlugin VERSION 1.0 LANGUAGES CXX)
 # no Qt, no VTK and no OOpenCAL. Build it with the same compiler (and standard library) as the Viewer.
 #
 #   cmake -S examples/trajectory_export_plugin -B build_trajectory_plugin && cmake --build build_trajectory_plugin
-#   OOpenCal-Viewer --listActions --loadModel build_trajectory_plugin/libTrajectoryExport.so
+#   OOpenCal-Viewer --listActions --loadPlugin build_trajectory_plugin/libTrajectoryExport.so
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

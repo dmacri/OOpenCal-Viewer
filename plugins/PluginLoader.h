@@ -20,6 +20,15 @@ struct PluginInfo
     int version{};                    ///< Plugin version (from getPluginVersion)
     std::unique_ptr<QLibrary> handle; ///< QLibrary handle for cross-platform plugin loading
     bool isLoaded{};                  ///< Load status
+    bool providesModel{};             ///< The library registers a model (exports registerPlugin)
+    bool providesActions{};           ///< The library registers actions (exports registerActionPlugin, see plugins/ActionApi.h)
+};
+
+/** @brief What a library is expected to provide when it is loaded with `--loadModel` or `--loadPlugin` */
+enum class PluginKind
+{
+    Model,   ///< a model (visualization of a Cell)
+    Actions  ///< actions, e.g. exports (plugins/ActionApi.h)
 };
 
 /** @brief Manages plugin loading and lifecycle
@@ -57,6 +66,25 @@ public:
      * @param directories List of directory paths to scan
      * @return Total number of loaded plugins */
     int loadFromStandardDirectories(const std::vector<std::string>& directories);
+
+    /** @return directories searched for plugins at startup (relative to the working directory) */
+    static const std::vector<std::string>& standardDirectories();
+
+    /** @brief Load plugins from standardDirectories()
+     * @return Total number of loaded plugins */
+    int loadFromStandardDirectories();
+
+    /** @brief Load the libraries given on the command line (`--loadModel`, `--loadPlugin`)
+     *
+     * A library which is already loaded (e.g. found in a standard directory) is not an error. A library which does not
+     * provide @p expectedKind is still loaded, but the user is warned that another option is meant for it.
+     * @param paths Paths of the libraries
+     * @param expectedKind What the option the paths came from is for
+     * @return paths that could not be loaded */
+    std::vector<std::string> loadPlugins(const std::vector<std::string>& paths, PluginKind expectedKind);
+
+    /** @return the loaded plugin that was loaded from @p pluginPath, or nullptr */
+    const PluginInfo* findLoadedPlugin(const std::string& pluginPath) const;
 
     /** @brief Get list of all loaded plugins */
     const std::vector<PluginInfo>& getLoadedPlugins() const;

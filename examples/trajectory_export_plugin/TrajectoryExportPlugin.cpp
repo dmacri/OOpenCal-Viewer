@@ -2,7 +2,7 @@
  * @brief Plugin with the action exporting trajectories of pedestrians (see JulichTrajectoryAction.h).
  *
  * Build it with the CMakeLists.txt next to this file and load it with `Model -> Load Plugin...`,
- * `--loadModel libTrajectoryExport.so`, or put the library into `./plugins/`. */
+ * `--loadPlugin libTrajectoryExport.so`, or put the library into `./plugins/`. */
 
 #include "JulichTrajectoryAction.h"
 

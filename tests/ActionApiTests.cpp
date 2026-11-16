@@ -17,6 +17,12 @@ namespace fs = std::filesystem;
 namespace
 {
 // ---------------------------------------------------------------- registry
+/** ActionRegistry has a protected constructor (the application uses ActionRegistry::instance()); a test gets its own registry from this class */
+struct TestRegistry : ActionRegistry
+{
+    TestRegistry() = default;
+};
+
 class DummyAction final : public IAction
 {
 public:
@@ -32,9 +38,9 @@ public:
         info.supportedModels = models_;
         return info;
     }
-    Result start(IActionContext&) override { return Result::success(); }
-    Result processCell(const CellRef&) override { return Result::success(); }
-    Result finish(bool) override { return Result::success(); }
+    Status start(IActionContext&) override { return success(); }
+    Status processCell(const CellRef&) override { return success(); }
+    Summary finish(bool) override { return summary(); }
 
 private:
     std::string id_;
@@ -43,7 +49,7 @@ private:
 
 TEST(ActionRegistryTest, RegistersAndFindsActions)
 {
-    ActionRegistry registry;
+    TestRegistry registry;
     EXPECT_TRUE(registry.registerAction(std::make_unique<DummyAction>("a")));
     EXPECT_TRUE(registry.registerAction(std::make_unique<DummyAction>("b")));
 
@@ -54,7 +60,7 @@ TEST(ActionRegistryTest, RegistersAndFindsActions)
 
 TEST(ActionRegistryTest, RefusesDuplicatesEmptyIdsAndNull)
 {
-    ActionRegistry registry;
+    TestRegistry registry;
     EXPECT_TRUE(registry.registerAction(std::make_unique<DummyAction>("a")));
     EXPECT_FALSE(registry.registerAction(std::make_unique<DummyAction>("a")));
     EXPECT_FALSE(registry.registerAction(std::make_unique<DummyAction>("")));
@@ -64,7 +70,7 @@ TEST(ActionRegistryTest, RefusesDuplicatesEmptyIdsAndNull)
 
 TEST(ActionRegistryTest, RemovesOnlyActionsOfTheUnloadedPlugin)
 {
-    ActionRegistry registry;
+    TestRegistry registry;
     registry.setCurrentOwner("/plugins/one.so");
     registry.registerAction(std::make_unique<DummyAction>("one-a"));
     registry.registerAction(std::make_unique<DummyAction>("one-b"));
@@ -80,7 +86,7 @@ TEST(ActionRegistryTest, RemovesOnlyActionsOfTheUnloadedPlugin)
 
 TEST(ActionRegistryTest, FiltersActionsByModel)
 {
-    ActionRegistry registry;
+    TestRegistry registry;
     registry.registerAction(std::make_unique<DummyAction>("any"));
     registry.registerAction(std::make_unique<DummyAction>("crowd", std::vector<std::string>{"crowd_simulation"}));
 
@@ -168,33 +174,43 @@ public:
     mutable std::vector<std::string> requestedSubstates;
 };
 
-/// Drives an action the way ActionRunner does.
-Result drive(IAction& action, FakeContext& context, const std::function<void(Step, FakeCells&)>& placePedestrians, bool finishCompleted = true)
+/// Drives an action the way ActionRunner does. A failure of any call is returned (finish(false) is called then).
+Summary drive(IAction& action, FakeContext& context, const std::function<void(Step, FakeCells&)>& placePedestrians, bool finishCompleted = true)
 {
-    if (auto r = action.start(context); ! r)
-        return r;
+    if (auto status = action.start(context); ! status)
+        return failure(status.error());
+
     FakeCells cells;
     for (const Step step : context.steps())
     {
         cells.ids.clear();
         placePedestrians(step, cells);
-        if (auto r = action.beginStep(step); ! r)
-            return r;
-        for (int row = 0; row < context.model().rows; ++row)
-            for (int column = 0; column < context.model().columns; ++column)
+
+        auto status = action.beginStep(step);
+        for (int row = 0; status && row < context.model().rows; ++row)
+            for (int column = 0; status && column < context.model().columns; ++column)
             {
                 cells.row = row;
                 cells.column = column;
-                if (auto r = action.processCell(CellRef{step, 0, row, column, cells}); ! r)
-                {
-                    action.finish(false);
-                    return r;
-                }
+                status = action.processCell(CellRef{step, 0, row, column, cells});
             }
-        if (auto r = action.endStep(step); ! r)
-            return r;
+        if (status)
+            status = action.endStep(step);
+
+        if (! status)
+        {
+            (void) action.finish(false);
+            return failure(status.error());
+        }
     }
     return action.finish(finishCompleted);
+}
+
+/// Text of a failure, for the messages of assertions (a success has none)
+template <typename Expected>
+std::string errorOf(const Expected& result)
+{
+    return result ? std::string() : result.error();
 }
 
 class JulichTrajectoryActionTest : public ::testing::Test
@@ -248,7 +264,7 @@ TEST_F(JulichTrajectoryActionTest, WritesPositionsAsCellCentresSortedByIdAndFram
                                   cells.ids[{0, static_cast<int>(step)}] = 7;
                                   cells.ids[{2, 0}] = 2;
                               });
-    ASSERT_TRUE(result) << result.message;
+    ASSERT_TRUE(result) << errorOf(result);
 
     const std::vector<std::string> expected = {
         "2\t0\t0.2\t0.2\t1.75", "2\t1\t0.2\t0.2\t1.75", "2\t2\t0.2\t0.2\t1.75",
@@ -267,7 +283,7 @@ TEST_F(JulichTrajectoryActionTest, FrameIsTheStepNumberEvenWhenStepsAreSparse)
 {
     FakeContext context(1, 3, {0, 10, 20});
     const auto result = drive(action, context, [](Step step, FakeCells& cells) { cells.ids[{0, static_cast<int>(step / 10)}] = 1; });
-    ASSERT_TRUE(result) << result.message;
+    ASSERT_TRUE(result) << errorOf(result);
     EXPECT_EQ(dataRows(), (std::vector<std::string>{"1\t0\t0.2\t0.2\t1.75", "1\t10\t0.6\t0.2\t1.75", "1\t20\t1\t0.2\t1.75"}));
 }
 
@@ -281,7 +297,7 @@ TEST_F(JulichTrajectoryActionTest, OptionsChangeScaleHeightIdsAndYDirection)
 
     FakeContext context(2, 2, {0});
     const auto result = drive(action, context, [](Step, FakeCells& cells) { cells.ids[{1, 1}] = 0; });
-    ASSERT_TRUE(result) << result.message;
+    ASSERT_TRUE(result) << errorOf(result);
 
     EXPECT_EQ(dataRows(), (std::vector<std::string>{"1\t0\t0.75\t0.75\t1.76"})); // row 1 counted from the top, id 0 -> 1
     EXPECT_NE(fileText().find("# framerate: 25 fps\r\n"), std::string::npos);
@@ -308,7 +324,7 @@ TEST_F(JulichTrajectoryActionTest, DuplicatedIdKeepsFirstPositionAndWarns)
                                   cells.ids[{0, 0}] = 5;
                                   cells.ids[{0, 2}] = 5; // the same pedestrian again
                               });
-    ASSERT_TRUE(result) << result.message;
+    ASSERT_TRUE(result) << errorOf(result);
     EXPECT_EQ(dataRows(), (std::vector<std::string>{"5\t0\t0.2\t0.2\t1.75"}));
     ASSERT_EQ(context.warnings.size(), 1u);
     EXPECT_NE(context.warnings.front().find("pedestrian 5"), std::string::npos);
@@ -324,7 +340,7 @@ TEST_F(JulichTrajectoryActionTest, DuplicatedIdCanBeAnError)
                                   cells.ids[{0, 2}] = 5;
                               });
     EXPECT_FALSE(result);
-    EXPECT_NE(result.message.find("pedestrian 5"), std::string::npos);
+    EXPECT_NE(result.error().find("pedestrian 5"), std::string::npos);
     EXPECT_FALSE(fs::exists(path)) << "nothing is written after a failure";
 }
 
@@ -333,7 +349,7 @@ TEST_F(JulichTrajectoryActionTest, FailsWhenThereAreNoPedestrians)
     FakeContext context(2, 2, {0, 1});
     const auto result = drive(action, context, [](Step, FakeCells&) {});
     EXPECT_FALSE(result);
-    EXPECT_NE(result.message.find("pedestriansIds"), std::string::npos);
+    EXPECT_NE(result.error().find("pedestriansIds"), std::string::npos);
     EXPECT_FALSE(fs::exists(path));
 }
 
@@ -369,7 +385,7 @@ TEST_F(JulichTrajectoryActionTest, FailsToStartWhenTheOutputDirectoryDoesNotExis
     FakeContext context(1, 1, {0});
     const auto result = action.start(context);
     EXPECT_FALSE(result);
-    EXPECT_NE(result.message.find("does not exist"), std::string::npos);
+    EXPECT_NE(result.error().find("does not exist"), std::string::npos);
 }
 
 TEST_F(JulichTrajectoryActionTest, DeclaresItsParametersConsistently)

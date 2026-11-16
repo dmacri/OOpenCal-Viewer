@@ -15,7 +15,8 @@
 
 namespace viz::actions
 {
-/// Everything needed to run an action.
+/** @struct ActionJob
+ *  @brief Everything needed to run an action. */
 struct ActionJob
 {
     std::string actionId;                           ///< id of a registered action (ActionRegistry)
@@ -28,16 +29,21 @@ struct ActionJob
     std::function<void(LogLevel, const std::string&)> onLog;             ///< optional; by default the messages go to std::cout/std::cerr
 };
 
-/// Outcome of a run.
+/** @struct RunResult
+ *  @brief Outcome of runAction(). */
 struct RunResult
 {
     bool ok = false;
     bool cancelled = false;
-    std::string message;                    ///< summary or the reason of the failure
+    std::string message;                    ///< summary of the action, or the reason of the failure
     std::vector<std::string> warnings;      ///< everything the action logged as a warning
 };
 
-/** @brief Runs the action: sets the parameters, start(), the steps and cells, finish(). Never throws: every failure
- *  (unknown action, missing data, a failure or an exception of the plugin) is returned in RunResult. */
+/** @brief Runs the action: sets the parameters, start(), the steps and cells, finish().
+ *
+ *  Never throws: every failure (unknown action, missing data, a failure or an exception of the plugin) is returned in RunResult.
+ *
+ *  @param job what to run
+ *  @return how it went */
 RunResult runAction(const ActionJob& job);
 } // namespace viz::actions

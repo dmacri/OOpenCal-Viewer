@@ -10,9 +10,13 @@
  * 1	1	2.2752	2.6359	1.76
  * @endcode
  *
+ * The format is described in the documentation of PeTrack (https://petrack.readthedocs.io/en/stable/export/trajectory.html)
+ * and is read by PedPy (https://pedpy.readthedocs.io/en/stable/user_guide.html).
+ *
  * The model keeps pedestrians in the cells of a grid, so the position of a pedestrian is the centre of its cell.
  * The grid has no scale, therefore the size of a cell and the duration of a step are parameters.
- * Depends on the Action API only (plugins/ActionApi.h). */
+ * Depends on the Action API only (plugins/ActionApi.h): it does not know the `Cell` of the model, it reads the text
+ * encoding of the substate which holds the pedestrian id. */
 
 #pragma once
 
@@ -28,10 +32,16 @@
 
 namespace viz::examples
 {
+/** @class JulichTrajectoryAction
+ *  @brief Collects the positions of pedestrians step by step and writes them in the Jülich format in finish().
+ *
+ *  Pedestrians are recognised by the id found in the substate `id_substate` of a cell; a negative or non-numeric value
+ *  means an empty cell (CrowdSimulation answers "-1"). Parameters: see parameters(). */
 class JulichTrajectoryAction final : public viz::actions::IAction
 {
-    using Result = viz::actions::Result;
     using ParameterInfo = viz::actions::ParameterInfo;
+    using Status = viz::actions::Status;
+    using Summary = viz::actions::Summary;
 
 public:
     static constexpr char ID[] = "export-trajectories-julich";
@@ -79,13 +89,13 @@ public:
         };
     }
 
-    Result setParameter(const std::string& name, const std::string& value) override
+    Status setParameter(const std::string& name, const std::string& value) override
     {
         using namespace viz::actions;
         if (name == "output_file")
         {
             if (trimmed(value).empty())
-                return Result::failure("give the output file");
+                return viz::actions::failure("give the output file");
             outputFile_ = value;
         }
         else if (name == "cell_size_m")
@@ -95,36 +105,36 @@ public:
         else if (name == "height_m")
         {
             if (! parseReal(value, height_))
-                return Result::failure("height has to be a number (with a dot), got '" + value + "'");
+                return viz::actions::failure("height has to be a number (with a dot), got '" + value + "'");
         }
         else if (name == "id_substate")
         {
             if (trimmed(value).empty())
-                return Result::failure("give the name of the substate");
+                return viz::actions::failure("give the name of the substate");
             idSubstate_ = trimmed(value);
         }
         else if (name == "id_offset")
         {
             if (! parseInteger(value, idOffset_))
-                return Result::failure("id offset has to be a whole number, got '" + value + "'");
+                return viz::actions::failure("id offset has to be a whole number, got '" + value + "'");
         }
         else if (name == "flip_y")
         {
             if (! parseBoolean(value, flipY_))
-                return Result::failure("expected true or false, got '" + value + "'");
+                return viz::actions::failure("expected true or false, got '" + value + "'");
         }
         else if (name == "duplicate_ids")
         {
             if (value != "keep_first" && value != "fail")
-                return Result::failure("expected keep_first or fail, got '" + value + "'");
+                return viz::actions::failure("expected keep_first or fail, got '" + value + "'");
             failOnDuplicates_ = value == "fail";
         }
         else
-            return Result::failure("unknown parameter");
-        return Result::success();
+            return viz::actions::failure("unknown parameter");
+        return viz::actions::success();
     }
 
-    Result start(viz::actions::IActionContext& context) override
+    Status start(viz::actions::IActionContext& context) override
     {
         trajectories_.clear();
         seenInStep_.clear();
@@ -132,23 +142,23 @@ public:
         context_ = &context;
         model_ = context.model();
         if (std::filesystem::path(outputFile_).has_parent_path() && ! std::filesystem::is_directory(std::filesystem::path(outputFile_).parent_path()))
-            return Result::failure("directory of the output file does not exist: " + std::filesystem::path(outputFile_).parent_path().string());
-        return Result::success();
+            return viz::actions::failure("directory of the output file does not exist: " + std::filesystem::path(outputFile_).parent_path().string());
+        return viz::actions::success();
     }
 
-    Result beginStep(viz::actions::Step) override
+    Status beginStep(viz::actions::Step) override
     {
         seenInStep_.clear();
-        return Result::success();
+        return viz::actions::success();
     }
 
-    Result processCell(const viz::actions::CellRef& cell) override
+    Status processCell(const viz::actions::CellRef& cell) override
     {
         const std::string text = cell.cell.substate(idSubstate_.c_str());
 
         long long id = 0;
         if (! viz::actions::parseInteger(text, id) || id < 0) // "-1" is an empty cell
-            return Result::success();
+            return viz::actions::success();
 
         if (! seenInStep_.insert(id).second)
         {
@@ -156,25 +166,25 @@ public:
             const std::string where = std::format("pedestrian {} is in more than one cell of step {} (again at row {}, column {})",
                                                   id, cell.step, cell.row, cell.column);
             if (failOnDuplicates_)
-                return Result::failure(where);
+                return viz::actions::failure(where);
             if (duplicates_ <= MAX_LOGGED_DUPLICATES)
                 context_->log(viz::actions::LogLevel::Warning, where + "; the first position is kept");
-            return Result::success();
+            return viz::actions::success();
         }
 
         trajectories_[id].push_back(Position{cell.step, cell.row, cell.column});
-        return Result::success();
+        return viz::actions::success();
     }
 
-    Result finish(bool completed) override
+    Summary finish(bool completed) override
     {
         const auto collected = std::move(trajectories_);
         trajectories_.clear();
         if (! completed)
-            return Result::success();
+            return viz::actions::summary();
 
         if (collected.empty())
-            return Result::failure("no pedestrians found: substate '" + idSubstate_ + "' gave no id >= 0 in any cell");
+            return viz::actions::failure("no pedestrians found: substate '" + idSubstate_ + "' gave no id >= 0 in any cell");
 
         if (duplicates_ > MAX_LOGGED_DUPLICATES)
             context_->log(viz::actions::LogLevel::Warning,
@@ -183,7 +193,7 @@ public:
 
         std::ofstream file(outputFile_, std::ios::binary | std::ios::trunc);
         if (! file)
-            return Result::failure("cannot open the output file for writing: " + outputFile_);
+            return viz::actions::failure("cannot open the output file for writing: " + outputFile_);
 
         const std::string eol = "\r\n"; // as in files of PeTrack
         file << "#This is a trajectory file exported from OOpenCal-Viewer" << eol
@@ -207,9 +217,9 @@ public:
         }
         file.close();
         if (! file)
-            return Result::failure("writing the output file failed: " + outputFile_);
+            return viz::actions::failure("writing the output file failed: " + outputFile_);
 
-        return Result::success(std::format("Saved {} trajectories ({} positions) to {}", collected.size(), rows, outputFile_));
+        return viz::actions::summary(std::format("Saved {} trajectories ({} positions) to {}", collected.size(), rows, outputFile_));
     }
 
 private:
@@ -222,13 +232,13 @@ private:
 
     static constexpr std::size_t MAX_LOGGED_DUPLICATES = 10;
 
-    static Result positiveReal(const std::string& text, double& target, const char* what)
+    static Status positiveReal(const std::string& text, double& target, const char* what)
     {
         double value = 0;
         if (! viz::actions::parseReal(text, value) || ! (value > 0))
-            return Result::failure(std::string(what) + " has to be a positive number (with a dot), got '" + text + "'");
+            return viz::actions::failure(std::string(what) + " has to be a positive number (with a dot), got '" + text + "'");
         target = value;
-        return Result::success();
+        return viz::actions::success();
     }
 
     /// Up to 4 decimal places without trailing zeros, always with a dot: "2.275", "1.76", "0.4".

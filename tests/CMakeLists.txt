@@ -419,3 +419,37 @@ target_include_directories(ActionApiTests PRIVATE
 )
 
 add_test(NAME ActionApiTests COMMAND ActionApiTests)
+
+# ============================================
+# Add test executable for reading Header.txt (shared by the main window and the actions of plugins)
+# ============================================
+add_executable(SimulationHeaderTests
+    SimulationHeaderTests.cpp
+    ${CMAKE_SOURCE_DIR}/data/SimulationHeader.cpp
+    ${CMAKE_SOURCE_DIR}/config/Config.cpp
+    ${CMAKE_SOURCE_DIR}/config/ConfigCategory.cpp
+    ${CMAKE_SOURCE_DIR}/visualiser/SettingParameter.cpp
+    ${inih_SOURCE_DIR}/ini.c
+    ${inih_SOURCE_DIR}/cpp/INIReader.cpp
+)
+
+# Config.cpp includes <QtGlobal>
+if(USE_QT6)
+    set(SIMULATION_HEADER_TESTS_QT Qt6::Core)
+else()
+    set(SIMULATION_HEADER_TESTS_QT Qt5::Core)
+endif()
+
+target_link_libraries(SimulationHeaderTests
+    GTest::gtest_main
+    ${SIMULATION_HEADER_TESTS_QT}
+)
+
+target_include_directories(SimulationHeaderTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/config
+    ${inih_SOURCE_DIR}
+    ${inih_SOURCE_DIR}/cpp
+)
+
+add_test(NAME SimulationHeaderTests COMMAND SimulationHeaderTests)

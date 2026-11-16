@@ -38,6 +38,7 @@
 #include "config/ConfigConstants.h"
 #include "visualiser/Line.h"
 #include "visualiser/Visualizer.hpp"
+#include "data/SimulationHeader.h"
 #include "visualiser/SettingParameter.h"
 #include "visualiser/VolumeZSpacing.h"
 #include "widgets/ColorSettings.h"
@@ -102,57 +103,6 @@ public:
         return {};
     }
 };
-
-/** @brief Checks if the given directory already contains data files matching the output name pattern
- *  @param configDir Directory to check
- *  @param outputFileNameFromCfg Base output filename to look for
- *  @return True if the directory contains data files, false otherwise */
-bool isDataDirectory(const std::filesystem::path& configDir, const std::string& outputFileNameFromCfg)
-{
-    namespace fs = std::filesystem;
-
-    for (const auto& entry : fs::directory_iterator(configDir))
-    {
-        if (! entry.is_regular_file())
-            continue;
-
-        std::string filename = entry.path().filename().string();
-
-        // Check if file name starts with the output file name pattern
-        if (filename.find(outputFileNameFromCfg) != 0)
-            continue;
-
-        // Check if it has a known data file extension
-        std::string ext = entry.path().extension().string();
-        if (ext == ".bin" || ext == ".blosc" || ext == ".txt")
-            return true;
-    }
-
-    return false;
-}
-
-/** @brief Prepares the output file path for saving visualization data
- *  @param configFile Path to the configuration file
- *  @param outputFileNameFromCfg Output filename from configuration
- *  @return Full path to the output file */
-std::string prepareOutputFileName(const std::string& configFile, const std::string& outputFileNameFromCfg)
-{
-    namespace fs = std::filesystem;
-
-    // Step 1: determine output directory
-    fs::path configPath(configFile);
-    fs::path configDir = configPath.parent_path();
-
-    // Step 2: check if we are already in a data directory
-    const bool isInDataDirectory = isDataDirectory(configDir, outputFileNameFromCfg);
-
-    // Step 3: build full output file path
-    fs::path outputDir = isInDataDirectory ? configDir : (configDir / std::string(DirectoryConstants::OUTPUT_DIRECTORY));
-    fs::create_directories(outputDir); // ensure that directory exists
-
-    // Step 4: build and return the final output file path
-    return (outputDir / outputFileNameFromCfg).string();
-}
 
 vtkColor3d toVtkColor(QColor color)
 {
@@ -918,13 +868,7 @@ void SceneWidget::setupSettingParameters(const std::string& configFilename, Step
 {
     readSettingsFromConfigFile(configFilename);
 
-    // Each node has two XY boundary lines. Final edges are tracked for every Z node layer.
-    const auto totalNodes =
-        settingParameter->nNodeX * settingParameter->nNodeY * settingParameter->nNodeZ;
-    settingParameter->numberOfLines =
-        2 * totalNodes +
-        settingParameter->nNodeX * settingParameter->nNodeZ +
-        settingParameter->nNodeY * settingParameter->nNodeZ;
+    settingParameter->numberOfLines = SimulationHeader::numberOfBoundaryLines(*settingParameter);
     settingParameter->step = stepNumber;
     settingParameter->changed = false;
 
@@ -956,60 +900,13 @@ void SceneWidget::refreshGridColorFromSettings()
 
 void SceneWidget::readSettingsFromConfigFile(const std::string& filename)
 {
-    Config config(filename);
+    SimulationHeader::readSettingParameter(filename, *settingParameter);
 
-    {
-        ConfigCategory* generalContext = config.getConfigCategory(ConfigConstants::CATEGORY_GENERAL);
-        const std::string outputFileNameFromCfg = generalContext->getConfigParameter(ConfigConstants::PARAM_OUTPUT_FILE_NAME)->getValue<std::string>();
-        settingParameter->outputFileName = prepareOutputFileName(filename, outputFileNameFromCfg);
-        loadStepTimeMap();
-        settingParameter->numberOfColumnX = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_COLUMNS)->getValue<int>();
-        settingParameter->numberOfRowsY = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_ROWS)->getValue<int>();
-        
-        // Read number_of_slices for 3D models (defaults to 1 for 2D models)
-        auto slicesParam = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_OF_SLICES);
-        settingParameter->numberOfSlicesZ = slicesParam ? slicesParam->getValue<int>() : 1;
-        
-        settingParameter->nsteps = generalContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_STEPS)->getValue<int>();
-        emit totalNumberOfStepsReadFromConfigFile(settingParameter->nsteps);
-    }
+    // Output directory has to exist (it is created next to the header if the data lies there for the first time)
+    std::filesystem::create_directories(std::filesystem::path(settingParameter->outputFileName).parent_path());
 
-    {
-        ConfigCategory* execContext = config.getConfigCategory(ConfigConstants::CATEGORY_DISTRIBUTED);
-        settingParameter->nNodeX = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_X)->getValue<int>();
-        settingParameter->nNodeY = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Y)->getValue<int>();
-        
-        // Read number_node_z for 3D models (defaults to 1 for 2D models)
-        auto nodeZParam = execContext->getConfigParameter(ConfigConstants::PARAM_NUMBER_NODE_Z);
-        settingParameter->nNodeZ = nodeZParam ? nodeZParam->getValue<int>() : 1;
-        
-        /// Notice: there are much more params, which are not used: e.g. border_size_x, border_size_y, border_size_z
-    }
-
-    {
-        ConfigCategory* visualizationContext = config.getConfigCategory(ConfigConstants::CATEGORY_VISUALIZATION);
-        if (visualizationContext)
-        {
-            // Read visualization mode (text or binary)
-            auto modeParam = visualizationContext->getConfigParameter(ConfigConstants::PARAM_MODE);
-            settingParameter->readMode = modeParam ? modeParam->getValue<std::string>() : ConfigConstants::DEFAULT_MODE;
-
-            // Read substates
-            auto substatesParam = visualizationContext->getConfigParameter(ConfigConstants::PARAM_SUBSTATES);
-            settingParameter->substates = substatesParam ? substatesParam->getValue<std::string>() : ConfigConstants::DEFAULT_SUBSTATES;
-
-            // Read reduction operations
-            auto reductionParam = visualizationContext->getConfigParameter(ConfigConstants::PARAM_REDUCTION);
-            settingParameter->reduction = reductionParam ? reductionParam->getValue<std::string>() : ConfigConstants::DEFAULT_REDUCTION;
-        }
-        else
-        {
-            // Default values if ConfigConstants::CATEGORY_VISUALIZATION) section is not present
-            settingParameter->readMode = ConfigConstants::DEFAULT_MODE;
-            settingParameter->substates = ConfigConstants::DEFAULT_SUBSTATES;
-            settingParameter->reduction = ConfigConstants::DEFAULT_REDUCTION;
-        }
-    }
+    loadStepTimeMap();
+    emit totalNumberOfStepsReadFromConfigFile(settingParameter->nsteps);
 }
 
 void SceneWidget::setupVtkScene()

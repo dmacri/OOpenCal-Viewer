@@ -27,6 +27,10 @@ bool CommandLineParser::parse(int argc, char* argv[])
             .help("Path to custom model plugin (can be repeated)")
             .append();
 
+        program.add_argument(ARG_LOAD_PLUGIN)
+            .help("Path to a plugin with actions, e.g. exports (can be repeated)")
+            .append();
+
         program.add_argument(ARG_STARTING_MODEL)
             .help("Name of the model to start with");
 
@@ -78,13 +82,14 @@ bool CommandLineParser::parse(int argc, char* argv[])
                   "(directory defaults to OOPENCAL_PRECOMPILED_HEADER_DIR)")
             .metavar("DIR");
 
-        // Handled by main() before the GUI is created (see ActionCommand.h); registered here so that they are listed in --help
+        // Run without the GUI by main() (see ActionCommand.h)
         program.add_argument(ARG_RUN_ACTION)
             .help("Run an action of a loaded plugin on the simulation without GUI and exit")
             .metavar("ID");
         program.add_argument(ARG_ACTION_PARAM)
             .help("Parameter of the action, name=value (can be repeated)")
-            .metavar("NAME=VALUE");
+            .metavar("NAME=VALUE")
+            .append();
         program.add_argument(ARG_LIST_ACTIONS)
             .help("List actions of the loaded plugins and their parameters and exit")
             .flag();
@@ -123,6 +128,17 @@ bool CommandLineParser::parse(int argc, char* argv[])
 
         if (auto models = program.present<std::vector<std::string>>(ARG_LOAD_MODEL))
             loadModelPaths = *models;
+
+        if (auto plugins = program.present<std::vector<std::string>>(ARG_LOAD_PLUGIN))
+            loadPluginPaths = *plugins;
+
+        if (auto action = program.present<std::string>(ARG_RUN_ACTION))
+            runActionId = *action;
+
+        if (auto parameters = program.present<std::vector<std::string>>(ARG_ACTION_PARAM))
+            actionParameters = *parameters;
+
+        listActions = program.get<bool>(ARG_LIST_ACTIONS);
 
         if (auto model = program.present<std::string>(ARG_STARTING_MODEL))
             startingModel = *model;
@@ -185,6 +201,7 @@ void CommandLineParser::printHelp() const
               << std::format("  {: <{}} Path to model directory (Header.txt, .h file, data files)\n\n", "MODEL_DIR", WIDTH)
               << "Optional Arguments:\n"
               << std::format("  {: <{}} Load custom model plugin (can be repeated)\n", ARG_LOAD_MODEL, WIDTH)
+              << std::format("  {: <{}} Load plugin with actions, e.g. exports (can be repeated)\n", ARG_LOAD_PLUGIN, WIDTH)
               << std::format("  {: <{}} Start with specific model\n", ARG_STARTING_MODEL, WIDTH)
               << std::format("  {: <{}} Generate movie by running all steps\n", ARG_GENERATE_MOVIE, WIDTH)
               << std::format("  {: <{}} Generate image for current step\n", ARG_GENERATE_IMAGE, WIDTH)

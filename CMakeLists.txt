@@ -198,6 +198,7 @@ list(APPEND Sources
     widgets/TimeSeriesPlot.cpp
     plugins/PluginLoader.cpp
     plugins/ActionRegistry.cpp
+    data/SimulationHeader.cpp
     plugins/ActionRunner.cpp
     plugins/ModelLoader.cpp
     plugins/CppModuleBuilder.cpp

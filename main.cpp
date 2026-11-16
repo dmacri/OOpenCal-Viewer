@@ -41,6 +41,7 @@
 #include "plugins/PluginLoader.h"
 #include "data/PerformanceMetrics.h"
 #include "core/ActionCommand.h"
+#include "core/ApplicationName.h"
 #include "core/PrecompiledHeaderCommand.h"
 
 
@@ -74,16 +75,12 @@ int main(int argc, char* argv[])
     // keep numbers in the C format. Qt widgets format numbers through QLocale and are not affected.
     std::setlocale(LC_NUMERIC, "C");
     QApplication::setStyle(QStyleFactory::create("Fusion"));
-    QApplication::setApplicationName("OOpenCal-Visualiser");
+    QApplication::setApplicationName(APPLICATION_NAME);
 
     // Load plugins from standard locations
     // This happens before MainWindow creation so models are available immediately
     PluginLoader& pluginLoader = PluginLoader::instance();
-    pluginLoader.loadFromStandardDirectories({
-        "./plugins",      // Current directory
-        "../plugins",     // Parent directory
-        "./build/plugins" // Build directory
-    });
+    pluginLoader.loadFromStandardDirectories();
 
     // Parse command-line arguments
     CommandLineParser cmdParser;
@@ -123,14 +120,11 @@ int main(int argc, char* argv[])
     }
     // "none" is handled by disabling metrics above
 
-    // Load custom model plugins if specified
-    for (const auto& modelPath : cmdParser.getLoadModelPaths())
-    {
-        if (! pluginLoader.loadPlugin(modelPath))
-        {
-            std::cerr << "Warning: Failed to load plugin: " << modelPath << std::endl;
-        }
-    }
+    // Load the libraries given with --loadModel (models) and --loadPlugin (actions, e.g. exports)
+    for (const auto& failedPath : pluginLoader.loadPlugins(cmdParser.getLoadModelPaths(), PluginKind::Model))
+        std::cerr << "Warning: Failed to load model plugin: " << failedPath << std::endl;
+    for (const auto& failedPath : pluginLoader.loadPlugins(cmdParser.getLoadPluginPaths(), PluginKind::Actions))
+        std::cerr << "Warning: Failed to load plugin: " << failedPath << std::endl;
 
     MainWindow mainWindow;
 

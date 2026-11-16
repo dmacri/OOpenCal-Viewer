@@ -652,12 +652,13 @@ MainWindow::MainWindow(QWidget* parent)
     createViewModeActionGroup();
     updateRecentDirectoriesMenu();
 
-    // The Actions menu lists the actions of plugins (exports, analyses...) for the current model, see plugins/ActionApi.h
+    // The Actions menu (declared in mainwindow.ui) lists the actions of plugins (exports, analyses...) for the current
+    // model, see plugins/ActionApi.h
     actionsMenu = new ActionsMenu(
+        ui->menuActions,
         this,
         [this] { return ui->sceneWidget->getCurrentModelName(); },
         [this] { return ui->inputFilePathLabel->getFileName(); });
-    menuBar()->insertMenu(ui->menuHelp->menuAction(), actionsMenu->menu());
     connect(actionsMenu, &ActionsMenu::actionFinished, this,
             [this]
             {

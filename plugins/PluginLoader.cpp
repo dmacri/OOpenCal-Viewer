@@ -1,6 +1,7 @@
 /** @file PluginLoader.cpp
  * @brief Implementation of the plugin loading system. */
 
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <QLibrary>
@@ -110,6 +111,8 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
             actionRegistry.setCurrentOwner({});
         }
         info.isLoaded = true;
+        info.providesModel = registerPlugin != nullptr;
+        info.providesActions = registerActions != nullptr;
         std::cout << "✓ Loaded plugin: " << pluginPath << std::endl;
     }
     catch (const std::exception& e)
@@ -258,6 +261,55 @@ int PluginLoader::loadFromStandardDirectories(const std::vector<std::string>& di
     }
 
     return totalLoaded;
+}
+
+const std::vector<std::string>& PluginLoader::standardDirectories()
+{
+    static const std::vector<std::string> directories{"./plugins", "../plugins", "./build/plugins"};
+    return directories;
+}
+
+int PluginLoader::loadFromStandardDirectories()
+{
+    return loadFromStandardDirectories(standardDirectories());
+}
+
+std::vector<std::string> PluginLoader::loadPlugins(const std::vector<std::string>& paths, PluginKind expectedKind)
+{
+    std::vector<std::string> failed;
+
+    for (const auto& path : paths)
+    {
+        const auto sameFile = [&path](const PluginInfo& plugin)
+        {
+            std::error_code error;
+            return plugin.path == path || fs::equivalent(plugin.path, path, error);
+        };
+        const bool alreadyLoaded = std::ranges::any_of(loadedPlugins, sameFile);
+
+        if (! alreadyLoaded && ! loadPlugin(path))
+        {
+            failed.push_back(path);
+            continue;
+        }
+
+        const auto plugin = std::ranges::find_if(loadedPlugins, sameFile);
+        if (plugin == loadedPlugins.end())
+            continue;
+
+        if (expectedKind == PluginKind::Model && ! plugin->providesModel)
+            std::cerr << "Warning: " << path << " provides actions, not a model (use --loadPlugin for it)" << std::endl;
+        else if (expectedKind == PluginKind::Actions && ! plugin->providesActions)
+            std::cerr << "Warning: " << path << " provides a model, not actions (use --loadModel for it)" << std::endl;
+    }
+
+    return failed;
+}
+
+const PluginInfo* PluginLoader::findLoadedPlugin(const std::string& pluginPath) const
+{
+    const auto plugin = std::ranges::find(loadedPlugins, pluginPath, &PluginInfo::path);
+    return plugin == loadedPlugins.end() ? nullptr : &*plugin;
 }
 
 const std::vector<PluginInfo>& PluginLoader::getLoadedPlugins() const
