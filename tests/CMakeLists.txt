@@ -71,6 +71,7 @@ if(VIEWER_WITH_BLOSC2)
         CompressedStepReaderTests.cpp
         ${CMAKE_SOURCE_DIR}/data/CompressedStepReader.cpp
         ${CMAKE_SOURCE_DIR}/data/ModelReader.cpp
+        ${CMAKE_SOURCE_DIR}/data/PerformanceMetrics.cpp
     )
 
     target_link_libraries(CompressedStepReaderTests
@@ -161,6 +162,23 @@ target_include_directories(BenchmarkStatisticsTests PRIVATE
 )
 
 add_test(NAME BenchmarkStatisticsTests COMMAND BenchmarkStatisticsTests)
+
+# ============================================
+# Add test executable for ProcessMemory (header-only, no Qt/VTK)
+# ============================================
+add_executable(ProcessMemoryTests
+    ProcessMemoryTests.cpp
+)
+
+target_link_libraries(ProcessMemoryTests
+    GTest::gtest_main
+)
+
+target_include_directories(ProcessMemoryTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME ProcessMemoryTests COMMAND ProcessMemoryTests)
 
 # ============================================
 # Add test executable for VolumeZSpacing (header-only, no Qt/VTK)
@@ -260,6 +278,24 @@ target_include_directories(NumberFormattingTests PRIVATE
 )
 
 add_test(NAME NumberFormattingTests COMMAND NumberFormattingTests)
+
+# ============================================
+# Add test executable for ApplicationLocale (number locale of the process, no Qt/VTK)
+# ============================================
+add_executable(ApplicationLocaleTests
+    ApplicationLocaleTests.cpp
+    ${CMAKE_SOURCE_DIR}/core/ApplicationLocale.cpp
+)
+
+target_link_libraries(ApplicationLocaleTests
+    GTest::gtest_main
+)
+
+target_include_directories(ApplicationLocaleTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+)
+
+add_test(NAME ApplicationLocaleTests COMMAND ApplicationLocaleTests)
 
 # ============================================
 # Add test executable for RulerLabelFit (header-only, no Qt/VTK)

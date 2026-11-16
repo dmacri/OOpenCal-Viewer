@@ -57,8 +57,12 @@ ValueSummary summarizeValues(std::size_t cellCount,
                              const std::function<std::string(std::size_t)>& textOfCell,
                              std::optional<double> noValue = std::nullopt);
 
-/** @brief Explains in a sentence why the substate cannot be used, from the result of summarizeValues().
- *  @return empty if all is fine (every checked cell returned a number) */
+/** @brief Explains for the user why the substate cannot be used, from the result of summarizeValues().
+ *
+ * Says for how many of the checked cells the data could not be got ("k of N checked cells (Z%)"). When it is so for
+ * every checked cell, the text says that the substate seems to be invalid instead. Then comes an example of what the
+ * cell returned and what the model must return.
+ * @return empty if all is fine (every checked cell returned a number) */
 std::string describeProblem(const ValueSummary& summary, const std::string& substateName);
 
 /** @brief Reads a number from the whole text (spaces around are ignored), independent of the locale.

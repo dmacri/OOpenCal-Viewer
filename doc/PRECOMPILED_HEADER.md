@@ -114,6 +114,41 @@ The first line of the output starting with `!` means the header is used, `x` tha
 and no such line at all (the list starts with `. .../iostream` and its children) that the build has no `-include`, i.e. no precompiled header.
 Note that the reasons g++ gives do not always contain `not used because` (e.g. `created and used with different settings of -fpic`).
 
+## Optimization level
+
+The compiler optimization is chosen once, when the Viewer is configured, and it is the default for everything compiled
+afterwards, so the Viewer, the plugins and their precompiled headers are always optimized the same way:
+
+```bash
+cmake -DOOPENCAL_OPTIMIZATION=2 ..                      # none (default) | 0 | 1 | 2 | 3 | s | g | fast
+scripts/prepare_and_build.sh --oopencal <dir> --optimization=2
+```
+
+| Value | Flag | Remark |
+|-------|------|--------|
+| `none` (default) | nothing | exactly as before: decided by `CMAKE_BUILD_TYPE` (no optimization when it is empty) |
+| `0` `1` `2` `3` `s` `g` | `-O0` `-O1` `-O2` `-O3` `-Os` `-Og` | |
+| `fast` | `-Ofast` | allows `-ffast-math`, results of simulations may differ in the last digits |
+
+The flag is added after the flags of `CMAKE_BUILD_TYPE`, so e.g. `-O2` wins over `-O3` of `Release`. For MSVC the nearest
+equivalents are used (`/Od`, `/O1`, `/O2`; there is no `-O3`).
+
+Where the value is used:
+
+- **The Viewer** (CMake target).
+- **Models compiled on the fly** by the Viewer: it becomes a part of the default *Base flags* (`-shared -fPIC -O2`), also in the
+  precompiled header of those models (`--buildPrecompiledHeader`). Typing other flags into *Compilation settings* replaces them.
+- **Plugins** (`scripts/build_plugin.sh`, `visualizer.sh`): `build_plugin.sh` takes the value from, in this order,
+  `-DOOPENCAL_OPTIMIZATION=...` given to it, the environment variable `OOPENCAL_OPTIMIZATION`, the Viewer build
+  (`<viewer>/build/CMakeCache.txt`), and `none`. It prints the choice (`Optimization: -O2 (...)`) and gives it explicitly to the
+  CMake runs of both the precompiled header and the plugin. The value is a part of the key of the shared precompiled header, so
+  changing it creates a new one instead of reusing a header built with another optimization (g++ refuses e.g. a header built
+  without optimization when it is used with `-O2`: `created and used with differing settings`; it is the reason of the
+  `precompiled header NOT used by the compiler` message of `build_plugin.sh`).
+
+Optimization makes the compilation of a model slower (by how much depends on the model) and the model faster to run, which pays
+off for long simulations and for `outputValue()`, which is called for every cell and every frame.
+
 ## Notes for packaging
 
 Nothing may modify the headers inside the package after the precompiled header has been built: clang validates their

@@ -252,10 +252,66 @@ TEST(SubstateStringSummary, ModelWhichReturnsTheWholeCellIsRejected)
     EXPECT_EQ(summary.notNumeric, 4u);
     EXPECT_EQ(summary.firstNotNumericText, "[0.012000,0.350000,0.012000,10.000000]");
 
+    // Every checked cell is wrong: the substate seems to be invalid, no "x of y" and no percent
     const std::string problem = SubstateString::describeProblem(summary, "psi");
     EXPECT_NE(problem.find("stringEncoding(\"psi\")"), std::string::npos) << problem;
-    EXPECT_NE(problem.find("4 of 4"), std::string::npos) << problem;
+    EXPECT_NE(problem.find("seems to be invalid"), std::string::npos) << problem;
+    EXPECT_NE(problem.find("any of the 4 checked cells"), std::string::npos) << problem;
     EXPECT_NE(problem.find("[0.012000"), std::string::npos) << problem;
+    EXPECT_EQ(problem.find("%"), std::string::npos) << problem;
+    EXPECT_EQ(problem.find("4 of 4"), std::string::npos) << problem;
+}
+
+TEST(SubstateStringSummary, ProblemOfSomeCellsOnlyIsNotCalledInvalid)
+{
+    const std::vector<std::string> cells = {"1", "2", "oops", "4"};
+    const auto summary = SubstateString::summarizeValues(cells.size(), 1, [&](std::size_t i) { return cells[i]; });
+
+    const std::string problem = SubstateString::describeProblem(summary, "x");
+    EXPECT_NE(problem.find("Could not get data of substate \"x\" for 1 of 4 checked cells (25%)."), std::string::npos) << problem;
+    EXPECT_NE(problem.find("returned 'oops' instead of a number"), std::string::npos) << problem;
+    EXPECT_EQ(problem.find("seems to be invalid"), std::string::npos) << problem;
+}
+
+TEST(SubstateStringSummary, ProblemOfASingleCheckedCell)
+{
+    const auto summary = SubstateString::summarizeValues(1, 1, [](std::size_t) { return std::string("[1,2]"); });
+    const std::string problem = SubstateString::describeProblem(summary, "x");
+    EXPECT_NE(problem.find("seems to be invalid"), std::string::npos) << problem;
+    EXPECT_NE(problem.find("the only checked cell"), std::string::npos) << problem;
+}
+
+TEST(SubstateStringSummary, EmptyAndLongAnswersOfACellAreReadable)
+{
+    const auto empty = SubstateString::summarizeValues(2, 1, [](std::size_t) { return std::string(); });
+    EXPECT_NE(SubstateString::describeProblem(empty, "x").find("returned an empty text"), std::string::npos);
+
+    const auto longText = SubstateString::summarizeValues(2, 1, [](std::size_t) { return std::string(200, 'a'); });
+    const std::string problem = SubstateString::describeProblem(longText, "x");
+    EXPECT_NE(problem.find("..."), std::string::npos) << problem;
+    EXPECT_LT(problem.size(), 300u) << problem;
+}
+
+// The percent is never 100% unless every cell is wrong and never 0% when some are wrong
+TEST(SubstateStringSummary, PercentOfWrongCellsIsNeverMisleading)
+{
+    const auto problemFor = [](std::size_t wrong, std::size_t all)
+    {
+        SubstateString::ValueSummary summary;
+        summary.cellsChecked = all;
+        summary.notNumeric = wrong;
+        summary.numeric = all - wrong;
+        summary.firstNotNumericText = "x";
+        return SubstateString::describeProblem(summary, "s");
+    };
+
+    EXPECT_NE(problemFor(1, 3).find("1 of 3 checked cells (33%)"), std::string::npos);
+    EXPECT_NE(problemFor(1, 2).find("(50%)"), std::string::npos);
+    EXPECT_NE(problemFor(7, 1000).find("(0.7%)"), std::string::npos);
+    EXPECT_NE(problemFor(1, 1000000).find("(<0.1%)"), std::string::npos);
+    EXPECT_NE(problemFor(999999, 1000000).find("(99%)"), std::string::npos);
+    EXPECT_NE(problemFor(179514, 179515).find("(99%)"), std::string::npos);
+    EXPECT_EQ(problemFor(179515, 179515).find("%"), std::string::npos);
 }
 
 TEST(SubstateStringSummary, OneBadCellIsEnoughToReject)

@@ -17,7 +17,6 @@
 #include <QFileDialog>
 #include <QActionGroup>
 #include <QElapsedTimer>
-#include <QFile>
 #include <QSurfaceFormat>
 #include <QWindow>
 #include <QProgressDialog>
@@ -36,6 +35,7 @@
 #include "config/ConfigConstants.h"
 #include "core/AppImagePaths.h"
 #include "core/CommandLineParser.h"
+#include "core/ProcessMemory.h"
 #include "plugins/CppModuleBuilder.h"
 #include "plugins/ModelLoader.h"
 #include "plugins/PluginLoader.h"
@@ -55,6 +55,7 @@
 #include "widgets/ReductionDialog.h"
 #include "widgets/CustomDirectoryDialog.h"
 #include "widgets/PerformanceSettingsDialog.h"
+#include "widgets/LocaleSettingsDialog.h"
 
 
 namespace
@@ -713,6 +714,7 @@ void MainWindow::connectMenuActions()
     connect(ui->actionColor_settings, &QAction::triggered, this, &MainWindow::onColorSettingsRequested);
     connect(ui->actionCompilation_settings, &QAction::triggered, this, &MainWindow::onCompilationSettingsRequested);
     connect(ui->actionPerformance_settings, &QAction::triggered, this, &MainWindow::onPerformanceSettingsRequested);
+    connect(ui->actionLocale_settings, &QAction::triggered, this, &MainWindow::onLocaleSettingsRequested);
 
     // Settings -> Rendering: exactly one of the modes is always selected
     {
@@ -1758,6 +1760,26 @@ void MainWindow::onPerformanceSettingsRequested()
     delete perfSettings;  // Modal dialog, delete after use
 }
 
+void MainWindow::onLocaleSettingsRequested()
+{
+    LocaleSettingsDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted || ! dialog.localeChanged())
+        return;
+
+    // The locale is used when the data is read, so what is shown now was read in the previous one
+    if (! ui->actionReloadData->isEnabled())
+        return; // no simulation is open
+
+    const auto answer = QMessageBox::question(this, tr("Number Locale"),
+                                              tr("The new locale is used whenever the data of a model is read.\n\n"
+                                                 "Reload the data of the current model now?\n"
+                                                 "(The values from Header.txt, e.g. min and max of the substates, are read when the "
+                                                 "model directory is opened, so open it again to read them in the new locale.)"),
+                                              QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    if (answer == QMessageBox::Yes)
+        onReloadDataRequested();
+}
+
 void MainWindow::onRenderingModeSelected(GridWorldMapping::GridRenderingMode mode)
 {
     if (ui->sceneWidget)
@@ -2229,10 +2251,26 @@ void MainWindow::syncFlatSceneBackgroundCheckbox()
 
 void MainWindow::updateCameraControlsVisibility()
 {
+    // The XY plane drawn as a height surface (a substate used as its height) is the only plane seen with the 3D camera
     const bool is3DMode =
         ui->sceneWidget->getViewMode() == ViewMode::Mode3D &&
-        !ui->sceneWidget->isCrossSectionView();
+        (!ui->sceneWidget->isCrossSectionView() || ui->sceneWidget->isNative3DXYSliceView());
     ui->camera3DControlsWidget->setVisible(is3DMode);
+}
+
+void MainWindow::syncViewModeActionsWithScene()
+{
+    const bool is3DMode = ui->sceneWidget->getViewMode() == ViewMode::Mode3D;
+    {
+        QSignalBlocker blocker2D(ui->action2DMode);
+        QSignalBlocker blocker3D(ui->action3DMode);
+        ui->action2DMode->setChecked(!is3DMode);
+        ui->action3DMode->setChecked(is3DMode);
+    }
+    syncCameraSliders();
+    updateCameraControlsVisibility();
+    syncFlatSceneBackgroundCheckbox();
+    syncToolTipCheckbox();
 }
 
 void MainWindow::updateSliceControls(bool resetSelection)
@@ -2416,13 +2454,8 @@ void MainWindow::onSliceViewChanged(int viewIndex)
     else
         ui->sceneWidget->setSubstate3DSlice(axis, initialIndex);
 
-    QSignalBlocker blocker2D(ui->action2DMode);
-    QSignalBlocker blocker3D(ui->action3DMode);
-    ui->action2DMode->setChecked(true);
-    ui->action3DMode->setChecked(false);
-    updateCameraControlsVisibility();
-    syncFlatSceneBackgroundCheckbox();
-    syncToolTipCheckbox();
+    // The scene decides: a plane is flat and seen from above, except the XY plane drawn as a height surface (issue #171)
+    syncViewModeActionsWithScene();
 }
 
 void MainWindow::onSliceChanged(int fixedIndex)
@@ -2587,29 +2620,6 @@ void MainWindow::setWidgetsEnabledState(bool enabled)
     changeWhichButtonsAreEnabled();
 }
 
-
-namespace
-{
-/// @brief Peak size of the memory held in RAM by this process in megabytes (VmHWM), or -1 if the system does not tell it
-double peakMemoryMegabytes()
-{
-#ifdef __linux__
-    QFile status("/proc/self/status");
-    if (status.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        // readAll(), not a loop with atEnd(): files of /proc have size 0, so atEnd() is true from the start
-        const QList<QByteArray> lines = status.readAll().split('\n');
-        for (const QByteArray& line : lines)
-        {
-            if (line.startsWith("VmHWM:"))
-                return line.mid(6).trimmed().split(' ').first().toDouble() / 1024.0; // the value is in kB
-        }
-    }
-#endif
-    return -1.0;
-}
-} // namespace
-
 int MainWindow::runBenchmark()
 {
     const SettingParameter* parameters = ui->sceneWidget ? ui->sceneWidget->getSettingParameter() : nullptr;
@@ -2689,8 +2699,8 @@ int MainWindow::runBenchmark()
 
     std::cout << "\n" << std::format("Measured steps: {}\n", measured.size()) << Benchmark::formatTable(Benchmark::summarize(measured))
               << std::format("\nWall time of all {} steps: {:.2f} s\n", steps.size(), loopDuration.count());
-    if (const double peakMemory = peakMemoryMegabytes(); peakMemory >= 0.0)
-        std::cout << std::format("Peak memory (RSS): {:.0f} MB\n", peakMemory);
+    if (const auto peakMemory = ProcessMemory::peakResidentMegabytes())
+        std::cout << std::format("Peak memory (RSS): {:.0f} MB\n", *peakMemory);
     std::cout << std::flush;
     return 0;
 }
@@ -3131,10 +3141,18 @@ void MainWindow::apply3DSubstateSelection(const std::vector<std::string>& fieldN
     {
         // Every cell of a native 3D model has its own place in 3D, so the checked substates are not heights:
         // they are what the voxels of the volume are made of. There is no mode to switch, only to redraw.
+        // The exception is the XY plane (fixed Z): its cells lie on one plane, so there the checked substates
+        // are the height of the plane (issue #171) and the plane is shown with the 3D camera.
         WaitCursorGuard waitCursor("Updating 3D volume...");
         activeSubstatesFor3D = fieldNamesTopToBottom;
         ui->sceneWidget->setActiveSubstatesFor3D(fieldNamesTopToBottom);
         ui->substatesDockWidget->setActiveSubstates(fieldNamesTopToBottom);
+        if (ui->sceneWidget->isNative3DSliceView())
+        {
+            ui->sceneWidget->updateNative3DSliceElevation();
+            syncViewModeActionsWithScene();
+            return;
+        }
         ui->sceneWidget->refreshVisualization();
         return;
     }

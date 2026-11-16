@@ -17,8 +17,7 @@
 #include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkCamera.h>
 #include <vtkNamedColors.h>
-#include <vtkOrientationMarkerWidget.h>
-#include <vtkAxesActor.h>
+#include <vtkCameraOrientationRepresentation.h>
 #include <vtkAxisActor2D.h>
 #include <vtkProperty.h>
 #include <vtkProperty2D.h>
@@ -457,7 +456,8 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         renderer->RemoveActor(gridLinesOnSurfaceActor);
     }
 
-    if (isNative3DModel())
+    // The XY plane of a native 3D model drawn as a height surface goes the way of a 2D model with "3D altitude" (issue #171)
+    if (isNative3DModel() && !isHeightSurfaceDisplayed())
     {
         const bool sliceView = isNative3DSliceView();
         if (flatSceneBackgroundVisible && !sliceView)
@@ -502,7 +502,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
     
     // Check if we should use 3D substate visualization
     const auto heightSubstateInfosTopToBottom = get3DSubstateInfosTopToBottom();
-    if (settingParameter->numberOfSlicesZ <= 1 &&
+    if ((settingParameter->numberOfSlicesZ <= 1 || isNative3DXYSliceView()) &&
         !heightSubstateInfosTopToBottom.empty())
     {
         auto heightSubstateInfosBottomToTop = heightSubstateInfosTopToBottom;
@@ -596,8 +596,14 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
             actorBuildLine->SetVisibility(false); // Always hide 2D lines in 3D mode
         }
 
-        // Draw 3D grid lines on surface with proper visibility
-        if (stackedSubstates)
+        // Draw 3D grid lines on surface with proper visibility.
+        // The node lines describe the whole volume, so a plane of a native 3D model has none (see applyGridLinesSettings()).
+        if (isNative3DModel())
+        {
+            if (gridLinesOnSurfaceActor)
+                gridLinesOnSurfaceActor->SetVisibility(false);
+        }
+        else if (stackedSubstates)
         {
             sceneWidgetVisualizerProxy->drawGridLinesOn3DSubstateStack(settingParameter->numberOfRowsY,
                                                                        settingParameter->numberOfColumnX,
@@ -620,7 +626,7 @@ void SceneWidget::drawVisualizationWithOptional3DSubstate()
         }
 
         // Apply visibility setting to 3D grid lines
-        if (gridLinesOnSurfaceActor)
+        if (gridLinesOnSurfaceActor && !isNative3DModel())
         {
             gridLinesOnSurfaceActor->SetVisibility(gridLinesVisible);
         }
@@ -673,7 +679,8 @@ std::vector<const SubstateInfo*> SceneWidget::getNative3DVolumeSubstateInfos() c
 std::vector<const SubstateInfo*> SceneWidget::get3DSubstateInfosTopToBottom() const
 {
     std::vector<const SubstateInfo*> heightSubstateInfos;
-    if (!settingParameter || isNative3DModel())
+    // A native 3D model draws its checked substates in the volume; only its XY plane uses them as the height
+    if (!settingParameter || (isNative3DModel() && !isNative3DXYSliceView()))
         return heightSubstateInfos;
 
     for (const auto& fieldName : activeSubstatesFor3D)
@@ -938,28 +945,35 @@ void SceneWidget::setupVtkScene()
 
 void SceneWidget::setupAxesWidget()
 {
-    // Configure axes actor
-    axesActor->SetShaftTypeToCylinder();
-    axesActor->SetXAxisLabelText("X");
-    axesActor->SetYAxisLabelText("Y");
-    axesActor->SetZAxisLabelText("Z");
-    axesActor->SetTotalLength(1.0, 1.0, 1.0);
-    axesActor->SetCylinderRadius(0.02);
-    axesActor->SetConeRadius(0.05);
-    axesActor->SetSphereRadius(0.03);
+    // Interactive gizmo (VTK's vtkCameraOrientationWidget, see the "CurvaturesAdjustEdges" example):
+    // drag it to rotate the scene, click the end of an axis to look along that axis.
+    // The widget adds its own overlay renderer to the render window, so it is attached only once.
+    cameraOrientationWidget->SetParentRenderer(renderer);
+    cameraOrientationWidget->SetAnimate(true);
 
-    // Make labels more readable
-    axesActor->GetXAxisCaptionActor2D()->GetCaptionTextProperty()->SetFontSize(20);
-    axesActor->GetYAxisCaptionActor2D()->GetCaptionTextProperty()->SetFontSize(20);
-    axesActor->GetZAxisCaptionActor2D()->GetCaptionTextProperty()->SetFontSize(20);
+    cameraOrientationWidget->CreateDefaultRepresentation();
+    if (auto* representation = vtkCameraOrientationRepresentation::SafeDownCast(cameraOrientationWidget->GetRepresentation()))
+    {
+        representation->AnchorToLowerLeft(); // the same corner as the former passive axes marker
+        representation->SetPadding(10, 10);
+        representation->SetSize(140, 140);
+    }
 
-    // Configure orientation marker widget
-    axesWidget->SetOrientationMarker(axesActor);
-    axesWidget->SetViewport(0.0, 0.0, 0.2, 0.2); // Bottom-left corner, 20% size
-    axesWidget->SetInteractor(interactor());
-    // Note: InteractiveOff() is not called here to avoid VTK warning
-    // The widget is non-interactive by default when disabled
-    axesWidget->SetEnabled(false); // Hidden by default (2D mode)
+    // The widget turns the camera around its focal point. These observers move the camera so that the
+    // rotation orbits the scene centre (like mouse rotation) and publish the angles for the sliders.
+    if (! orientationWidgetObserversAdded)
+    {
+        vtkNew<vtkCallbackCommand> callback;
+        callback->SetCallback(SceneWidget::cameraOrientationWidgetCallback);
+        callback->SetClientData(this);
+        cameraOrientationWidget->AddObserver(vtkCommand::StartInteractionEvent, callback);
+        cameraOrientationWidget->AddObserver(vtkCommand::InteractionEvent, callback);
+        cameraOrientationWidget->AddObserver(vtkCommand::EndInteractionEvent, callback);
+        orientationWidgetObserversAdded = true;
+    }
+
+    // Shown only in 3D mode (see setAxesWidgetVisible()); the view starts in 2D
+    cameraOrientationWidget->SetEnabled(currentViewMode == ViewMode::Mode3D);
 }
 
 void SceneWidget::setup2DRulerAxes()
@@ -1172,28 +1186,85 @@ void SceneWidget::cameraCallbackFunction(vtkObject* caller, long unsigned int ev
     Q_UNUSED(eventId);
     Q_UNUSED(callData);
 
-    auto* self = static_cast<SceneWidget*>(clientData);
-    if (! self)
+    if (auto* self = static_cast<SceneWidget*>(clientData))
+        self->publishCameraOrientation();
+}
+
+void SceneWidget::publishCameraOrientation()
+{
+    // Synchronize only in 3D mode; 2D interaction has no rotation controls.
+    if (currentViewMode != ViewMode::Mode3D || ! renderer)
         return;
 
-    // Synchronize only in 3D mode; 2D interaction has no rotation controls.
-    if (self->currentViewMode == ViewMode::Mode3D && self->renderer)
+    vtkCamera* camera = renderer->GetActiveCamera();
+    if (! camera)
+        return;
+
+    const CameraEulerAngles angles = cameraEulerFromVtk(*camera);
+
+    // cameraPivot is not updated here: it stays the scene centre, because zoom and
+    // pan move the focal point.
+    // Store the actual VTK orientation. The Qt side blocks slider signals
+    // while displaying these values, so this cannot feed back into VTK.
+    cameraRoll = angles.roll;
+    cameraPitch = angles.pitch;
+    cameraYaw = angles.yaw;
+
+    emit cameraOrientationChanged(angles.roll, angles.pitch, angles.yaw);
+}
+
+void SceneWidget::cameraOrientationWidgetCallback(vtkObject* caller, long unsigned int eventId, void* clientData, void* callData)
+{
+    Q_UNUSED(caller);
+    Q_UNUSED(callData);
+
+    auto* self = static_cast<SceneWidget*>(clientData);
+    if (! self || self->currentViewMode != ViewMode::Mode3D || ! self->renderer)
+        return;
+
+    vtkCamera* camera = self->renderer->GetActiveCamera();
+    if (! camera)
+        return;
+
+    if (eventId == vtkCommand::StartInteractionEvent)
     {
-        vtkCamera* camera = self->renderer->GetActiveCamera();
-        if (camera)
+        // Same notification as for a mouse rotation: the main window pauses playback meanwhile
+        self->orientationWidgetPose = VtkCameraPose::read(*camera);
+        emit self->cameraInteractionStarted();
+        return;
+    }
+
+    if (eventId == vtkCommand::InteractionEvent && self->orientationWidgetPose)
+    {
+        // One drag step: the widget rotated the camera around the focal point. Repeat the same rotation
+        // around the scene centre. (The jump to an axis on a click needs no correction: the widget
+        // re-centres the camera on the scene afterwards.)
+        const CameraPivotMath::CameraPose& before = *self->orientationWidgetPose;
+        const CameraPivotMath::CameraPose after = VtkCameraPose::read(*camera);
+        const auto frameBefore = CameraPivotMath::cameraFrameOf(before);
+        const auto frameAfter = CameraPivotMath::cameraFrameOf(after);
+        if (frameBefore && frameAfter)
         {
-            const CameraEulerAngles angles = cameraEulerFromVtk(*camera);
-
-            // cameraPivot is not updated here: it stays the scene centre, because zoom and
-            // pan move the focal point.
-            // Store the actual VTK orientation. The Qt side blocks slider signals
-            // while displaying these values, so this cannot feed back into VTK.
-            self->cameraRoll = angles.roll;
-            self->cameraPitch = angles.pitch;
-            self->cameraYaw = angles.yaw;
-
-            emit self->cameraOrientationChanged(angles.roll, angles.pitch, angles.yaw);
+            const CameraPivotMath::Mat3 rotation = CameraPivotMath::rotationBetween(*frameBefore, *frameAfter);
+            const CameraPivotMath::Vec3 correction =
+                CameraPivotMath::pivotCompensation(rotation, before.focalPoint, self->cameraPivot);
+            if (CameraPivotMath::length(correction) > 1e-9)
+            {
+                VtkCameraPose::write(*camera, CameraPivotMath::compensatePivot(after, rotation, before.focalPoint, self->cameraPivot));
+                self->renderer->ResetCameraClippingRange();
+                self->renderWindow()->Render();
+            }
         }
+        self->orientationWidgetPose = VtkCameraPose::read(*camera);
+    }
+
+    // Move the Roll/Pitch/Yaw sliders together with the gizmo (during the drag and after a click on an axis)
+    self->publishCameraOrientation();
+
+    if (eventId == vtkCommand::EndInteractionEvent)
+    {
+        self->orientationWidgetPose.reset();
+        emit self->cameraInteractionFinished();
     }
 }
 
@@ -1919,7 +1990,8 @@ void SceneWidget::setViewMode2D()
     currentViewMode = ViewMode::Mode2D;
     
     // Disable 3D substate visualization when switching to 2D mode
-    if (!substateSliceEnabled)
+    // (the substates checked for a native 3D model belong to its volume and to its XY plane, they stay)
+    if (!substateSliceEnabled && !isNative3DModel())
     {
         activeSubstateFor3D.clear();
         activeSubstatesFor3D.clear();
@@ -2051,6 +2123,12 @@ bool SceneWidget::isNative3DSliceView() const
            sceneWidgetVisualizerProxy->isNative3DSliceEnabled();
 }
 
+bool SceneWidget::isNative3DXYSliceView() const
+{
+    return isNative3DSliceView() &&
+           sceneWidgetVisualizerProxy->native3DSliceAxis() == GridSliceAxis::Z;
+}
+
 bool SceneWidget::is3DSubstateSurface() const
 {
     if (!settingParameter || isNative3DModel())
@@ -2080,6 +2158,12 @@ void SceneWidget::setNative3DSlice(GridSliceAxis axis, int fixedIndex)
 
     sceneWidgetVisualizerProxy->setNative3DSlice(axis, fixedIndex);
 
+    if (isHeightSurfaceDisplayed())
+    {
+        showNative3DSliceAsHeightSurface(planeChanged);
+        return;
+    }
+
     if (planeChanged || currentViewMode != ViewMode::Mode2D)
     {
         setViewMode2D();
@@ -2090,6 +2174,47 @@ void SceneWidget::setNative3DSlice(GridSliceAxis axis, int fixedIndex)
     update2DRulerAxisTitles();
     update2DRulerAxesBounds();
     updateCameraPivotFromBounds();
+    triggerRenderUpdate();
+}
+
+void SceneWidget::showNative3DSliceAsHeightSurface(bool resetCamera)
+{
+    const bool modeChanged = currentViewMode != ViewMode::Mode3D;
+    drawVisualizationWithOptional3DSubstate();
+
+    if (modeChanged)
+        setViewMode3D();
+
+    updateCameraPivotFromBounds();
+    if (modeChanged || resetCamera)
+    {
+        if (renderer)
+            renderer->ResetCamera();
+        applyCameraAngles();
+    }
+    triggerRenderUpdate();
+}
+
+void SceneWidget::updateNative3DSliceElevation()
+{
+    if (!isNative3DSliceView() || !sceneWidgetVisualizerProxy)
+        return;
+
+    if (isHeightSurfaceDisplayed())
+    {
+        showNative3DSliceAsHeightSurface(false);
+        return;
+    }
+
+    // No substate left to use as the height (or another plane): the flat plane seen from above
+    if (currentViewMode == ViewMode::Mode3D)
+    {
+        setViewMode2D();
+        return;
+    }
+
+    drawVisualizationWithOptional3DSubstate();
+    update2DRulerAxesBounds();
     triggerRenderUpdate();
 }
 
@@ -2185,11 +2310,9 @@ void SceneWidget::clearCrossSection()
 
 void SceneWidget::setAxesWidgetVisible(bool visible)
 {
-    if (axesWidget)
-    {
-        axesWidget->SetEnabled(visible);
-        triggerRenderUpdate();
-    }
+    // The gizmo makes sense only for a 3D camera; in 2D mode the view is a fixed top-down projection
+    cameraOrientationWidget->SetEnabled(visible);
+    triggerRenderUpdate();
 }
 
 void SceneWidget::setGridLinesVisible(bool visible)
@@ -2387,6 +2510,14 @@ void SceneWidget::mousePressEvent(QMouseEvent* event)
     // Call parent implementation first
     QVTKOpenGLNativeWidget::mousePressEvent(event);
 
+    // The press was taken by the axes gizmo (see cameraOrientationWidgetCallback()): it is neither a click on
+    // a cell nor a click on the background, so the substate panel stays as it is and no cell is picked
+    if (orientationWidgetPose)
+    {
+        m_volumePressPosition.reset();
+        return;
+    }
+
     // The complete 3D volume is rotated with the left button: the cell is taken when the button is released
     if (isNative3DVolumeDisplayed())
     {
@@ -2549,7 +2680,7 @@ bool SceneWidget::isHeightSurfaceDisplayed() const
     // height surface; cross-section (substateSliceEnabled) draws a profile instead.
     return settingParameter &&
            !substateSliceEnabled &&
-           !isNative3DModel() &&
+           (!isNative3DModel() || isNative3DXYSliceView()) &&
            !get3DSubstateInfosTopToBottom().empty();
 }
 

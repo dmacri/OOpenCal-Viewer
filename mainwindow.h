@@ -88,6 +88,8 @@ private slots: // menu actions
     void onColorSettingsRequested();
     void onCompilationSettingsRequested();
     void onPerformanceSettingsRequested();
+    /// @brief Settings -> Number Locale: choose the locale of the numbers which the models read and write
+    void onLocaleSettingsRequested();
     /// @brief The user picked a rendering mode in Settings -> Rendering: set it and redraw the scene
     void onRenderingModeSelected(GridWorldMapping::GridRenderingMode mode);
     /// @brief Select in Settings -> Rendering the mode which the scene widget uses
@@ -118,6 +120,9 @@ private slots: // menu actions
     void onCameraInteractionFinished();
     void syncCameraSliders();
     void onCrossSectionControlsToggled(bool checked);
+
+    /// @brief Check the 2D / 3D mode action that matches the scene and show the camera controls when they are needed.
+    void syncViewModeActionsWithScene();
     void onSliceViewChanged(int viewIndex);
     void onSliceChanged(int fixedIndex);
     /// Pull the Z planes of a native 3D volume apart (empty planes between them).

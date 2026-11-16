@@ -6,8 +6,8 @@
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <cmath>
-#include <cstdint>
 #include <string>
 
 #include "core/TimeUnit.h"
@@ -44,59 +44,64 @@ inline std::string plainSeconds(double seconds)
  *
  *  The leading units that are zero are omitted, the following ones are always shown (also when zero), so the
  *  text keeps its shape while a simulation is played. The fraction of a second is rounded, not truncated
- *  (59.96 s is `1 min 0.0 s`).
- *  @param seconds Time in seconds
- *  @param secondDecimals Digits kept after the decimal point of the seconds: 1 (tenths), 2 or 3 (milliseconds) */
-inline std::string pretty(double seconds, int secondDecimals = 1)
+ *  (59.96 s is `1 min 0.0 s`). The split into days, hours, minutes and seconds is done by std::chrono.
+ *  @param time Simulated time (any std::chrono duration converts to SimulatedSeconds)
+ *  @param secondDecimals Digits kept after the decimal point of the seconds: 0 to 3 (3 = milliseconds) */
+inline std::string pretty(SimulatedSeconds time, int secondDecimals = 1)
 {
-    if (!std::isfinite(seconds))
+    using namespace std::chrono;
+
+    if (!std::isfinite(time.count()))
         return "n/a";
 
-    const bool negative = seconds < 0.0;
-    const double absolute = std::fabs(seconds);
-    if (absolute > 1e12) // would overflow the integer arithmetic below, and is not a meaningful simulation time anyway
-        return plainSeconds(seconds);
+    const SimulatedSeconds absolute{std::fabs(time.count())};
+    if (absolute.count() > 1e12) // not a meaningful simulation time, and too much for the integer durations below
+        return plainSeconds(time.count());
 
+    // Round to the resolution that is shown first, so that e.g. 59.96 s (one decimal) becomes a whole minute
     secondDecimals = std::clamp(secondDecimals, 0, 3);
-    std::int64_t ticksPerSecond = 1; // a "tick" is the smallest fraction of a second that is shown
-    for (int i = 0; i < secondDecimals; ++i)
-        ticksPerSecond *= 10;
-
-    const std::int64_t ticksPerMinute = 60 * ticksPerSecond;
-    const std::int64_t ticksPerHour = 60 * ticksPerMinute;
-    const std::int64_t ticksPerDay = 24 * ticksPerHour;
+    constexpr double decimalScale[] = {1.0, 10.0, 100.0, 1000.0};
+    const double scale = decimalScale[secondDecimals];
+    const milliseconds total = round<milliseconds>(SimulatedSeconds{std::round(absolute.count() * scale) / scale});
 
     std::string text;
-    const std::int64_t ticks = std::llround(absolute * static_cast<double>(ticksPerSecond));
-    if (ticks >= ticksPerDay)
+    if (total >= days{1})
     {
-        const std::int64_t whole = std::llround(absolute); // from the first day on fractions of a second are noise
-        text = std::to_string(whole / 86400) + " d " + std::to_string(whole / 3600 % 24) + " h "
-               + std::to_string(whole / 60 % 60) + " min " + std::to_string(whole % 60) + " s";
+        // From the first day on fractions of a second are noise
+        const seconds whole{std::llround(absolute.count())};
+        const days wholeDays = floor<days>(whole);
+        const hh_mm_ss<seconds> rest{whole - wholeDays};
+        text = std::to_string(wholeDays.count()) + " d " + std::to_string(rest.hours().count()) + " h "
+               + std::to_string(rest.minutes().count()) + " min " + std::to_string(rest.seconds().count()) + " s";
     }
     else
     {
-        const std::int64_t hours = ticks / ticksPerHour;
-        const std::int64_t minutes = ticks / ticksPerMinute % 60;
-        const std::int64_t secondsInTicks = ticks % ticksPerMinute;
+        const hh_mm_ss<milliseconds> parts{total};
 
-        std::string secondsText = std::to_string(secondsInTicks / ticksPerSecond);
+        std::string secondsText = std::to_string(parts.seconds().count());
         if (secondDecimals > 0)
         {
-            std::string fraction = std::to_string(secondsInTicks % ticksPerSecond);
-            secondsText += "." + std::string(static_cast<std::size_t>(secondDecimals) - fraction.size(), '0') + fraction;
+            std::string fraction = std::to_string(parts.subseconds().count()); // milliseconds: 0..999
+            fraction.insert(0, 3 - fraction.size(), '0');
+            secondsText += "." + fraction.substr(0, static_cast<std::size_t>(secondDecimals));
         }
         secondsText += " s";
 
-        if (hours > 0)
-            text = std::to_string(hours) + " h " + std::to_string(minutes) + " min " + secondsText;
-        else if (minutes > 0)
-            text = std::to_string(minutes) + " min " + secondsText;
+        if (parts.hours().count() > 0)
+            text = std::to_string(parts.hours().count()) + " h " + std::to_string(parts.minutes().count()) + " min " + secondsText;
+        else if (parts.minutes().count() > 0)
+            text = std::to_string(parts.minutes().count()) + " min " + secondsText;
         else
             text = secondsText;
     }
 
-    return negative && ticks != 0 ? "-" + text : text;
+    return time.count() < 0.0 && total.count() != 0 ? "-" + text : text;
+}
+
+/// Same as above for a plain number of seconds.
+inline std::string pretty(double seconds, int secondDecimals = 1)
+{
+    return pretty(SimulatedSeconds{seconds}, secondDecimals);
 }
 
 /** @brief Formats a time given in the unit used by the model.
@@ -106,7 +111,7 @@ inline std::string pretty(double seconds, int secondDecimals = 1)
  *         false: the value with its unit, e.g. `2500 ms` */
 inline std::string format(double value, TimeUnit unit, bool prettyFormat)
 {
-    return prettyFormat ? pretty(value * timeUnitInSeconds(unit), timeUnitSecondDecimals(unit)) : plain(value, unit);
+    return prettyFormat ? pretty(toSeconds(value, unit), timeUnitSecondDecimals(unit)) : plain(value, unit);
 }
 
 /// Same as above for seconds.

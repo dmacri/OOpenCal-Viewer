@@ -13,6 +13,9 @@
 #   - Uses a precompiled header shared by all plugins of one Viewer (built on first use, ~25% faster builds),
 #     see doc/PRECOMPILED_HEADER.md. Any problem with it only means a normal build.
 #     Set OOPENCAL_NO_PRECOMPILED_HEADER=1 to switch it off.
+#   - Optimizes the plugin like the Viewer (-DOOPENCAL_OPTIMIZATION=<none|0|1|2|3|s|g|fast> given to the Viewer's CMake).
+#     Override it with -DOOPENCAL_OPTIMIZATION=... here or with the environment variable OOPENCAL_OPTIMIZATION.
+#     "none" (the default when nothing was chosen) adds no -O flag. The precompiled header gets the same value.
 #
 # Usage:
 #   ./build_plugin.sh path/to/MyCell.h [--template /path/to/plugin_template]
@@ -163,6 +166,65 @@ cmake_arg_value() {
 }
 
 # --------------------------------------------------------------
+# Optimization level of the plugin (and of the precompiled header it uses)
+# --------------------------------------------------------------
+# Decided here, once, and always given explicitly as -DOOPENCAL_OPTIMIZATION=<value> to every CMake run below. That way the
+# plugin and its precompiled header cannot be optimized differently (g++ refuses e.g. a header created without
+# optimization when it is used with -O2), and a value left in the CMake cache of an old build directory cannot linger.
+# Priority:
+#   1. -DOOPENCAL_OPTIMIZATION=<value> among the CMake arguments
+#   2. environment variable OOPENCAL_OPTIMIZATION
+#   3. the value the Viewer was configured with (<viewer>/build/CMakeCache.txt), so plugins follow the Viewer by default
+#   4. none (nothing is added: the optimization of CMAKE_BUILD_TYPE, i.e. none when it is empty - as it has always been)
+# <value> is none, 0, 1, 2, 3, s, g or fast (-O0 ... -Ofast), see cmake/OOpenCalOptimization.cmake
+resolve_optimization() {
+    local value origin="CMake argument"
+    value="$(cmake_arg_value OOPENCAL_OPTIMIZATION)"
+
+    if [[ -z "$value" && -n "${OOPENCAL_OPTIMIZATION:-}" ]]; then
+        value="$OOPENCAL_OPTIMIZATION"
+        origin="environment variable OOPENCAL_OPTIMIZATION"
+    fi
+
+    if [[ -z "$value" ]]; then
+        local viewer_dir cache
+        viewer_dir="$(cmake_arg_value OOPENCALVIEWER_DIR)"
+        [[ -n "$viewer_dir" ]] || viewer_dir="$TEMPLATE_DIR/../.."
+        cache="${viewer_dir}/build/CMakeCache.txt"
+        if [[ -f "$cache" ]]; then
+            value="$(sed -n 's/^OOPENCAL_OPTIMIZATION:[A-Z]*=//p' "$cache" | head -n 1)"
+            origin="the Viewer build (${cache})"
+        fi
+    fi
+
+    # "O2", "-O2" and "o2" mean 2 (the same normalization as in cmake/OOpenCalOptimization.cmake)
+    value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]' | sed -e 's/^-\{0,1\}o//')"
+    if [[ -z "$value" ]]; then
+        value="none"
+        origin="default"
+    fi
+    case "$value" in
+        none|0|1|2|3|s|g|fast) ;;
+        *) die "Unsupported optimization '$value' (OOPENCAL_OPTIMIZATION). Use one of: none 0 1 2 3 s g fast" ;;
+    esac
+
+    local filtered=() arg
+    for arg in ${CMAKE_ARGS[@]+"${CMAKE_ARGS[@]}"}; do
+        case "$arg" in
+            -DOOPENCAL_OPTIMIZATION=*) ;;
+            *) filtered+=("$arg") ;;
+        esac
+    done
+    CMAKE_ARGS=(${filtered[@]+"${filtered[@]}"} "-DOOPENCAL_OPTIMIZATION=${value}")
+
+    if [[ "$value" == "none" ]]; then
+        info "Optimization: none (decided by CMAKE_BUILD_TYPE; ${origin})"
+    else
+        info "Optimization: -O${value} (${origin})"
+    fi
+}
+
+# --------------------------------------------------------------
 # Optional: precompiled header shared by all plugins of one Viewer
 # --------------------------------------------------------------
 # Every plugin parses the same Viewer / OOpenCAL headers, which is a big part of the build time. They are built once
@@ -194,6 +256,8 @@ prepare_precompiled_header() {
         case "$arg" in
             -DPLUGIN_*|-DOOPENCAL_PRECOMPILED_HEADER_DIR=*) ;;
             -DOOPENCAL_DIR=*|-DOOPENCALVIEWER_DIR=*) producer_args+=("$arg") ;;
+            # "none" adds no flag, so it is not a part of the key (the directories built before the option existed stay valid)
+            -DOOPENCAL_OPTIMIZATION=none) producer_args+=("$arg") ;;
             *) producer_args+=("$arg"); other_args+="$arg " ;;
         esac
     done
@@ -338,6 +402,7 @@ move_output_library() {
 main() {
     parse_args "$@"
     resolve_template_dir
+    resolve_optimization
 
     prepare_precompiled_header
 
