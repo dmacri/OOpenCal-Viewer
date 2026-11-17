@@ -349,6 +349,7 @@ target_include_directories(AppImagePathsTests PRIVATE
 
 add_test(NAME AppImagePathsTests COMMAND AppImagePathsTests)
 
+# ============================================
 # Add test executable for the simulated time (step -> seconds file and its formatting, no Qt/VTK)
 # ============================================
 add_executable(StepTimeMapTests

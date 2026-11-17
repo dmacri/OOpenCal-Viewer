@@ -10,7 +10,7 @@ no Qt, no VTK, no OOpenCAL. They are loaded like model plugins (`QLibrary` + agr
 to package into an AppImage.
 
 > The Viewer and the plugin must be built with the same compiler and standard library (as for model plugins), because
-> `std::string`, `std::vector` and `std::expected` cross the library boundary. The API header needs C++23 (`<expected>`).
+> `std::string` and `std::vector` cross the library boundary. The API header needs C++20.
 
 ## A plugin does not need the code of the model
 
@@ -35,10 +35,10 @@ The Viewer drives the action; the plugin only reacts:
 | 5 | `finish(true)` | writes the result and returns a summary for the user |
 |   | `finish(false)` (cancelled / failed) | drops what it has collected |
 
-* Every function that can fail returns `std::expected`: `Status` (`std::expected<void, std::string>`) for the calls that
-  have nothing to return and `Summary` (`std::expected<std::string, std::string>`) for `finish()`, whose value is the
-  message shown to the user. Return `success()` / `summary("Saved ...")` or `failure("what went wrong")`. Nothing has to
-  throw; if a plugin throws anyway, the Viewer catches it and reports a failure.
+* Every function that can fail returns `Status` (nothing to return) or `Summary` (`finish()`, whose value is the message
+  shown to the user). Return `success()` / `summary("Saved ...")` or `failure("what went wrong")`; test a result with
+  `if (! status)` and read the message with `status.error()`. Nothing has to throw; if a plugin throws anyway, the Viewer
+  catches it and reports a failure.
 * The Viewer reads the data with a reader of its own, so running an action does not change what the window shows, and the
   plugin never gets the whole history at once (low memory use, progress and cancelling work).
 * Steps are given in ascending order. They may be sparse (`visualization_step_rate`), the plugin gets the real step number.
@@ -162,7 +162,8 @@ The grid has no scale, so `cell_size_m` and `step_duration_s` have to be set by 
 * The header of a simulation is read by `SimulationHeader` (`data/SimulationHeader.h`), the same code as the scene widget uses.
 * Reading uses `ISceneWidgetVisualizer::getCellStringEncoding`, so the interface used by compiled model plugins is unchanged.
   For native 3D models other layers are reached through `setNative3DSlice`.
-* `Result` of the first version was replaced with `std::expected`; the same code (`Status`, `Summary`) is used by the Viewer
-  and by the plugins.
+* `Status` and `Summary` are small types of their own that are used like `std::expected` (`has_value()`, `operator bool`,
+  `error()`, `*summary`). `std::expected` itself is not used: libstdc++ provides it only when `__cpp_concepts >= 202002L`,
+  while Clang 18, which builds the AppImage and runs clang-tidy, reports `201907L`, so `std::expected` does not exist there.
 * Speed: every cell of every step costs one virtual call and one `std::string`. That is fine for grids like the crowd
   examples; for very large grids an action that needs only a few cells still has to look at all of them.

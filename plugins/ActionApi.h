@@ -23,12 +23,14 @@
  *    IAction::finish(false) - the run was cancelled or failed: the plugin should drop what it has collected.
  *
  * @par Errors
- * Functions that can fail return Status (or Summary), i.e. `std::expected` with a message for the user. C++ exceptions
+ * Functions that can fail return Status (or Summary): success, or a failure with a message for the user. C++ exceptions
  * should not cross the library boundary; if a plugin throws anyway, the Viewer catches it and reports a failure.
+ * (Status and Summary are small types of their own, used like `std::expected`; `std::expected` itself is not used,
+ * because libstdc++ does not provide it for Clang 18, which builds the AppImage.)
  *
  * @par Compilers
- * `std::string`, `std::vector` and `std::expected` cross the library boundary, so the Viewer and the plugin have to be
- * built with the same compiler and standard library (as for model plugins). The header needs C++23 (`<expected>`).
+ * `std::string` and `std::vector` cross the library boundary, so the Viewer and the plugin have to be built with the same
+ * compiler and standard library (as for model plugins). The header needs C++20.
  *
  * Minimal plugin:
  * @code
@@ -56,7 +58,6 @@
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
-#include <expected>
 #include <memory>
 #include <optional>
 #include <string>
@@ -73,7 +74,7 @@ namespace viz::actions
 {
 /** Version of this API. A plugin built against a different version is refused by the Viewer.
  *  Bump it whenever a virtual function or a type of the interfaces below changes. */
-inline constexpr int API_VERSION = 3;
+inline constexpr int API_VERSION = 4;
 
 /** Index of a simulation step. A fixed-width type, because it crosses the library boundary (it is the same type as
  *  `StepIndex` of the Viewer, which the Viewer checks at compile time). */
@@ -82,15 +83,43 @@ using Step = std::uint32_t;
 /** Number of layers (the z dimension) of a 2D model. */
 inline constexpr int LAYERS_OF_2D_MODEL = 1;
 
-/** @name Results of calls
- *  A call either succeeds or fails with a message for the user.
- *  @{ */
+/** @struct Failure
+ *  @brief An error message; made by failure(), which converts to Status as well as to Summary. */
+struct Failure
+{
+    std::string message;
+};
 
-/** Result of a call that has nothing to return: success, or an error message. */
-using Status = std::expected<void, std::string>;
+/** @return a failure with @p message, e.g. `return failure("cell size has to be positive");` */
+inline Failure failure(std::string message)
+{
+    return Failure{std::move(message)};
+}
 
-/** Result of IAction::finish(): success with a summary shown to the user (may be empty), or an error message. */
-using Summary = std::expected<std::string, std::string>;
+/** @class Status
+ *  @brief Result of a call that has nothing to return: success, or a failure with a message for the user.
+ *
+ *  Used like `std::expected<void, std::string>`: `if (! status) log(status.error());` */
+class Status
+{
+public:
+    Status() = default;                        ///< success
+    Status(Failure failure)                    ///< failure; not explicit, so that `return failure("...");` works
+        : error_(std::move(failure.message))
+        , ok_(false)
+    {
+    }
+
+    bool has_value() const { return ok_; }
+    explicit operator bool() const { return ok_; }
+
+    /** @return the message of a failure; empty for a success */
+    const std::string& error() const { return error_; }
+
+private:
+    std::string error_;
+    bool ok_ = true;
+};
 
 /** @return a successful Status */
 inline Status success()
@@ -98,18 +127,45 @@ inline Status success()
     return {};
 }
 
+/** @class Summary
+ *  @brief Result of IAction::finish(): success with a summary shown to the user (may be empty), or a failure with a message.
+ *
+ *  Used like `std::expected<std::string, std::string>`: `*summary` / value() is the summary, error() the message of a failure. */
+class Summary
+{
+public:
+    Summary() = default;                               ///< success without a text
+    explicit Summary(std::string text)                 ///< success with a text, e.g. "Saved 75 trajectories to ..."
+        : text_(std::move(text))
+    {
+    }
+    Summary(Failure failure)                           ///< failure; not explicit, so that `return failure("...");` works
+        : error_(std::move(failure.message))
+        , ok_(false)
+    {
+    }
+
+    bool has_value() const { return ok_; }
+    explicit operator bool() const { return ok_; }
+
+    /** @return the summary of a success; empty for a failure */
+    const std::string& value() const { return text_; }
+    const std::string& operator*() const { return text_; }
+
+    /** @return the message of a failure; empty for a success */
+    const std::string& error() const { return error_; }
+
+private:
+    std::string text_;
+    std::string error_;
+    bool ok_ = true;
+};
+
 /** @return a successful Summary with the text shown to the user (e.g. "Saved 75 trajectories to ...") */
 inline Summary summary(std::string text = {})
 {
     return Summary(std::move(text));
 }
-
-/** @return a failure with @p message; converts to Status as well as to Summary */
-inline std::unexpected<std::string> failure(std::string message)
-{
-    return std::unexpected<std::string>(std::move(message));
-}
-/** @} */
 
 /** @struct ParameterInfo
  *  @brief A parameter of an action. The Viewer builds a dialog from these and `--actionParam=name=value` sets them. */

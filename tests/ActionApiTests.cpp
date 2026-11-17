@@ -132,6 +132,48 @@ TEST(ActionApiParsingTest, ParsesBooleans)
     EXPECT_FALSE(parseBoolean("maybe", value));
 }
 
+// ---------------------------------------------------------------- results of calls
+TEST(ActionApiResultTest, StatusIsSuccessOrAFailureWithMessage)
+{
+    const Status ok = success();
+    EXPECT_TRUE(ok);
+    EXPECT_TRUE(ok.has_value());
+    EXPECT_TRUE(ok.error().empty());
+
+    const Status bad = failure("no good");
+    EXPECT_FALSE(bad);
+    EXPECT_FALSE(bad.has_value());
+    EXPECT_EQ(bad.error(), "no good");
+    EXPECT_TRUE(Status{}) << "a default Status is a success";
+}
+
+TEST(ActionApiResultTest, SummaryCarriesTheTextOrTheError)
+{
+    const Summary done = summary("Saved 3 trajectories");
+    ASSERT_TRUE(done);
+    EXPECT_EQ(*done, "Saved 3 trajectories");
+    EXPECT_EQ(done.value(), "Saved 3 trajectories");
+    EXPECT_TRUE(done.error().empty());
+
+    EXPECT_TRUE(summary()) << "a summary may be empty";
+    EXPECT_TRUE(summary().value().empty());
+
+    const Summary bad = failure("disk full");
+    EXPECT_FALSE(bad);
+    EXPECT_EQ(bad.error(), "disk full");
+    EXPECT_TRUE(bad.value().empty());
+}
+
+TEST(ActionApiResultTest, FailureConvertsToBothResultTypes)
+{
+    auto make = [](bool asSummary) -> std::pair<Status, Summary>
+    {
+        return asSummary ? std::pair<Status, Summary>{success(), failure("x")} : std::pair<Status, Summary>{failure("y"), summary("z")};
+    };
+    EXPECT_EQ(make(true).second.error(), "x");
+    EXPECT_EQ(make(false).first.error(), "y");
+}
+
 // ---------------------------------------------------------------- fake simulation
 class FakeContext final : public IActionContext
 {
