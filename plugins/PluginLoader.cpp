@@ -1,10 +1,12 @@
 /** @file PluginLoader.cpp
  * @brief Implementation of the plugin loading system. */
 
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <QLibrary>
 
+#include "ActionRegistry.h"
 #include "PluginLoader.h"
 #include "visualiserProxy/SceneWidgetVisualizerFactory.h" // SceneWidgetVisualizerFactory::unregisterModel
 
@@ -55,13 +57,17 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
         return false;
     }
 
-    // Find the registerPlugin function using QLibrary::resolve
+    // A plugin provides a model (registerPlugin), actions (registerActionPlugin, see ActionApi.h) or both
     typedef void (*RegisterFunc)();
+    typedef void (*RegisterActionsFunc)(viz::actions::IActionRegistry&);
+    typedef int (*ApiVersionFunc)();
     RegisterFunc registerPlugin = reinterpret_cast<RegisterFunc>(library->resolve("registerPlugin"));
+    RegisterActionsFunc registerActions =
+        reinterpret_cast<RegisterActionsFunc>(library->resolve("registerActionPlugin"));
 
-    if (! registerPlugin)
+    if (! registerPlugin && ! registerActions)
     {
-        lastError = "Plugin does not export registerPlugin() function";
+        lastError = "Plugin does not export registerPlugin() nor registerActionPlugin() function";
         if (! library->errorString().isEmpty())
             lastError += std::string(": ") + library->errorString().toStdString();
 
@@ -70,21 +76,49 @@ bool PluginLoader::loadPlugin(const std::string& pluginPath, bool overridePlugin
         return false;
     }
 
+    if (registerActions)
+    {
+        // The interfaces are C++ classes with virtual functions: refuse a plugin built for another version of them
+        const auto apiVersion = reinterpret_cast<ApiVersionFunc>(library->resolve("getActionApiVersion"));
+        const int pluginApiVersion = apiVersion ? apiVersion() : 0;
+        if (pluginApiVersion != viz::actions::API_VERSION)
+        {
+            lastError = "Action plugin was built for action API version " + std::to_string(pluginApiVersion) +
+                        ", the application provides version " + std::to_string(viz::actions::API_VERSION) +
+                        " (rebuild the plugin)";
+            std::cerr << "Error: " << lastError << std::endl;
+            library->unload();
+            return false;
+        }
+    }
+
     // Create plugin info
     PluginInfo info;
     info.path = pluginPath;
     info.handle = std::move(library);
     info.isLoaded = false;
 
-    // Call the registration function
+    // Call the registration functions
+    auto& actionRegistry = viz::actions::ActionRegistry::instance();
     try
     {
-        registerPlugin();
+        if (registerPlugin)
+            registerPlugin();
+        if (registerActions)
+        {
+            actionRegistry.setCurrentOwner(pluginPath); // to destroy the actions before the library is unloaded
+            registerActions(actionRegistry);
+            actionRegistry.setCurrentOwner({});
+        }
         info.isLoaded = true;
+        info.providesModel = registerPlugin != nullptr;
+        info.providesActions = registerActions != nullptr;
         std::cout << "✓ Loaded plugin: " << pluginPath << std::endl;
     }
     catch (const std::exception& e)
     {
+        actionRegistry.setCurrentOwner({});
+        actionRegistry.removeOwnedBy(pluginPath);
         lastError = std::string("Exception while registering plugin: ") + e.what();
         std::cerr << "Error: " << lastError << std::endl;
         info.handle->unload();
@@ -149,6 +183,10 @@ void PluginLoader::removePlugin(const std::string &pluginPath)
         if (SceneWidgetVisualizerFactory::unregisterModel(plugin.name))
             std::cout << "✓ Unregistered model: " << plugin.name << std::endl;
     }
+
+    // The code of the actions is in the library, so they must be destroyed before it is unloaded
+    if (const auto removed = viz::actions::ActionRegistry::instance().removeOwnedBy(pluginPath))
+        std::cout << "✓ Unregistered " << removed << " action(s) of: " << pluginPath << std::endl;
 
     // Close the library using QLibrary::unload
     if (plugin.handle)
@@ -223,6 +261,55 @@ int PluginLoader::loadFromStandardDirectories(const std::vector<std::string>& di
     }
 
     return totalLoaded;
+}
+
+const std::vector<std::string>& PluginLoader::standardDirectories()
+{
+    static const std::vector<std::string> directories{"./plugins", "../plugins", "./build/plugins"};
+    return directories;
+}
+
+int PluginLoader::loadFromStandardDirectories()
+{
+    return loadFromStandardDirectories(standardDirectories());
+}
+
+std::vector<std::string> PluginLoader::loadPlugins(const std::vector<std::string>& paths, PluginKind expectedKind)
+{
+    std::vector<std::string> failed;
+
+    for (const auto& path : paths)
+    {
+        const auto sameFile = [&path](const PluginInfo& plugin)
+        {
+            std::error_code error;
+            return plugin.path == path || fs::equivalent(plugin.path, path, error);
+        };
+        const bool alreadyLoaded = std::ranges::any_of(loadedPlugins, sameFile);
+
+        if (! alreadyLoaded && ! loadPlugin(path))
+        {
+            failed.push_back(path);
+            continue;
+        }
+
+        const auto plugin = std::ranges::find_if(loadedPlugins, sameFile);
+        if (plugin == loadedPlugins.end())
+            continue;
+
+        if (expectedKind == PluginKind::Model && ! plugin->providesModel)
+            std::cerr << "Warning: " << path << " provides actions, not a model (use --loadPlugin for it)" << std::endl;
+        else if (expectedKind == PluginKind::Actions && ! plugin->providesActions)
+            std::cerr << "Warning: " << path << " provides a model, not actions (use --loadModel for it)" << std::endl;
+    }
+
+    return failed;
+}
+
+const PluginInfo* PluginLoader::findLoadedPlugin(const std::string& pluginPath) const
+{
+    const auto plugin = std::ranges::find(loadedPlugins, pluginPath, &PluginInfo::path);
+    return plugin == loadedPlugins.end() ? nullptr : &*plugin;
 }
 
 const std::vector<PluginInfo>& PluginLoader::getLoadedPlugins() const

@@ -16,6 +16,7 @@
  *
  * Supported arguments:
  * - loadModel=<path>: Load a custom model plugin (can be repeated)
+ * - loadPlugin=<path>: Load a plugin with actions, e.g. exports (can be repeated)
  * - startingModel=<name>: Start with specific model
  * - generateMoviePath=<path>: Generate movie by running all steps (testing)
  * - exitAfterLastStep: Exit after last step (useful with generateMoviePath)
@@ -36,6 +37,7 @@ public:
     // Argument names as constants
     static constexpr const char ARG_CONFIG[] = "modelDir";
     static constexpr const char ARG_LOAD_MODEL[] = "--loadModel";
+    static constexpr const char ARG_LOAD_PLUGIN[] = "--loadPlugin";
     static constexpr const char ARG_STARTING_MODEL[] = "--startingModel";
     static constexpr const char ARG_GENERATE_MOVIE[] = "--generateMoviePath";
     static constexpr const char ARG_GENERATE_IMAGE[] = "--generateImagePath";
@@ -48,6 +50,9 @@ public:
     static constexpr const char ARG_RENDERING_MODE[] = "--renderingMode";
     static constexpr const char ARG_BENCHMARK[] = "--benchmark";
     static constexpr const char ARG_BUILD_PRECOMPILED_HEADER[] = "--buildPrecompiledHeader";
+    static constexpr const char ARG_RUN_ACTION[] = "--runAction";
+    static constexpr const char ARG_ACTION_PARAM[] = "--actionParam";
+    static constexpr const char ARG_LIST_ACTIONS[] = "--listActions";
 
     /** @brief Parse command-line arguments.
      * @param argc Number of arguments
@@ -59,6 +64,23 @@ public:
     const std::vector<std::string>& getLoadModelPaths() const
     {
         return loadModelPaths;
+    }
+    const std::vector<std::string>& getLoadPluginPaths() const
+    {
+        return loadPluginPaths;
+    }
+    const std::optional<std::string>& getRunActionId() const
+    {
+        return runActionId;
+    }
+    /// @return values of all `--actionParam`, each as written: `name=value`
+    const std::vector<std::string>& getActionParameters() const
+    {
+        return actionParameters;
+    }
+    bool shouldListActions() const
+    {
+        return listActions;
     }
     const std::optional<std::string>& getStartingModel() const
     {
@@ -133,6 +155,10 @@ public:
 
 private:
     std::vector<std::string> loadModelPaths;
+    std::vector<std::string> loadPluginPaths;
+    std::optional<std::string> runActionId;
+    std::vector<std::string> actionParameters;
+    bool listActions = false;
     std::optional<std::string> startingModel;
     std::optional<std::string> generateMoviePath;
     std::optional<std::string> generateImagePath;
